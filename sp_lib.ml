@@ -324,7 +324,7 @@ module SP_byte_vector = struct
 
   let marshal env (v : t) =
     Env.byte_blit v env;
-    Env.skip_bytes env (Env.byte_length env)
+    Env.skip_bytes env (Env.byte_length v)
 end
 
 module SP_bit_vector = struct
