@@ -51,7 +51,7 @@ module Env = struct
     && (env.end_bit >= 0) && (env.end_bit < 8)
 
   let is_byte_aligned env =
-    (env.start_bit = 0) && (env.end_bit = 0)
+    (env.start_bit = 0) && (env.end_bit = 7)
 
   let byte_at env offset =
     if offset < 0 || offset >= env.vlen || not (is_byte_aligned env) then
@@ -358,7 +358,7 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
   let read (v : t) =
     let module I = Int64 in
     let v0, e0 = SP_int32.unmarshal v in
-    let v1, e1 = SP_int32.unmarshal e0 in
+    let v1, _ = SP_int32.unmarshal e0 in
     let i0 = I.of_int32 (SP_int32.read v0) in
     let i1 = I.of_int32 (SP_int32.read v1) in
     let i = match Env.endian v with
@@ -379,9 +379,26 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
 	    SP_int32.marshal (SP_int32.marshal env i0) i1
 end
 
-module SP_array (E : SP_elem) = struct
+module type SP_array_sig = sig
+  type t
+  type v
+  type elem_v
+  val rep_to_env : t -> Env.t
+  val env_to_rep : Env.t -> t
+  val unmarshal : int -> Env.t -> t * Env.t
+  val read : t -> v
+  val read_elem : int -> t -> elem_v
+  val marshal : Env.t -> v -> Env.t
+end
+
+module SP_array (E : SP_elem)  : (SP_array_sig with type v = E.v array and type elem_v = E.v) = struct
   type t = Env.t
   type v = E.v array
+  type elem_v = E.v
+
+  let rep_to_env (t : t) = (t : Env.t)
+
+  let env_to_rep (t : Env.t) = (t : t)
 
   let unmarshal len env =
     let size = len * E.size in
@@ -398,5 +415,7 @@ module SP_array (E : SP_elem) = struct
     Array.fold_left (fun e ae -> E.marshal e ae) env a
 end
 
-module SP_byte_vector = SP_array (SP_byte)
-
+module SP_byte_vector  = SP_array (SP_byte)
+module SP_int16_vector = SP_array (SP_int16)
+module SP_int32_vector = SP_array (SP_int32)
+module SP_int64_vector = SP_array (SP_int64)
