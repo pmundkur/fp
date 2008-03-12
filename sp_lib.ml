@@ -258,7 +258,7 @@ module SP_bit = struct
     if b <> 0 && b <> 1 then
       raise Arg_out_of_bounds;
     Env.set_bit_at env 0 b;
-    Env.skip_bits env 1
+    ((Env.bit_at env 0) : t), (Env.skip_bits env 1)
 end
 
 module SP_bit_vector = struct
@@ -268,8 +268,9 @@ module SP_bit_vector = struct
     ((Env.bit_vector_at env 0 len) : t), (Env.skip_bits env len)
 
   let marshal env (t : t) =
+    let len = Env.bit_length t in
     Env.bit_blit t env;
-    Env.skip_bits env (Env.bit_length t)
+    ((Env.bit_vector_at env 0 len) : t), (Env.skip_bits env len)
 end
 
 module type SP_elem = sig
@@ -281,7 +282,7 @@ module type SP_elem = sig
   val read : t -> v
   val write : v -> t -> unit
   val unmarshal : Env.t -> t * Env.t
-  val marshal : Env.t -> v -> Env.t
+  val marshal : Env.t -> v -> t * Env.t
 end
 
 module SP_byte : (SP_elem with type v = char) = struct
@@ -308,7 +309,7 @@ module SP_byte : (SP_elem with type v = char) = struct
 
   let marshal env (v : v) =
     write v env;
-    Env.skip_bytes env 1
+    unmarshal env
 end
 
 module SP_int16 : (SP_elem with type v = int) = struct
@@ -351,7 +352,7 @@ module SP_int16 : (SP_elem with type v = int) = struct
 
   let marshal env (v : v) =
     write v env;
-    Env.skip_bytes env 2
+    unmarshal env
 end
 
 module SP_int32 : (SP_elem with type v = Int32.t) = struct
@@ -386,11 +387,14 @@ module SP_int32 : (SP_elem with type v = Int32.t) = struct
     let module I = Int32 in
     let i0 = I.to_int (I.logand v 65535l) in
     let i1 = I.to_int (I.shift_right v 16) in
+    let next =
       match Env.endian env with
         | Env.Big_endian ->
-            SP_int16.marshal (SP_int16.marshal env i1) i0
+            snd (SP_int16.marshal (snd (SP_int16.marshal env i1)) i0)
         | Env.Little_endian ->
-            SP_int16.marshal (SP_int16.marshal env i0) i1
+            snd (SP_int16.marshal (snd (SP_int16.marshal env i0)) i1)
+    in
+      (Env.sub env 0 size : t), next
 
   let write (v : v) (t : t) =
     ignore (marshal (rep_to_env t) v)
@@ -428,12 +432,15 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
     let module I = Int64 in
     let i0 = I.to_int32 (I.logand v 4294967295L) in
     let i1 = I.to_int32 (I.shift_right v 32) in
+    let next =
       match Env.endian env with
         | Env.Big_endian -> begin
-            SP_int32.marshal (SP_int32.marshal env i1) i0
+            snd (SP_int32.marshal (snd (SP_int32.marshal env i1)) i0)
           end
         | Env.Little_endian ->
-            SP_int32.marshal (SP_int32.marshal env i0) i1
+            snd (SP_int32.marshal (snd (SP_int32.marshal env i0)) i1)
+    in
+      (Env.sub env 0 size : t), next
 
   let write (v : v) (t : t) =
     ignore (marshal (rep_to_env t) v)
@@ -453,7 +460,7 @@ module type SP_array_sig = sig
   val write_elem : int -> elem_v -> t -> unit
   val write : v -> t -> unit
   val write_raw : string -> t -> unit
-  val marshal : Env.t -> v -> Env.t
+  val marshal : Env.t -> v -> t * Env.t
 end
 
 module SP_array (E : SP_elem)
@@ -488,11 +495,13 @@ struct
     Env.read_raw t 0 (size t)
 
   let unmarshal len env =
-    let size = len * E.size in
-    (Env.sub env 0 size : t), (Env.skip_bytes env size)
+    let alen = len * E.size in
+      (Env.sub env 0 alen : t), (Env.skip_bytes env alen)
 
   let marshal env (a : v) =
-    Array.fold_left (fun e ae -> E.marshal e ae) env a
+    let alen = (Array.length a) * E.size in
+    let next = Array.fold_left (fun e ae -> snd (E.marshal e ae)) env a in
+      (Env.sub env 0 alen : t), next
 
   let write (a : v) (t : t) =
     ignore (marshal t a)
