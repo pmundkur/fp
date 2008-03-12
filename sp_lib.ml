@@ -19,6 +19,13 @@ module Env = struct
     endian: endian      (* endianness of data view *)
   }
 
+  type byte_data = [
+  | `None
+  | `Str of string
+  | `Frag of t
+  | `Fill of (t -> t * t)       (* returns view of filled-in data + next view *)
+  ]
+
   let endian env =
     env.endian
 
@@ -44,14 +51,16 @@ module Env = struct
 
   let is_valid env =
     (env.blen <= String.length env.buf)
-    && (env.vstart >= 0) && (env.vlen > 0)
+    && (env.vstart >= 0)
     && (env.blen >= env.vstart + env.vlen)
-    && (bit_length env > 0)
     && (env.start_bit >= 0) && (env.start_bit < 8)
     && (env.end_bit >= 0) && (env.end_bit < 8)
 
+  let is_non_empty env =
+    (is_valid env) && (env.vlen > 0) && (bit_length env > 0)
+
   let is_byte_aligned env =
-    (env.start_bit = 0) && (env.end_bit = 7)
+    (is_valid env) && (env.start_bit = 0) && (env.end_bit = 7)
 
   let byte_at env offset =
     if offset < 0 || offset >= env.vlen || not (is_byte_aligned env) then
@@ -73,14 +82,13 @@ module Env = struct
 
   let set_vector_at env offset src =
     let src_len = String.length src in
-      if not (is_valid env) || not (is_byte_aligned env)
+      if not (is_non_empty env) || not (is_byte_aligned env)
         || offset < 0 || offset + src_len > env.vlen
       then raise Invalid_op;
       String.blit src 0 env.buf (env.vstart + offset) src_len
 
   let byte_blit src_env dest_env =
-    if not (is_valid src_env) || not (is_valid dest_env)
-      || not (is_byte_aligned src_env) || not (is_byte_aligned dest_env)
+    if not (is_byte_aligned src_env) || not (is_byte_aligned dest_env)
       || byte_length dest_env < byte_length src_env
       || (endian src_env) <> (endian dest_env)
     then raise Invalid_op;
@@ -210,8 +218,34 @@ module Env = struct
     if offset < 0 || len < 0 || offset + len > env.vlen then
       raise Invalid_op;
     { env with
-	vstart = env.vstart + offset;
-	vlen = len }
+        vstart = env.vstart + offset;
+        vlen = len }
+
+  let read_raw env offset len =
+    if offset < 0 || len < 0 || offset + len > env.vlen then
+      raise Invalid_op;
+    String.sub env.buf (env.vstart + offset) len
+
+  let write_raw env offset src src_offset len =
+    if offset < 0 || len < 0 || offset + len > env.vlen
+      || src_offset + len > String.length src || not (is_valid env)
+    then raise Invalid_op;
+    String.blit src src_offset env.buf (env.vstart + offset) len
+
+  let marshal_bytes env (data : byte_data) =
+    match data with
+      | `None ->
+	  (sub env 0 0), env
+      | `Str s ->
+	  let slen = String.length s in
+	    write_raw env 0 s 0 slen;
+	    (sub env 0 slen), (skip_bytes env slen)
+      | `Frag t ->
+	  let tlen = byte_length t in
+	    byte_blit t env;
+	    (sub env 0 tlen), (skip_bytes env tlen)
+      | `Fill fn ->
+	  fn env
 end
 
 module SP_bit = struct
@@ -233,19 +267,20 @@ module SP_bit_vector = struct
   let unmarshal len env =
     ((Env.bit_vector_at env 0 len) : t), (Env.skip_bits env len)
 
-  let marshal env (v : t) =
-    Env.bit_blit v env;
-    Env.skip_bits env (Env.bit_length v)
+  let marshal env (t : t) =
+    Env.bit_blit t env;
+    Env.skip_bits env (Env.bit_length t)
 end
 
 module type SP_elem = sig
   type t
   type v
+  val size : int
   val rep_to_env : t -> Env.t
   val env_to_rep : Env.t -> t
-  val size : int
-  val unmarshal : Env.t -> t * Env.t
   val read : t -> v
+  val write : v -> t -> unit
+  val unmarshal : Env.t -> t * Env.t
   val marshal : Env.t -> v -> Env.t
 end
 
@@ -253,20 +288,26 @@ module SP_byte : (SP_elem with type v = char) = struct
   type t = Env.t
   type v = char
 
+  let size = 1
+
   let rep_to_env (t : t) = (t : Env.t)
 
-  let env_to_rep (t : Env.t) = (t : t)
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
+    then raise Env.Invalid_op;
+    (t : t)
 
-  let size = 1
+  let read (t : t) =
+    (Env.byte_at t 0 : v)
+
+  let write (v : v) (t : t) =
+    Env.set_byte_at (rep_to_env t) v 0
 
   let unmarshal env =
     (Env.sub env 0 1 : t), (Env.skip_bytes env 1)
 
-  let read (v : t) =
-    (Env.byte_at v 0 : v)
-
-  let marshal env (b : v) =
-    Env.set_byte_at env b 0;
+  let marshal env (v : v) =
+    write v env;
     Env.skip_bytes env 1
 end
 
@@ -274,109 +315,128 @@ module SP_int16 : (SP_elem with type v = int) = struct
   type t = Env.t
   type v = int
 
-  let rep_to_env (t : t) = (t : Env.t)
-
-  let env_to_rep (t : Env.t) = (t : t)
-
   let size = 2
 
-  let unmarshal env =
-    (Env.sub env 0 2 : t), (Env.skip_bytes env 2)
+  let rep_to_env (t : t) = (t : Env.t)
 
-  let read (v : t) =
-    let b0, b1 = int_of_char (Env.byte_at v 0), int_of_char (Env.byte_at v 1) in
-    let i = match Env.endian v with
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
+    then raise Env.Invalid_op;
+    (t : t)
+
+  let read (t : t) =
+    let b0, b1 = int_of_char (Env.byte_at t 0), int_of_char (Env.byte_at t 1) in
+    let i = match Env.endian t with
       | Env.Little_endian -> b0 + (b1 lsl 8)
       | Env.Big_endian -> (b0 lsl 8) + b1
     in
       (i : v)
 
-  let marshal env (i : v) =
-    if (i lsr 16) > 0 then
+  let write (v : v) (t : t) =
+    if (v lsr 16) > 0 then
       raise Arg_out_of_bounds;
-    let b0 = char_of_int (i land 255) in
-    let b1 = char_of_int ((i lsr 8) land 255) in
-      (match Env.endian env with
-	| Env.Big_endian ->
-	    Env.set_byte_at env b1 0;
-	    Env.set_byte_at env b0 1
-	| Env.Little_endian ->
-	    Env.set_byte_at env b0 0;
-	    Env.set_byte_at env b1 1);
-      Env.skip_bytes env 2
+    let env = rep_to_env t in
+    let b0 = char_of_int (v land 255) in
+    let b1 = char_of_int ((v lsr 8) land 255) in
+      match Env.endian env with
+        | Env.Big_endian ->
+            Env.set_byte_at env b1 0;
+            Env.set_byte_at env b0 1
+        | Env.Little_endian ->
+            Env.set_byte_at env b0 0;
+            Env.set_byte_at env b1 1
+
+  let unmarshal env =
+    (Env.sub env 0 2 : t), (Env.skip_bytes env 2)
+
+  let marshal env (v : v) =
+    write v env;
+    Env.skip_bytes env 2
 end
 
 module SP_int32 : (SP_elem with type v = Int32.t) = struct
   type t = Env.t
   type v = Int32.t
 
-  let rep_to_env (t : t) = (t : Env.t)
-
-  let env_to_rep (t : Env.t) = (t : t)
-
   let size = 2 * SP_int16.size
 
-  let unmarshal env =
-    (Env.sub env 0 size : t), (Env.skip_bytes env size)
+  let rep_to_env (t : t) = (t : Env.t)
 
-  let read (v : t) =
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
+    then raise Env.Invalid_op;
+    (t : t)
+
+  let read (t : t) =
     let module I = Int32 in
-    let v0, e0 = SP_int16.unmarshal v in
-    let v1, _ = SP_int16.unmarshal e0 in
-    let i0 = I.of_int (SP_int16.read v0) in
-    let i1 = I.of_int (SP_int16.read v1) in
-    let i = match Env.endian v with
+    let t0, e0 = SP_int16.unmarshal t in
+    let t1, _ = SP_int16.unmarshal e0 in
+    let i0 = I.of_int (SP_int16.read t0) in
+    let i1 = I.of_int (SP_int16.read t1) in
+    let i = match Env.endian t with
       | Env.Big_endian -> I.add (I.shift_left i0 16) i1
       | Env.Little_endian -> I.add i0 (I.shift_left i1 16)
     in
       (i : v)
 
-  let marshal env (i : v) =
+  let unmarshal env =
+    (Env.sub env 0 size : t), (Env.skip_bytes env size)
+
+  let marshal env (v : v) =
     let module I = Int32 in
-    let i0 = I.to_int (I.logand i 65535l) in
-    let i1 = I.to_int (I.shift_right i 16) in
+    let i0 = I.to_int (I.logand v 65535l) in
+    let i1 = I.to_int (I.shift_right v 16) in
       match Env.endian env with
-	| Env.Big_endian ->
-	    SP_int16.marshal (SP_int16.marshal env i1) i0
-	| Env.Little_endian ->
-	    SP_int16.marshal (SP_int16.marshal env i0) i1
+        | Env.Big_endian ->
+            SP_int16.marshal (SP_int16.marshal env i1) i0
+        | Env.Little_endian ->
+            SP_int16.marshal (SP_int16.marshal env i0) i1
+
+  let write (v : v) (t : t) =
+    ignore (marshal (rep_to_env t) v)
 end
 
 module SP_int64 : (SP_elem with type v = Int64.t) = struct
   type t = Env.t
   type v = Int64.t
 
-  let rep_to_env (t : t) = (t : Env.t)
-
-  let env_to_rep (t : Env.t) = (t : t)
-
   let size = 2 * SP_int32.size
 
-  let unmarshal env =
-    (Env.sub env 0 size : t), (Env.skip_bytes env size)
+  let rep_to_env (t : t) = (t : Env.t)
 
-  let read (v : t) =
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
+    then raise Env.Invalid_op;
+    (t : t)
+
+  let read (t : t) =
     let module I = Int64 in
-    let v0, e0 = SP_int32.unmarshal v in
-    let v1, _ = SP_int32.unmarshal e0 in
-    let i0 = I.of_int32 (SP_int32.read v0) in
-    let i1 = I.of_int32 (SP_int32.read v1) in
-    let i = match Env.endian v with
+    let t0, e0 = SP_int32.unmarshal t in
+    let t1, _ = SP_int32.unmarshal e0 in
+    let i0 = I.of_int32 (SP_int32.read t0) in
+    let i1 = I.of_int32 (SP_int32.read t1) in
+    let i = match Env.endian t with
       | Env.Big_endian -> I.add (I.shift_left i0 32) i1
       | Env.Little_endian -> I.add i0 (I.shift_left i1 32)
     in
       (i : v)
 
-  let marshal env (i : v) =
+  let unmarshal env =
+    (Env.sub env 0 size : t), (Env.skip_bytes env size)
+
+  let marshal env (v : v) =
     let module I = Int64 in
-    let i0 = I.to_int32 (I.logand i 4294967295L) in
-    let i1 = I.to_int32 (I.shift_right i 32) in
+    let i0 = I.to_int32 (I.logand v 4294967295L) in
+    let i1 = I.to_int32 (I.shift_right v 32) in
       match Env.endian env with
-	| Env.Big_endian -> begin
-	    SP_int32.marshal (SP_int32.marshal env i1) i0
-	  end
-	| Env.Little_endian ->
-	    SP_int32.marshal (SP_int32.marshal env i0) i1
+        | Env.Big_endian -> begin
+            SP_int32.marshal (SP_int32.marshal env i1) i0
+          end
+        | Env.Little_endian ->
+            SP_int32.marshal (SP_int32.marshal env i0) i1
+
+  let write (v : v) (t : t) =
+    ignore (marshal (rep_to_env t) v)
 end
 
 module type SP_array_sig = sig
@@ -385,34 +445,60 @@ module type SP_array_sig = sig
   type elem_v
   val rep_to_env : t -> Env.t
   val env_to_rep : Env.t -> t
+  val size : t -> int
   val unmarshal : int -> Env.t -> t * Env.t
-  val read : t -> v
   val read_elem : int -> t -> elem_v
+  val read : t -> v
+  val read_raw : t -> string
+  val write_elem : int -> elem_v -> t -> unit
+  val write : v -> t -> unit
+  val write_raw : string -> t -> unit
   val marshal : Env.t -> v -> Env.t
 end
 
-module SP_array (E : SP_elem)  : (SP_array_sig with type v = E.v array and type elem_v = E.v) = struct
+module SP_array (E : SP_elem)
+  : (SP_array_sig with type v = E.v array and type elem_v = E.v) =
+struct
   type t = Env.t
   type v = E.v array
   type elem_v = E.v
 
   let rep_to_env (t : t) = (t : Env.t)
 
-  let env_to_rep (t : Env.t) = (t : t)
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_byte_aligned t) then
+      raise Env.Invalid_op;
+    (t : t)
+
+  let size (t : t) =
+    Env.byte_length t
+
+  let read_elem idx (t : t) =
+    let elem = Env.sub t (idx * E.size) E.size in
+      E.read (E.env_to_rep elem)
+
+  let write_elem idx (e : elem_v) (t : t) =
+    let elem = Env.sub t (idx * E.size) E.size in
+    E.write e (E.env_to_rep elem)
+
+  let read (t : t) =
+    Array.init ((Env.byte_length t) / E.size) (fun idx -> read_elem idx t)
+
+  let read_raw (t : t) =
+    Env.read_raw t 0 (size t)
 
   let unmarshal len env =
     let size = len * E.size in
     (Env.sub env 0 size : t), (Env.skip_bytes env size)
 
-  let read_elem idx (v : t) =
-    let elem_v = Env.sub v (idx * E.size) E.size in
-      E.read (E.env_to_rep elem_v)
-
-  let read (v : t) =
-    Array.init ((Env.byte_length v) / E.size) (fun idx -> read_elem idx v)
-
   let marshal env (a : v) =
     Array.fold_left (fun e ae -> E.marshal e ae) env a
+
+  let write (a : v) (t : t) =
+    ignore (marshal t a)
+
+  let write_raw src (t : t) =
+    Env.write_raw t 0 src 0 (String.length src)
 end
 
 module SP_byte_vector  = SP_array (SP_byte)
