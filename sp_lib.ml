@@ -23,7 +23,7 @@ module Env = struct
   | `None
   | `Str of string
   | `Frag of t
-  | `Fill of (t -> t * t)       (* returns view of filled-in data + next view *)
+  | `Fill of (t -> t * t)   (* returns view of filled-in data + next view *)
   ]
 
   let endian env =
@@ -221,6 +221,21 @@ module Env = struct
         vstart = env.vstart + offset;
         vlen = len }
 
+  let bit_sub env offset len =
+    if offset < 0 || len < 0 || offset + len > bit_length env then
+      raise Invalid_op;
+    let skipped_bits = env.start_bit + offset in
+    let start_skipped_bytes = skipped_bits / 8 in
+    let new_start_bit = skipped_bits mod 8 in
+    let skipped_bits = new_start_bit + len - 1 in
+    let len_skipped_bytes = skipped_bits / 8 in
+    let new_end_bit = skipped_bits mod 8 in
+      { env with
+          vstart = env.vstart + start_skipped_bytes;
+          start_bit = new_start_bit;
+          vlen = len_skipped_bytes + 1;
+          end_bit = new_end_bit }
+
   let read_raw env offset len =
     if offset < 0 || len < 0 || offset + len > env.vlen then
       raise Invalid_op;
@@ -235,37 +250,61 @@ module Env = struct
   let marshal_bytes env (data : byte_data) =
     match data with
       | `None ->
-	  (sub env 0 0), env
+          (sub env 0 0), env
       | `Str s ->
-	  let slen = String.length s in
-	    write_raw env 0 s 0 slen;
-	    (sub env 0 slen), (skip_bytes env slen)
+          let slen = String.length s in
+            write_raw env 0 s 0 slen;
+            (sub env 0 slen), (skip_bytes env slen)
       | `Frag t ->
-	  let tlen = byte_length t in
-	    byte_blit t env;
-	    (sub env 0 tlen), (skip_bytes env tlen)
+          let tlen = byte_length t in
+            byte_blit t env;
+            (sub env 0 tlen), (skip_bytes env tlen)
       | `Fill fn ->
-	  fn env
+          fn env
 end
 
 module SP_bit = struct
-  type t = int
+  type t = Env.t
+  type v = int
+
+  let rep_to_env (t : t) = (t : Env.t)
+
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_valid t) || (Env.bit_length t) <> 1 then
+      raise Env.Invalid_op;
+    (t : t)
+
+  let read (t : t) =
+    (Env.bit_at t 0 : v)
+
+  let write (v : v) (t : t) =
+    if v <> 0 && v <> 1 then
+      raise Arg_out_of_bounds;
+    Env.set_bit_at t 0 v
 
   let unmarshal env =
-    ((Env.bit_at env 0) : t), (Env.skip_bits env 1)
+    ((Env.bit_sub env 0 1) : t), (Env.skip_bits env 1)
 
-  let marshal env (b : t) =
-    if b <> 0 && b <> 1 then
-      raise Arg_out_of_bounds;
-    Env.set_bit_at env 0 b;
-    ((Env.bit_at env 0) : t), (Env.skip_bits env 1)
+  let marshal env (v : v) =
+    write v env;
+    ((Env.bit_sub env 0 1) : t), (Env.skip_bits env 1)
 end
 
 module SP_bit_vector = struct
   type t = Env.t
+  type v = int
+
+  let size (t : t) =
+    Env.bit_length t
 
   let unmarshal len env =
     ((Env.bit_vector_at env 0 len) : t), (Env.skip_bits env len)
+
+  let read_elem idx (t : t) =
+    Env.bit_at t idx
+
+  let write_elem idx (v : v) (t : t) =
+    Env.set_bit_at t idx v
 
   let marshal env (t : t) =
     let len = Env.bit_length t in
@@ -473,8 +512,8 @@ struct
   let rep_to_env (t : t) = (t : Env.t)
 
   let env_to_rep (t : Env.t) =
-    if not (Env.is_byte_aligned t) then
-      raise Env.Invalid_op;
+    if not (Env.is_byte_aligned t) || (Env.byte_length t) mod E.size <> 0
+    then raise Env.Invalid_op;
     (t : t)
 
   let size (t : t) =
