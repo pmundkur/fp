@@ -263,7 +263,18 @@ module Env = struct
           fn env
 end
 
-module SP_bit = struct
+module type SP_bit_elem = sig
+  type t
+  type v
+  val rep_to_env : t -> Env.t
+  val env_to_rep : Env.t -> t
+  val read : t -> v
+  val write : v -> t -> unit
+  val unmarshal : Env.t -> t * Env.t
+  val marshal : Env.t -> v -> t * Env.t
+end
+
+module SP_bit : (SP_bit_elem with type v = int) = struct
   type t = Env.t
   type v = int
 
@@ -313,15 +324,9 @@ module SP_bit_vector = struct
 end
 
 module type SP_elem = sig
-  type t
-  type v
+  include SP_bit_elem
+
   val size : int
-  val rep_to_env : t -> Env.t
-  val env_to_rep : Env.t -> t
-  val read : t -> v
-  val write : v -> t -> unit
-  val unmarshal : Env.t -> t * Env.t
-  val marshal : Env.t -> v -> t * Env.t
 end
 
 module SP_byte : (SP_elem with type v = char) = struct
