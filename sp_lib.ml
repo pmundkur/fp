@@ -272,6 +272,7 @@ module type SP_bit_elem = sig
   val write : v -> t -> unit
   val unmarshal : Env.t -> t * Env.t
   val marshal : Env.t -> v -> t * Env.t
+  val copy : t -> Env.t -> t * Env.t
 end
 
 module SP_bit : (SP_bit_elem with type v = int) = struct
@@ -299,6 +300,9 @@ module SP_bit : (SP_bit_elem with type v = int) = struct
   let marshal env (v : v) =
     write v env;
     ((Env.bit_sub env 0 1) : t), (Env.skip_bits env 1)
+
+  let copy (t : t) env =
+    marshal env (read t)
 end
 
 module SP_bit_vector = struct
@@ -321,6 +325,9 @@ module SP_bit_vector = struct
     let len = Env.bit_length t in
     Env.bit_blit t env;
     ((Env.bit_vector_at env 0 len) : t), (Env.skip_bits env len)
+
+  let copy (t : t) env =
+    marshal env t
 end
 
 module type SP_elem = sig
@@ -354,6 +361,9 @@ module SP_byte : (SP_elem with type v = char) = struct
   let marshal env (v : v) =
     write v env;
     unmarshal env
+
+  let copy (t : t) env =
+    marshal env (read t)
 end
 
 module SP_int16 : (SP_elem with type v = int) = struct
@@ -397,6 +407,9 @@ module SP_int16 : (SP_elem with type v = int) = struct
   let marshal env (v : v) =
     write v env;
     unmarshal env
+
+  let copy (t : t) env =
+    marshal env (read t)
 end
 
 module SP_int32 : (SP_elem with type v = Int32.t) = struct
@@ -442,6 +455,9 @@ module SP_int32 : (SP_elem with type v = Int32.t) = struct
 
   let write (v : v) (t : t) =
     ignore (marshal (rep_to_env t) v)
+
+  let copy (t : t) env =
+    marshal env (read t)
 end
 
 module SP_int64 : (SP_elem with type v = Int64.t) = struct
@@ -488,6 +504,9 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
 
   let write (v : v) (t : t) =
     ignore (marshal (rep_to_env t) v)
+
+  let copy (t : t) env =
+    marshal env (read t)
 end
 
 module type SP_array_sig = sig
@@ -505,6 +524,7 @@ module type SP_array_sig = sig
   val write : v -> t -> unit
   val write_raw : string -> t -> unit
   val marshal : Env.t -> v -> t * Env.t
+  val copy : t -> Env.t -> t * Env.t
 end
 
 module SP_array (E : SP_elem)
@@ -552,6 +572,9 @@ struct
 
   let write_raw src (t : t) =
     Env.write_raw t 0 src 0 (String.length src)
+
+  let copy (t : t) env =
+    marshal env (read t)
 end
 
 module SP_byte_vector  = SP_array (SP_byte)
