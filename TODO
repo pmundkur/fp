@@ -1,0 +1,32 @@
+TODO:
+
+- Add a alignment operation to the view that returns a view which
+  starts aligned on the nearest specified boundary scanning forward.
+
+Notes:
+
+- Each datatype is viewed as an interpretation of a view of a
+  bytestream.
+
+- To implement this: make all representation types for the viewtype
+  modules the view, not the evaluation type.  The evaluation type
+  needs to also be exported in the module signature, to implement
+  array functors (see below).
+
+- The array datatype should be implemented as a functor, that takes as
+  an argument the module for a primitive datatype.  Note that arrays
+  of arrays will probably not trivially work with this approach.
+
+- The representation type of a dependent sum will be an object of a
+  class whose constructor will take as arguments the implementation
+  views of each label.
+
+- To implement array element updates, the lower-level modules
+  implementing each element need to be updatable.  This means given an
+  object bound to a view, we need a way of getting a new object with
+  the same contents bound to a different view.  This is implemented as
+  an object-level copy function, that given a view, marshals the
+  object's contents into that view, and returns a new object bound to
+  that view.  This copy function handles endianess differences between
+  the source and dest environments.
+
