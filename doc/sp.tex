@@ -1,0 +1,80 @@
+\documentclass{article}
+\usepackage{xspace}
+\begin{document}
+\title{A Specification of the StructParsing Language}
+\author{Prashanth Mundkur}
+\date{\today} \maketitle
+
+\newcommand{\DDC}{$\mathrm{DDC}^\alpha$\xspace}
+\newcommand{\OCaml}{\textrm{OCaml}\xspace}
+
+\section{Introduction}
+
+The Meta Packet Language (MPL) was presented in
+\cite{Madhavapeddy:thesis} to provide concise declarative
+specifications of binary packet formats, from which \OCaml code can be
+generated for parsers for, and producers of, binary data satisfying
+those formats.  The MPL language is simple but expressive, and quite
+effective in achieving its task.  Its implemention is fast and has
+been used for an impressive set of applications.  However, the
+language was presented descriptively, without an underlying semantics,
+leaving some details and quirks of the language lacking a rationale,
+and its implementation code without a roadmap.
+
+The primary objective for this document is to rectify this situation,
+and provide a semi-formal specification for a language StructParsing
+(SP) closely derived from the Meta Packet Language
+(MPL)~\cite{Madhavapeddy:thesis}, one that can provide both some
+rationale for its design and also a guide and some documentation for
+its implementation.  The techniques used are inspired by the Data
+Description Calculus \DDC presented in \cite{Mandelbaum:thesis}.
+Specifically, the dependent-sums of \DDC will be used as the core of
+the semantics of SP.
+
+The semantics of \DDC are based on the use of types to describe data.
+Each type constructed in the \DDC calculus has three roles: (i) to
+describe a collection of byte strings, (ii) to specify datatypes in
+the host language (i.e. the target language for the generated code)
+corresponding to the internal representation in the host language for
+these byte strings, and (iii) to specify the code transforming the
+byte strings into their internal representation as values of the
+corresponding datatypes.  This will inform our view of specifications
+in SP as a collection of types in a dependent type theory, and the
+semantics will directly specify the \OCaml types used for the internal
+representation, as well as the parsing code transforming the
+corresponding byte strings into values of these types.
+
+In addition, MPL specifications are also used
+in~\cite{Madhavapeddy:thesis} to specify the efficient construction of
+the byte string from an \OCaml value.  Hence, the types in the
+specification of SP will also directly specify this reverse
+transformation.
+
+\section{An Initial Fragment of the Language}
+
+We will first consider the fragment of the language used for
+specifying byte strings (Figure~\ref{fig:syntax1}).
+
+\begin{figure}
+\begin{tabular}{rcl}
+expr & $::=$ & values \\
+\end{tabular}
+\caption{Syntax}
+\label{fig:syntax1}
+\end{figure}
+
+\subsection{Type checking}
+
+\section{Extensions}
+
+\subsection{Alignment}
+\subsection{Variants}
+\subsection{Classifications}
+
+\section{Packet Construction}
+
+\section{Language Interface}
+
+\bibliographystyle{unsrt}
+\bibliography{bib}
+\end{document}
