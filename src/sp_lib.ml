@@ -214,6 +214,45 @@ module Env = struct
     in
       iter_bytes 0 0
 
+  let align_start env bit_boundary =
+    if bit_boundary < 0 || bit_boundary mod 8 <> 0 || not (is_valid env) then
+      raise Invalid_op;
+    let byte_boundary = bit_boundary / 8 in
+    let byte_aligned_env =
+      if env.start_bit <> 0 then
+        { env with
+            start_bit = 0;
+            vstart = env.vstart + 1;
+            vlen = env.vlen - 1 }
+      else
+        env
+    in
+    let shift = byte_aligned_env.vstart mod byte_boundary in
+    let shift = if shift = 0 then 0 else byte_boundary - shift in
+    let aligned_env =
+      { byte_aligned_env with
+          vstart = byte_aligned_env.vstart + shift;
+          vlen = byte_aligned_env.vlen - shift }
+    in
+      if not (is_valid aligned_env) then
+        raise Invalid_access;
+      aligned_env
+
+  let align_end env bit_boundary =
+    if bit_boundary < 0 || bit_boundary mod 8 <> 0 || not (is_valid env) then
+      raise Invalid_op;
+    let byte_boundary = bit_boundary / 8 in
+    let shift = (env.vstart + env.vlen) mod byte_boundary in
+    let shift = if shift = 0 then 0 else byte_boundary - shift in
+    let aligned_env =
+      { env with
+          vlen = env.vlen + shift;
+          end_bit = 7 }
+    in
+      if not (is_valid aligned_env) then
+        raise Invalid_access;
+      aligned_env
+
   let sub env offset len =
     if offset < 0 || len < 0 || offset + len > env.vlen then
       raise Invalid_op;
