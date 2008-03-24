@@ -1,7 +1,8 @@
 TODO:
 
-- Add a alignment operation to the view that returns a view which
-  starts aligned on the nearest specified boundary scanning forward.
+- Handcode pcap -> ethernet -> ipv4 -> tcp using sp_lib.
+
+- Add Makefile for above and the docs.
 
 - Differentiate exception errors that arise when unmarshalling beyond
   the limit of the buffer.  That way the user can retry with a bigger

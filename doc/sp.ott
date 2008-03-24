@@ -1,6 +1,8 @@
-metavar name, field, x, y ::= {{ lex alphanum }} {{ tex \mathsf{[[field]]} }} {{ com field label }}
+metavar field, x, y     ::= {{ lex alphanum }} {{ com field label }}
 
-metavar integer_literal ::=   {{ lex numeral }}
+metavar integer_literal ::=   {{ lex numeral }} {{ com Literal integers }}
+
+metavar alignment, current_alignment    ::=   {{ lex alphanum }} {{ com Alignment expression }}
 
 grammar
 
@@ -16,7 +18,7 @@ base, b :: '' ::=                               {{ com Base types }}
  | int32                    ::  :: int32
  | int64                    ::  :: int64
 
-tau :: '' ::=                                   {{ com Type expressions }}
+tau {{ tex \tau }} :: '' ::=                    {{ com Type expressions }}
  | b                        ::  :: base
  | b [ e ]                  ::  :: array
  | struct { D ;; V }        ::  :: struct
@@ -36,7 +38,7 @@ D :: '' ::=                                     {{ com Declarations }}
  |                          ::  :: nil_decl
  | F ; D                    ::  :: cons_decl
 
-F :: '' ::=                                     {{ com Labelled Fields }}
+F :: '' ::=                                     {{ com Labeled Fields }}
  | align e                       ::  :: alignment
  | x : tau                       ::  :: field
  | x : classify (exp) { cases }  ::  :: classify
@@ -57,5 +59,52 @@ value_exp :: '' ::=                             {{ com Value expressions }}
  | path                     ::  :: qualified_field
 
 path, p :: '' ::=                               {{ com Path expressions }}
- | path . x                 ::  :: dot_path
  | x                        ::  :: path_root
+ | path . x                 ::  :: dot_path
+
+E :: '' ::=                                     {{ com Typing contexts }}
+ |                          ::  :: env_nil
+ | E ; x : tau              ::  :: env_cons
+ | E1 ; x : tau ; E2        ::  :: env_append
+
+terminals :: '' ::=                             {{ com Syntax terminals }}
+ | ->                       ::  :: rarrow       {{ tex \rightarrow }}
+ | |-                       ::  :: vdash        {{ tex \vdash }}
+
+align_expr, a :: '' ::=                         {{ com Alignment expressions }}
+ | current_alignment        ::  :: align_var
+ | integer_literal          ::  :: align_const
+ | a1 + a2                  ::  :: align_plus
+ | ( a )                    ::  :: align_group
+ | exp * a                  ::  :: align_multiple
+
+
+formula :: formula_ ::=
+ | judgement                ::  :: judgement
+ | x not in BV ( E )        ::  :: notinBV              {{ tex [[x]]\not\in BV([[E]]) }}
+ | a                        ::  :: current_alignment
+
+defns
+Type_checked_parsing :: '' ::=
+
+defn
+
+E , a |- tau : K , a'      ::  :: kinded_type :: '' by
+
+-------------------------- :: typed_bit
+E , a |- bit : T , (a + 1)
+
+-------------------------- :: typed_byte
+E , a |- byte : T , (a + 8)
+
+-------------------------- :: typed_int16
+E , a |- int16 : T , (a + 16)
+
+-------------------------- :: typed_int32
+E , a |- int32 : T , (a + 32)
+
+-------------------------- :: typed_int64
+E , a |- int64 : T , (a + 64)
+
+
+
