@@ -1,0 +1,61 @@
+metavar name, field, x, y ::= {{ lex alphanum }} {{ tex \mathsf{[[field]]} }} {{ com field label }}
+
+metavar integer_literal ::=   {{ lex numeral }}
+
+grammar
+
+kind, K :: '' ::=                               {{ com Kinds }}
+ | T                        ::  :: base_type    {{ com Base types }}
+ | Sigma -> T               ::  :: array_type   {{ com Array types }}
+ | Struct                   ::  :: struct_type  {{ com Struct types }}
+
+base, b :: '' ::=                               {{ com Base types }}
+ | bit                      ::  :: bit
+ | byte                     ::  :: byte
+ | int16                    ::  :: int16
+ | int32                    ::  :: int32
+ | int64                    ::  :: int64
+
+tau :: '' ::=                                   {{ com Type expressions }}
+ | b                        ::  :: base
+ | b [ e ]                  ::  :: array
+ | struct { D ;; V }        ::  :: struct
+
+exp, e :: '' ::=                                {{ com Expressions }}
+ | integer_literal          ::  :: integer
+ | x                        ::  :: field_ref
+ | e1 + e2                  ::  :: addition
+ | e1 - e2                  ::  :: subtraction
+ | e1 * e2                  ::  :: multiplication
+ | e1 / e2                  ::  :: division
+ | ( e )                    ::  :: grouping
+ | sizeof e                 ::  :: sizeof
+ | num_set_bits e           ::  :: num_set_bits
+
+D :: '' ::=                                     {{ com Declarations }}
+ |                          ::  :: nil_decl
+ | F ; D                    ::  :: cons_decl
+
+F :: '' ::=                                     {{ com Labelled Fields }}
+ | align e                       ::  :: alignment
+ | x : tau                       ::  :: field
+ | x : classify (exp) { cases }  ::  :: classify
+ | x : array (exp) { D ;; V }    ::  :: struct_array
+
+cases :: '' ::=                                 {{ com Classification trees }}
+ |                          ::  :: nil_case
+ | case cases               ::  :: cons_case
+
+case, c :: '' ::=                               {{ com Classification cases }}
+ | exp : name -> { D ;; V } ::  :: case
+
+V :: '' ::=                                     {{ com Value specifications }}
+ | x : value_exp            ::  :: value_exp
+
+value_exp :: '' ::=                             {{ com Value expressions }}
+ | e                        ::  :: expr
+ | path                     ::  :: qualified_field
+
+path, p :: '' ::=                               {{ com Path expressions }}
+ | path . x                 ::  :: dot_path
+ | x                        ::  :: path_root
