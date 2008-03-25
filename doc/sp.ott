@@ -89,7 +89,7 @@ align_expr, a :: '' ::=                         {{ com Alignment expressions }}
 
 formula :: formula_ ::=
  | judgement                ::  :: judgement
- | x not in BV ( E )        ::  :: notinBV              {{ tex [[x]]\not\in BV([[E]]) }}
+ | x not in dom ( E )       ::  :: notindomE    {{ tex [[x]]\not\in dom([[E]]) }}
  | a                        ::  :: current_alignment
  | a '%' i1 = i2            ::  :: alignment_boundary
 
@@ -98,95 +98,120 @@ Type_checked_parsing :: '' ::=
 
 defn
 
-E , a |- tau : K , a'      ::  :: struct_typing :: 'struct_typing_' by
+E |- e : sigma              ::  :: exp_typing :: 'exp_typing_' by
 
--------------------------- :: bit
-E , a |- bit : T , a + 1
-
-a % 8 = 0
--------------------------- :: byte
-E , a |- byte : T , a + 8
-
-a % 8 = 0
--------------------------- :: int16
-E , a |- int16 : T , a + 16
-
-a % 8 = 0
--------------------------- :: int32
-E , a |- int32 : T , a + 32
-
-a % 8 = 0
--------------------------- :: int64
-E , a |- int64 : T , a + 64
-
-E |- e : int
--------------------------- :: bit_vector
-E, a |- bit[e] : Sigma -> T , a + (e)
-
-a % 8 = 0
-E |- e : int
--------------------------- :: byte_vector
-E, a |- byte[e] : Sigma -> T , a + 8*(e)
-
-a % 8 = 0
-E |- e : int
--------------------------- :: int16_vector
-E, a |- int16[e] : Sigma -> T , a + 16*(e)
-
-a % 8 = 0
-E |- e : int
--------------------------- :: int32_vector
-E, a |- int32[e] : Sigma -> T , a + 32*(e)
-
-a % 8 = 0
-E |- e : int
--------------------------- :: int64_vector
-E, a |- int64[e] : Sigma -> T , a + 64*(e)
-
-
-
-defn
-
-E |- e : sigma             ::  :: exp_typing :: 'exp_typing_' by
-
--------------------------- :: int
+--------------------------  :: int
 E |- integer_literal : int
 
--------------------------- :: var
+--------------------------  :: var
 E1; x : tau ; E2 |- x : T(tau)
 
 E |- e1 : int
 E |- e2 : int
--------------------------- :: addition
+--------------------------  :: addition
 E |- e1 + e2 : int
 
 E |- e1 : int
 E |- e2 : int
--------------------------- :: subtraction
+--------------------------  :: subtraction
 E |- e1 - e2 : int
 
 E |- e1 : int
 E |- e2 : int
--------------------------- :: multiplication
+--------------------------  :: multiplication
 E |- e1 * e2 : int
 
 E |- e1 : int
 E |- e2 : int
--------------------------- :: division
+--------------------------  :: division
 E |- e1 / e2 : int
 
 E |- e : sigma
--------------------------- :: grouping
+--------------------------  :: grouping
 E |- (e) : sigma
 
--------------------------- :: sizeof
+--------------------------  :: sizeof
 E |- sizeof x  : int
 
--------------------------- :: offset
+--------------------------  :: offset
 E |- offset x  : int
 
--------------------------- :: num_set_bits
+--------------------------  :: num_set_bits
 E |- num_set_bits x  : int
 
--------------------------- :: remaining
+--------------------------  :: remaining
 E |- remaining ()  : int
+
+defn
+
+E , a |- tau : K , a'       ::  :: typing :: 'typing_' by
+
+--------------------------  :: bit
+E , a |- bit : T , a + 1
+
+a % 8 = 0
+--------------------------  :: byte
+E , a |- byte : T , a + 8
+
+a % 8 = 0
+--------------------------  :: int16
+E , a |- int16 : T , a + 16
+
+a % 8 = 0
+--------------------------  :: int32
+E , a |- int32 : T , a + 32
+
+a % 8 = 0
+--------------------------  :: int64
+E , a |- int64 : T , a + 64
+
+E |- e : int
+--------------------------  :: bit_vector
+E, a |- bit[e] : Sigma -> T , a + (e)
+
+a % 8 = 0
+E |- e : int
+--------------------------  :: byte_vector
+E, a |- byte[e] : Sigma -> T , a + 8*(e)
+
+a % 8 = 0
+E |- e : int
+--------------------------  :: int16_vector
+E, a |- int16[e] : Sigma -> T , a + 16*(e)
+
+a % 8 = 0
+E |- e : int
+--------------------------  :: int32_vector
+E, a |- int32[e] : Sigma -> T , a + 32*(e)
+
+a % 8 = 0
+E |- e : int
+--------------------------  :: int64_vector
+E, a |- int64[e] : Sigma -> T , a + 64*(e)
+
+defn
+
+E , a |- D , E' , a'        ::  :: decls_typing :: 'decls_typing_' by
+
+--------------------------  :: nil
+E , a |- , E , a
+
+E , a |- F , E' , a'
+E' , a' |- D , E'' , a''
+--------------------------  :: cons
+E , a |- F ; D , E'' , a''
+
+
+defn
+
+E , a |- F , E' , a'        ::  :: field_typing :: 'field_typing_' by
+
+const_fold ( e ) % 8 = 0
+--------------------------  :: alignment
+E , a |- align e , E , const_fold ( e )
+
+x not in dom(E)
+E , a |- tau : K , a'
+--------------------------  :: field
+E , a |- x : tau , E ; x : tau , a'
+
