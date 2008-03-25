@@ -1,6 +1,6 @@
 metavar field, x, y     ::= {{ lex alphanum }} {{ com field label }}
 
-metavar integer_literal ::=   {{ lex numeral }} {{ com Literal integers }}
+metavar integer_literal, i ::=   {{ lex numeral }} {{ com Literal integers }}
 
 metavar alignment, current_alignment    ::=   {{ lex alphanum }} {{ com Alignment expression }}
 
@@ -8,8 +8,14 @@ grammar
 
 kind, K :: '' ::=                               {{ com Kinds }}
  | T                        ::  :: base_type    {{ com Base types }}
- | Sigma -> T               ::  :: array_type   {{ com Array types }}
+ | Sigma -> T               ::  :: array_type   {{ com Array types }}  {{ tex \sigma\rightarrow [[T]] }}
  | Struct                   ::  :: struct_type  {{ com Struct types }}
+
+sigma {{ tex \sigma }} :: '' ::=                {{ com Expression types }}
+ | int                      ::  :: host_int
+ | bool                     ::  :: host_bool
+ | sigma1 -> sigma2         ::  :: host_function
+ | T ( tau )                ::  :: host_type_rep
 
 base, b :: '' ::=                               {{ com Base types }}
  | bit                      ::  :: bit
@@ -31,8 +37,10 @@ exp, e :: '' ::=                                {{ com Expressions }}
  | e1 * e2                  ::  :: multiplication
  | e1 / e2                  ::  :: division
  | ( e )                    ::  :: grouping
- | sizeof e                 ::  :: sizeof
- | num_set_bits e           ::  :: num_set_bits
+ | sizeof x                 ::  :: sizeof
+ | offset x                 ::  :: offset
+ | num_set_bits x           ::  :: num_set_bits
+ | remaining ()             ::  :: remaining
 
 D :: '' ::=                                     {{ com Declarations }}
  |                          ::  :: nil_decl
@@ -41,7 +49,7 @@ D :: '' ::=                                     {{ com Declarations }}
 F :: '' ::=                                     {{ com Labeled Fields }}
  | align e                       ::  :: alignment
  | x : tau                       ::  :: field
- | x : classify (exp) { cases }  ::  :: classify
+ | x : classify (x) { cases }    ::  :: classify
  | x : array (exp) { D ;; V }    ::  :: struct_array
 
 cases :: '' ::=                                 {{ com Classification trees }}
@@ -74,37 +82,111 @@ terminals :: '' ::=                             {{ com Syntax terminals }}
 align_expr, a :: '' ::=                         {{ com Alignment expressions }}
  | current_alignment        ::  :: align_var
  | integer_literal          ::  :: align_const
+ | ( exp )                  ::  :: align_exp
  | a1 + a2                  ::  :: align_plus
- | ( a )                    ::  :: align_group
- | exp * a                  ::  :: align_multiple
-
+ | a1 * a2                  ::  :: align_multiple
+ | const_fold ( exp )       ::  :: const_fold
 
 formula :: formula_ ::=
  | judgement                ::  :: judgement
  | x not in BV ( E )        ::  :: notinBV              {{ tex [[x]]\not\in BV([[E]]) }}
  | a                        ::  :: current_alignment
+ | a '%' i1 = i2            ::  :: alignment_boundary
 
 defns
 Type_checked_parsing :: '' ::=
 
 defn
 
-E , a |- tau : K , a'      ::  :: kinded_type :: '' by
+E , a |- tau : K , a'      ::  :: struct_typing :: 'struct_typing_' by
 
--------------------------- :: typed_bit
-E , a |- bit : T , (a + 1)
+-------------------------- :: bit
+E , a |- bit : T , a + 1
 
--------------------------- :: typed_byte
-E , a |- byte : T , (a + 8)
+a % 8 = 0
+-------------------------- :: byte
+E , a |- byte : T , a + 8
 
--------------------------- :: typed_int16
-E , a |- int16 : T , (a + 16)
+a % 8 = 0
+-------------------------- :: int16
+E , a |- int16 : T , a + 16
 
--------------------------- :: typed_int32
-E , a |- int32 : T , (a + 32)
+a % 8 = 0
+-------------------------- :: int32
+E , a |- int32 : T , a + 32
 
--------------------------- :: typed_int64
-E , a |- int64 : T , (a + 64)
+a % 8 = 0
+-------------------------- :: int64
+E , a |- int64 : T , a + 64
+
+E |- e : int
+-------------------------- :: bit_vector
+E, a |- bit[e] : Sigma -> T , a + (e)
+
+a % 8 = 0
+E |- e : int
+-------------------------- :: byte_vector
+E, a |- byte[e] : Sigma -> T , a + 8*(e)
+
+a % 8 = 0
+E |- e : int
+-------------------------- :: int16_vector
+E, a |- int16[e] : Sigma -> T , a + 16*(e)
+
+a % 8 = 0
+E |- e : int
+-------------------------- :: int32_vector
+E, a |- int32[e] : Sigma -> T , a + 32*(e)
+
+a % 8 = 0
+E |- e : int
+-------------------------- :: int64_vector
+E, a |- int64[e] : Sigma -> T , a + 64*(e)
 
 
 
+defn
+
+E |- e : sigma             ::  :: exp_typing :: 'exp_typing_' by
+
+-------------------------- :: int
+E |- integer_literal : int
+
+-------------------------- :: var
+E1; x : tau ; E2 |- x : T(tau)
+
+E |- e1 : int
+E |- e2 : int
+-------------------------- :: addition
+E |- e1 + e2 : int
+
+E |- e1 : int
+E |- e2 : int
+-------------------------- :: subtraction
+E |- e1 - e2 : int
+
+E |- e1 : int
+E |- e2 : int
+-------------------------- :: multiplication
+E |- e1 * e2 : int
+
+E |- e1 : int
+E |- e2 : int
+-------------------------- :: division
+E |- e1 / e2 : int
+
+E |- e : sigma
+-------------------------- :: grouping
+E |- (e) : sigma
+
+-------------------------- :: sizeof
+E |- sizeof x  : int
+
+-------------------------- :: offset
+E |- offset x  : int
+
+-------------------------- :: num_set_bits
+E |- num_set_bits x  : int
+
+-------------------------- :: remaining
+E |- remaining ()  : int
