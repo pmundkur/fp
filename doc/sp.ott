@@ -1,4 +1,4 @@
-metavar field, x, y, name  ::= {{ lex alphanum }} {{ com field label }}
+metavar field, x, y, name, n  ::= {{ lex alphanum }} {{ com field label }}
 
 metavar integer_literal, i ::=   {{ lex numeral }} {{ com Literal integers }}
 
@@ -87,7 +87,7 @@ V :: '' ::=                                     {{ com Value specifications }}
 
 % The path syntax allows value expressions to refer to fields within
 % classification trees.
-value_exp :: '' ::=                             {{ com Value expressions }}
+value_exp, ve :: '' ::=                         {{ com Value expressions }}
  | e                        ::  :: expr
  | path                     ::  :: qualified_field
 
@@ -262,12 +262,12 @@ E , a |- align e , E , const_fold ( e )
 % handle the case where tau is a struct.
 x not in dom(E)
 E , a |- b : K , a'
---------------------------  :: field_base
+--------------------------  :: base
 E , a |- x : b , E ; x : b , a'
 
 x not in dom(E)
 E , a |- b [ e ] : K , a'
---------------------------  :: field_array
+--------------------------  :: base_array
 E , a |- x : b [ e ] , E ; x : b [ e ] , a'
 
 % In the case where tau is a named struct, we need to handle
@@ -283,11 +283,11 @@ E , a |- x : b [ e ] , E ; x : b [ e ] , a'
 % one.  Of course, all this is for notational convenience; a real
 % implementation would use techniques like embedding markers in the
 % environment to make all this efficient.
-E , a |- struct name { D ;; VD } : Struct , a'
+E , a |- struct n { D ;; VD } : Struct , a'
 E , a |- D , E' , a'
 E' |- VD
---------------------------  :: field_struct
-E , a |- x : struct name { D ;; VD } , E ; x : struct name { D ;; VD } ; qualify ( x . name , E' \ E ) , a'
+--------------------------  :: struct
+E , a |- x : struct n { D ;; VD } , E ; x : struct n { D ;; } ; qualify ( x . n , E' \ E ) , a'
 
 % The array needs to start and end on a byte-boundary.
 a % 8 = 0
@@ -295,7 +295,7 @@ E |- e : int
 E , 0 |- D , E' , a'
 ( e ) * a' % 8 = 0
 E' |- VD
---------------------------  :: struct_array
+--------------------------  :: array
 E , a |- x : array ( e ) { D ;; VD } , E ; x : array_struct , a + ( e ) * a'
 
 
@@ -311,10 +311,10 @@ E |- V
 E |- V ; VD
 
 defn
-E |- V                      ::  :: value_decl_typing :: 'value_decl_typing_' by
+E |- V                      ::  :: value_typing :: 'value_typing_' by
 
 x in dom ( E )
-E |- value_exp : sigma
+E |- ve : sigma
 --------------------------  :: expr
-E |- x : value_exp
+E |- x : ve
 

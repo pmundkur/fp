@@ -312,6 +312,8 @@ module type SP_bit_elem = sig
   val unmarshal : Env.t -> t * Env.t
   val marshal : Env.t -> v -> t * Env.t
   val copy : t -> Env.t -> t * Env.t
+  val of_int : int -> v
+  val to_int : v -> int
 end
 
 module SP_bit : (SP_bit_elem with type v = int) = struct
@@ -342,6 +344,10 @@ module SP_bit : (SP_bit_elem with type v = int) = struct
 
   let copy (t : t) env =
     marshal env (read t)
+
+  let of_int (i : int) = i
+
+  let to_int (v : v) = v
 end
 
 module SP_bit_vector = struct
@@ -403,6 +409,10 @@ module SP_byte : (SP_elem with type v = char) = struct
 
   let copy (t : t) env =
     marshal env (read t)
+
+  let of_int (i : int) = char_of_int i
+
+  let to_int (v : v) = int_of_char v
 end
 
 module SP_int16 : (SP_elem with type v = int) = struct
@@ -449,6 +459,10 @@ module SP_int16 : (SP_elem with type v = int) = struct
 
   let copy (t : t) env =
     marshal env (read t)
+
+  let of_int (i : int) = i
+
+  let to_int (v : v) = v
 end
 
 module SP_int32 : (SP_elem with type v = Int32.t) = struct
@@ -497,6 +511,10 @@ module SP_int32 : (SP_elem with type v = Int32.t) = struct
 
   let copy (t : t) env =
     marshal env (read t)
+
+  let of_int (i : int) = Int32.of_int i
+
+  let to_int (v : v) = Int32.to_int v
 end
 
 module SP_int64 : (SP_elem with type v = Int64.t) = struct
@@ -546,6 +564,10 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
 
   let copy (t : t) env =
     marshal env (read t)
+
+  let of_int (i : int) = Int64.of_int i
+
+  let to_int (v : v) = Int64.to_int v
 end
 
 module type SP_array_sig = sig
