@@ -1,4 +1,4 @@
-metavar field, x, y     ::= {{ lex alphanum }} {{ com field label }}
+metavar field, x, y, name  ::= {{ lex alphanum }} {{ com field label }}
 
 metavar integer_literal, i ::=   {{ lex numeral }} {{ com Literal integers }}
 
@@ -11,6 +11,9 @@ kind, K :: '' ::=                               {{ com Kinds }}
  | Sigma -> T               ::  :: array_type   {{ com Array types }}  {{ tex \sigma\rightarrow [[T]] }}
  | Struct                   ::  :: struct_type  {{ com Struct types }}
 
+% T(tau) is the function that maps the base type to the representative
+% type in the host language.  It is undefined on non-base types, since
+% its value on non-base types is not used.
 sigma {{ tex \sigma }} :: '' ::=                {{ com Expression types }}
  | int                      ::  :: host_int
  | bool                     ::  :: host_bool
@@ -24,11 +27,22 @@ base, b :: '' ::=                               {{ com Base types }}
  | int32                    ::  :: int32
  | int64                    ::  :: int64
 
+% Note that this definition allows fields inside structs to have
+% struct types.  Also, the value expressions for fields are seperated
+% out into a separate syntactic rule, and after field declarations:
+% this has been done to ease the typing specification, since the
+% environment for the value expressions includes _all_ the fields in
+% the enclosing struct, including fields that lexically come later in
+% the actual language.
 tau {{ tex \tau }} :: '' ::=                    {{ com Type expressions }}
  | b                        ::  :: base
  | b [ e ]                  ::  :: array
- | struct { D ;; V }        ::  :: struct
+ | struct name { D ;; VD }  ::  :: struct
+ | array_struct             ::  :: array_struct
 
+% These are expressions that are used to specify array-lengths, and a
+% slight extension of these expressions will be used to specify value
+% specifications.
 exp, e :: '' ::=                                {{ com Expressions }}
  | integer_literal          ::  :: integer
  | x                        ::  :: field_ref
@@ -49,19 +63,30 @@ D :: '' ::=                                     {{ com Declarations }}
 F :: '' ::=                                     {{ com Labeled Fields }}
  | align e                       ::  :: alignment
  | x : tau                       ::  :: field
+ | x : array ( e ) { D ;; VD }   ::  :: struct_array
  | x : classify (x) { cases }    ::  :: classify
- | x : array (exp) { D ;; V }    ::  :: struct_array
 
 cases :: '' ::=                                 {{ com Classification trees }}
  |                          ::  :: nil_case
  | case cases               ::  :: cons_case
 
 case, c :: '' ::=                               {{ com Classification cases }}
- | exp : name -> { D ;; V } ::  :: case
+ | exp : name -> { D ;; VD } ::  :: case
+
+% The value declarations are unordered, so we should use a list form.
+% This ensures that we use the same environment for each decl, and
+% also enables us to define one less typing production.  However, Ott
+% had issues with the way I attempted it ...
+
+VD :: '' ::=                                    {{ com Value declarations }}
+ |                          ::  :: nil_value_decl
+ | V ; VD                   ::  :: cons_value_decl
 
 V :: '' ::=                                     {{ com Value specifications }}
- | x : value_exp            ::  :: value_exp
+ | x : value_exp            ::  :: value_decl
 
+% The path syntax allows value expressions to refer to fields within
+% classification trees.
 value_exp :: '' ::=                             {{ com Value expressions }}
  | e                        ::  :: expr
  | path                     ::  :: qualified_field
@@ -70,15 +95,21 @@ path, p :: '' ::=                               {{ com Path expressions }}
  | x                        ::  :: path_root
  | path . x                 ::  :: dot_path
 
-E :: '' ::=                                     {{ com Typing contexts }}
+
+% The qualify function prepends the specified path to each field in
+% the domain of the argument environment.
+E :: '' ::=                                     {{ com Typing environments }}
  |                          ::  :: env_nil
- | E ; x : tau              ::  :: env_cons
- | E1 ; x : tau ; E2        ::  :: env_append
+ | E ; path : tau           ::  :: env_cons
+ | E1 ; E2                  ::  :: env_append
+ | E1 ; path : tau ; E2     ::  :: env_find
+ | E1 \ E2                  ::  :: env_subtract
+ | qualify ( path , E )     ::  :: env_qualify
 
-terminals :: '' ::=                             {{ com Syntax terminals }}
- | ->                       ::  :: rarrow       {{ tex \rightarrow }}
- | |-                       ::  :: vdash        {{ tex \vdash }}
-
+% The ( exp ) production is purely a mechanism to inject expressions
+% as alignments, without disambiguation.  const_fold is a function
+% that is defined when exp can be constant-folded into a constant, and
+% is not defined otherwise.
 align_expr, a :: '' ::=                         {{ com Alignment expressions }}
  | current_alignment        ::  :: align_var
  | integer_literal          ::  :: align_const
@@ -89,22 +120,26 @@ align_expr, a :: '' ::=                         {{ com Alignment expressions }}
 
 formula :: formula_ ::=
  | judgement                ::  :: judgement
- | x not in dom ( E )       ::  :: notindomE    {{ tex [[x]]\not\in dom([[E]]) }}
+ | path in dom ( E )        ::  :: indomE       {{ tex [[x]]\not\in dom([[E]]) }}
+ | path not in dom ( E )    ::  :: notindomE    {{ tex [[x]]\not\in dom([[E]]) }}
  | a                        ::  :: current_alignment
  | a '%' i1 = i2            ::  :: alignment_boundary
+
+terminals :: '' ::=                             {{ com Syntax terminals }}
+ | ->                       ::  :: rarrow       {{ tex \rightarrow }}
+ | |-                       ::  :: vdash        {{ tex \vdash }}
 
 defns
 Type_checked_parsing :: '' ::=
 
 defn
-
-E |- e : sigma              ::  :: exp_typing :: 'exp_typing_' by
+E |- value_exp : sigma      ::  :: exp_typing :: 'exp_typing_' by
 
 --------------------------  :: int
 E |- integer_literal : int
 
---------------------------  :: var
-E1; x : tau ; E2 |- x : T(tau)
+--------------------------  :: path
+E1; path : tau ; E2 |- path : T(tau)
 
 E |- e1 : int
 E |- e2 : int
@@ -143,11 +178,16 @@ E |- num_set_bits x  : int
 E |- remaining ()  : int
 
 defn
-
 E , a |- tau : K , a'       ::  :: typing :: 'typing_' by
 
 --------------------------  :: bit
 E , a |- bit : T , a + 1
+
+E |- e : int
+--------------------------  :: bit_vector
+E, a |- bit[e] : Sigma -> T , a + (e)
+
+% All non-bit types are required to be byte-aligned.
 
 a % 8 = 0
 --------------------------  :: byte
@@ -164,10 +204,6 @@ E , a |- int32 : T , a + 32
 a % 8 = 0
 --------------------------  :: int64
 E , a |- int64 : T , a + 64
-
-E |- e : int
---------------------------  :: bit_vector
-E, a |- bit[e] : Sigma -> T , a + (e)
 
 a % 8 = 0
 E |- e : int
@@ -189,10 +225,23 @@ E |- e : int
 --------------------------  :: int64_vector
 E, a |- int64[e] : Sigma -> T , a + 64*(e)
 
-defn
+% This rule type checks a top-level struct.  Note that the environment
+% threading in this rule adds the fields in the struct to the
+% environment without any qualification.  This will be rectified for
+% nested structs, below.  Also, note that the environment used to type
+% VD is the one computed after typing D.
+E , a |- D , E' , a'
+E' |- VD
+--------------------------  :: named_struct
+E , a |- struct name { D ;; VD } : Struct, a'
 
+% There is no rule for typing an unamed array struct, since this will
+% never appear in the source syntax.
+
+defn
 E , a |- D , E' , a'        ::  :: decls_typing :: 'decls_typing_' by
 
+% That's not a typo: it's the null decl!
 --------------------------  :: nil
 E , a |- , E , a
 
@@ -201,17 +250,71 @@ E' , a' |- D , E'' , a''
 --------------------------  :: cons
 E , a |- F ; D , E'' , a''
 
-
 defn
-
 E , a |- F , E' , a'        ::  :: field_typing :: 'field_typing_' by
 
 const_fold ( e ) % 8 = 0
 --------------------------  :: alignment
 E , a |- align e , E , const_fold ( e )
 
+% We don't have a single rule for x : tau, but instead seperate out
+% the rules for the top level cases of tau.  This is to specially
+% handle the case where tau is a struct.
 x not in dom(E)
-E , a |- tau : K , a'
---------------------------  :: field
-E , a |- x : tau , E ; x : tau , a'
+E , a |- b : K , a'
+--------------------------  :: field_base
+E , a |- x : b , E ; x : b , a'
+
+x not in dom(E)
+E , a |- b [ e ] : K , a'
+--------------------------  :: field_array
+E , a |- x : b [ e ] , E ; x : b [ e ] , a'
+
+% In the case where tau is a named struct, we need to handle
+% environments specially: they need to be extended by prepending the
+% struct name as a prefix to each new field added to the environment
+% when typing tau.  This extended environment is used to handle the
+% value expressions that contain paths referring to fields inside the
+% struct.  The typing rules for arrays and classification cases will
+% rely on this rule.
+%
+% Note that the typing computation for D and VD is duplicated in the
+% second and third pre-conditions; it was already done in the first
+% one.  Of course, all this is for notational convenience; a real
+% implementation would use techniques like embedding markers in the
+% environment to make all this efficient.
+E , a |- struct name { D ;; VD } : Struct , a'
+E , a |- D , E' , a'
+E' |- VD
+--------------------------  :: field_struct
+E , a |- x : struct name { D ;; VD } , E ; x : struct name { D ;; VD } ; qualify ( x . name , E' \ E ) , a'
+
+% The array needs to start and end on a byte-boundary.
+a % 8 = 0
+E |- e : int
+E , 0 |- D , E' , a'
+( e ) * a' % 8 = 0
+E' |- VD
+--------------------------  :: struct_array
+E , a |- x : array ( e ) { D ;; VD } , E ; x : array_struct , a + ( e ) * a'
+
+
+% TODO: classify().
+
+% Defns to do: cases.
+
+defn
+E |- VD                     ::  :: value_decls_typing :: '' by
+
+E |- V
+--------------------------  :: value_decls
+E |- V ; VD
+
+defn
+E |- V                      ::  :: value_decl_typing :: 'value_decl_typing_' by
+
+x in dom ( E )
+E |- value_exp : sigma
+--------------------------  :: expr
+E |- x : value_exp
 
