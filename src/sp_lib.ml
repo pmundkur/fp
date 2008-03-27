@@ -2,8 +2,9 @@ exception Arg_out_of_bounds
 
 module Env = struct
 
-  exception Invalid_access
-  exception Invalid_op
+  exception Invalid_access of string
+  exception Invalid_op of string
+  exception Insufficient_data of string
 
   type endian =
     | Big_endian
@@ -18,6 +19,18 @@ module Env = struct
     end_bit: int;       (* bit offset into last byte *)
     endian: endian      (* endianness of data view *)
   }
+
+  let pretty_print env =
+    let p = print_endline in
+      p (" [Env.t]");
+      p (" bufsize = " ^ (string_of_int (String.length env.buf)));
+      p (" buflen = " ^ (string_of_int env.blen));
+      p (" vstart = " ^ (string_of_int env.vstart));
+      p (" vlen = " ^ (string_of_int env.vlen));
+      p (" vend = " ^ (string_of_int (env.vstart + env.vlen)));
+      p (" start_bit = " ^ (string_of_int env.start_bit));
+      p (" end_bit = " ^ (string_of_int env.end_bit));
+      p (" endian = " ^ (match env.endian with Big_endian -> "Big" | _ -> "Little"))
 
   type byte_data = [
   | `None
@@ -63,47 +76,65 @@ module Env = struct
     (is_valid env) && (env.start_bit = 0) && (env.end_bit = 7)
 
   let byte_at env offset =
-    if offset < 0 || offset >= env.vlen || not (is_byte_aligned env) then
-      raise Invalid_access;
+    if offset < 0 then
+      raise (Invalid_access "Env.byte_at");
+    if not (is_byte_aligned env) then
+      raise (Invalid_op "Env.byte_at");
+    if offset >= env.vlen then
+      raise (Insufficient_data "Env.byte_at");
     String.get env.buf (env.vstart + offset)
 
   let set_byte_at env b offset =
-    if offset < 0 || offset >= env.vlen then
-      raise Invalid_access;
+    if offset < 0 then
+      raise (Invalid_access "Env.set_byte_at");
+    if offset >= env.vlen then
+      raise (Insufficient_data "Env.set_byte_at");
     String.set env.buf (env.vstart + offset) b
 
   let vector_at env offset len =
-    if offset < 0 || len < 0 || offset + len > env.vlen
-      || not (is_byte_aligned env)
-    then raise Invalid_access;
+    if offset < 0 || len < 0 then
+      raise (Invalid_access "Env.vector_at");
+    if not (is_byte_aligned env) then
+      raise (Invalid_op "Env.vector_at");
+    if offset + len > env.vlen then
+      raise (Insufficient_data "Env.vector_at");
     { env with
         vstart = env.vstart + offset;
         vlen = len }
 
   let set_vector_at env offset src =
     let src_len = String.length src in
-      if not (is_non_empty env) || not (is_byte_aligned env)
-        || offset < 0 || offset + src_len > env.vlen
-      then raise Invalid_op;
+      if offset < 0 then
+	raise (Invalid_access "Env.set_vector_at");
+      if not (is_non_empty env) || not (is_byte_aligned env) then
+	raise (Invalid_op "Env.set_vector_at");
+      if offset + src_len > env.vlen then
+	raise (Insufficient_data "Env.set_vector_at");
       String.blit src 0 env.buf (env.vstart + offset) src_len
 
   let byte_blit src_env dest_env =
     if not (is_byte_aligned src_env) || not (is_byte_aligned dest_env)
-      || byte_length dest_env < byte_length src_env
       || (endian src_env) <> (endian dest_env)
-    then raise Invalid_op;
+    then raise (Invalid_op "Env.byte_blit");
+    if byte_length dest_env < byte_length src_env then
+      raise (Insufficient_data "Env.byte_blit");
     String.blit src_env.buf src_env.vstart dest_env.buf dest_env.vstart src_env.vlen
 
   let skip_bytes env len =
-    if len < 0 || len > env.vlen then
-      raise Invalid_op;
+    if len < 0 then
+      raise (Invalid_op "Env.skip_bytes");
+    if len > env.vlen then begin
+      raise (Insufficient_data "Env.skip_bytes");
+    end;
     { env with
         vstart = env.vstart + len;
         vlen = env.vlen - len }
 
   let bit_at env bit_offset =
-    if bit_offset < 0 || bit_offset >= bit_length env then
-      raise Invalid_op;
+    if bit_offset < 0 then
+      raise (Invalid_access "Env.bit_at");
+    if bit_offset >= bit_length env then
+      raise (Insufficient_data "Env.bit_at");
     let bit_offset = env.start_bit + bit_offset in
     let skipped_bytes = bit_offset / 8 in
     let bit_offset = bit_offset mod 8 in
@@ -112,9 +143,12 @@ module Env = struct
     in (target_byte lsr bit_offset) land 0x1
 
   let set_bit_at env bit_offset bit =
-    if bit_offset < 0 || bit_offset >= bit_length env
-      || (bit <> 0 && bit <> 1)
-    then raise Invalid_op;
+    if bit_offset < 0 then
+      raise (Invalid_access "Env.set_bit_at");
+    if bit <> 0 && bit <> 1 then
+      raise (Invalid_op "Env.set_bit_at");
+    if bit_offset >= bit_length env then
+      raise (Insufficient_data "Env.set_bit_at");
     let bit_offset = env.start_bit + bit_offset in
     let skipped_bytes = bit_offset / 8 in
     let skipped_bits = bit_offset mod 8 in
@@ -124,8 +158,10 @@ module Env = struct
       String.set env.buf byte_offset (char_of_int new_byte)
 
   let bit_vector_at env bit_offset bit_len =
-    if bit_offset < 0 || bit_len < 0 || bit_offset + bit_len >= bit_length env
-    then raise Invalid_access;
+    if bit_offset < 0 || bit_len < 0 then
+      raise (Invalid_access "Env.bit_vector_at");
+    if bit_offset + bit_len >= bit_length env then
+      raise (Insufficient_data "Env.bit_vector_at");
     let offs_bits = env.start_bit + bit_offset in
     let offs_bytes =  offs_bits / 8 in
     let offs_bits = offs_bits mod 8 in
@@ -142,9 +178,10 @@ module Env = struct
      unrolling word-blits.  The source and dest buffers could be
      identical and the views could overlap; this is not handled.  *)
   let bit_op src_env dest_env bitop =
-    if not (is_valid src_env) || not (is_valid dest_env)
-      || bit_length src_env > bit_length dest_env
-    then raise Invalid_op;
+    if not (is_valid src_env) || not (is_valid dest_env) then
+      raise (Invalid_op "Env.bit_op");
+    if bit_length src_env > bit_length dest_env then
+      raise (Insufficient_data "Env.bit_op");
     let total_bits = bit_length src_env in
     let bits_done = ref 0 in
     let s_offs = ref src_env.vstart in
@@ -186,8 +223,10 @@ module Env = struct
     bit_op src_env dest_env (fun s d -> s)
 
   let skip_bits env len =
-    if len < 0 || len > bit_length env then
-      raise Invalid_op;
+    if len < 0 then
+      raise (Invalid_op "Env.skip_bits");
+    if len > bit_length env then
+      raise (Insufficient_data "Env.skip_bits");
     let skipped_bits = len + env.start_bit in
     let skipped_bytes = skipped_bits / 8 in
     let skipped_bits = skipped_bits mod 8 in
@@ -198,7 +237,7 @@ module Env = struct
 
   let num_set_bits env =
     if not (is_valid env) then
-      raise Invalid_op;
+      raise (Invalid_op "Env.num_set_bits");
     let rec nset_bits b st ed ac =
       if st > ed then ac
       else nset_bits b (st + 1) ed (ac + ((b lsr st) land 0x1))
@@ -216,7 +255,7 @@ module Env = struct
 
   let align_start env bit_boundary =
     if bit_boundary < 0 || bit_boundary mod 8 <> 0 || not (is_valid env) then
-      raise Invalid_op;
+      raise (Invalid_op "Env.align_start");
     let byte_boundary = bit_boundary / 8 in
     let byte_aligned_env =
       if env.start_bit <> 0 then
@@ -235,12 +274,12 @@ module Env = struct
           vlen = byte_aligned_env.vlen - shift }
     in
       if not (is_valid aligned_env) then
-        raise Invalid_access;
+        raise (Invalid_op "Env.align_start");
       aligned_env
 
   let align_end env bit_boundary =
     if bit_boundary < 0 || bit_boundary mod 8 <> 0 || not (is_valid env) then
-      raise Invalid_op;
+      raise (Invalid_op "Env.align_end");
     let byte_boundary = bit_boundary / 8 in
     let shift = (env.vstart + env.vlen) mod byte_boundary in
     let shift = if shift = 0 then 0 else byte_boundary - shift in
@@ -250,19 +289,23 @@ module Env = struct
           end_bit = 7 }
     in
       if not (is_valid aligned_env) then
-        raise Invalid_access;
+        raise (Invalid_op "Env.align_start");
       aligned_env
 
   let sub env offset len =
-    if offset < 0 || len < 0 || offset + len > env.vlen then
-      raise Invalid_op;
+    if offset < 0 || len < 0 then
+      raise (Invalid_access "Env.sub");
+    if offset + len > env.vlen then
+      raise (Insufficient_data "Env.sub");
     { env with
         vstart = env.vstart + offset;
         vlen = len }
 
   let bit_sub env offset len =
-    if offset < 0 || len < 0 || offset + len > bit_length env then
-      raise Invalid_op;
+    if offset < 0 || len < 0 then
+      raise (Invalid_access "Env.bit_sub");
+    if offset + len > bit_length env then
+      raise (Insufficient_data "Env.bit_sub");
     let skipped_bits = env.start_bit + offset in
     let start_skipped_bytes = skipped_bits / 8 in
     let new_start_bit = skipped_bits mod 8 in
@@ -276,14 +319,19 @@ module Env = struct
           end_bit = new_end_bit }
 
   let read_raw env offset len =
-    if offset < 0 || len < 0 || offset + len > env.vlen then
-      raise Invalid_op;
+    if offset < 0 || len < 0 then
+      raise (Invalid_access "Env.read_raw");
+    if offset + len > env.vlen then
+      raise (Insufficient_data "Env.read_raw");
     String.sub env.buf (env.vstart + offset) len
 
   let write_raw env offset src src_offset len =
-    if offset < 0 || len < 0 || offset + len > env.vlen
-      || src_offset + len > String.length src || not (is_valid env)
-    then raise Invalid_op;
+    if offset < 0 || len < 0 then
+      raise (Invalid_access "Env.write_raw");
+    if not (is_valid env) then
+      raise (Invalid_op "Env.write_raw");
+    if offset + len > env.vlen || src_offset + len > String.length src then
+      raise (Insufficient_data "Env.write_raw");
     String.blit src src_offset env.buf (env.vstart + offset) len
 
   let marshal_bytes env (data : byte_data) =
@@ -324,7 +372,7 @@ module SP_bit : (SP_bit_elem with type v = int) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_valid t) || (Env.bit_length t) <> 1 then
-      raise Env.Invalid_op;
+      raise (Env.Invalid_op "SP_bit.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -391,7 +439,7 @@ module SP_byte : (SP_elem with type v = char) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise Env.Invalid_op;
+    then raise (Env.Invalid_op "SP_byte.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -425,7 +473,7 @@ module SP_int16 : (SP_elem with type v = int) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise Env.Invalid_op;
+    then raise (Env.Invalid_op "SP_int16.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -475,7 +523,7 @@ module SP_int32 : (SP_elem with type v = Int32.t) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise Env.Invalid_op;
+    then raise (Env.Invalid_op "SP_int32.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -527,7 +575,7 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise Env.Invalid_op;
+    then raise (Env.Invalid_op "SP_int64.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -599,7 +647,7 @@ struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t) mod E.size <> 0
-    then raise Env.Invalid_op;
+    then raise (Env.Invalid_op "SP_array.env_to_rep");
     (t : t)
 
   let size (t : t) =
