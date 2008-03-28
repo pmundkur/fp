@@ -11,15 +11,6 @@ kind, K :: '' ::=                               {{ com Kinds }}
  | Sigma -> T               ::  :: array_type   {{ com Array types }}  {{ tex \sigma\rightarrow [[T]] }}
  | Struct                   ::  :: struct_type  {{ com Struct types }}
 
-% T(tau) is the function that maps the base type to the representative
-% type in the host language.  It is undefined on non-base types, since
-% its value on non-base types is not used.
-sigma {{ tex \sigma }} :: '' ::=                {{ com Expression types }}
- | int                      ::  :: host_int
- | bool                     ::  :: host_bool
- | sigma1 -> sigma2         ::  :: host_function
- | T ( tau )                ::  :: host_type_rep
-
 base, b :: '' ::=                               {{ com Base types }}
  | bit                      ::  :: bit
  | byte                     ::  :: byte
@@ -91,6 +82,10 @@ V :: '' ::=                                     {{ com Value specifications }}
 value_exp, ve :: '' ::=                         {{ com Value expressions }}
  | e                        ::  :: expr
  | path                     ::  :: qualified_field
+ | sizeof path              ::  :: path_sizeof
+ | offset path              ::  :: path_offset
+ | num_set_bits path        ::  :: path_num_set_bits
+
 
 path, p :: '' ::=                               {{ com Path expressions }}
  | x                        ::  :: path_root
@@ -127,6 +122,9 @@ formula :: formula_ ::=
  | E ( path ) = label       ::  :: labelinE
  | a                        ::  :: current_alignment
  | a '%' i1 = i2            ::  :: alignment_boundary
+ | a < a'                   ::  :: alignment_compare
+ | T_to_int ( tau )         ::  :: type_cast_to_int
+ | T_from_int ( tau )       ::  :: type_cast_from_int
 
 terminals :: '' ::=                             {{ com Syntax terminals }}
  | ->                       ::  :: rarrow       {{ tex \rightarrow }}
@@ -135,14 +133,38 @@ terminals :: '' ::=                             {{ com Syntax terminals }}
 defns
 Type_checked_parsing :: '' ::=
 
+% Expression typing is used for array length expressions, and value
+% specifiers.  In the former case, we are interested if the expression
+% can be typed as an integer.  In the latter case, we are interested
+% if the value expression can be typed with the type carried by the
+% field.
+%
+% Although array expressions and value expressions have been
+% differentiated syntactically above (to handle paths in value
+% expressions), they will be typed using the same typing relation, and
+% the difference between the two is implemented in the typing relation
+% for V (field_value_typing).
+
 defn
-E |- value_exp : sigma      ::  :: exp_typing :: 'exp_typing_' by
+E |- value_exp : int ::  :: array_size_typing :: 'array_size_typing_' by
 
 --------------------------  :: int
 E |- integer_literal : int
 
---------------------------  :: path
-E1; path : tau ; E2 |- path : T(tau)
+
+% We handle bit-vectors specially, and the generic case below: they
+% can be converted into integers if their length is a constant and
+% less then a limit.
+E ( path ) = bit [ e ]
+const_fold ( e ) < 32
+--------------------------  :: var_bit_vector
+E |- path : int
+
+% This is the more generic case.
+E ( path ) = tau
+T_to_int ( tau )
+--------------------------  :: var
+E |- path : int
 
 E |- e1 : int
 E |- e2 : int
@@ -164,25 +186,25 @@ E |- e2 : int
 --------------------------  :: division
 E |- e1 / e2 : int
 
-E |- e : sigma
+E |- e : int
 --------------------------  :: grouping
-E |- (e) : sigma
+E |- (e) : int
 
-E ( x ) = tau
+E ( path ) = tau
 --------------------------  :: sizeof
-E |- sizeof x  : int
+E |- sizeof path  : int
 
-E ( x ) = tau
+E ( path ) = tau
 --------------------------  :: offset
-E |- offset x  : int
+E |- offset path  : int
 
-E ( x ) = label
+E ( path ) = label
 --------------------------  :: offset_label
-E |- offset x  : int
+E |- offset path  : int
 
-E ( x ) = tau
+E ( path ) = tau
 --------------------------  :: num_set_bits
-E |- num_set_bits x  : int
+E |- num_set_bits path  : int
 
 --------------------------  :: remaining
 E |- remaining ()  : int
@@ -327,10 +349,11 @@ E |- V
 E |- V ; VD
 
 defn
-E |- V                      ::  :: value_typing :: 'value_typing_' by
+E |- V                      ::  :: field_value_typing :: '' by
 
-x in dom ( E )
-E |- ve : sigma
---------------------------  :: expr
-E |- x : ve
+E ( x ) = tau
+E |- value_exp : int
+T_from_int ( tau )
+--------------------------  :: field_value_typing
+E |- x : value_exp
 
