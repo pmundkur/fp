@@ -62,6 +62,7 @@ D :: '' ::=                                     {{ com Declarations }}
 
 F :: '' ::=                                     {{ com Labeled Fields }}
  | align e                       ::  :: alignment
+ | x : label                     ::  :: label
  | x : tau                       ::  :: field
  | x : array ( e ) { D ;; VD }   ::  :: struct_array
  | x : classify (x) { cases }    ::  :: classify
@@ -100,9 +101,9 @@ path, p :: '' ::=                               {{ com Path expressions }}
 % the domain of the argument environment.
 E :: '' ::=                                     {{ com Typing environments }}
  |                          ::  :: env_nil
- | E ; path : tau           ::  :: env_cons
+ | path : tau               ::  :: env_cons
+ | path : label             ::  :: env_label
  | E1 ; E2                  ::  :: env_append
- | E1 ; path : tau ; E2     ::  :: env_find
  | E1 \ E2                  ::  :: env_subtract
  | qualify ( path , E )     ::  :: env_qualify
 
@@ -122,6 +123,8 @@ formula :: formula_ ::=
  | judgement                ::  :: judgement
  | path in dom ( E )        ::  :: indomE       {{ tex [[x]]\not\in dom([[E]]) }}
  | path not in dom ( E )    ::  :: notindomE    {{ tex [[x]]\not\in dom([[E]]) }}
+ | E ( path ) = tau         ::  :: typeinE
+ | E ( path ) = label       ::  :: labelinE
  | a                        ::  :: current_alignment
  | a '%' i1 = i2            ::  :: alignment_boundary
 
@@ -165,12 +168,19 @@ E |- e : sigma
 --------------------------  :: grouping
 E |- (e) : sigma
 
+E ( x ) = tau
 --------------------------  :: sizeof
 E |- sizeof x  : int
 
+E ( x ) = tau
 --------------------------  :: offset
 E |- offset x  : int
 
+E ( x ) = label
+--------------------------  :: offset_label
+E |- offset x  : int
+
+E ( x ) = tau
 --------------------------  :: num_set_bits
 E |- num_set_bits x  : int
 
@@ -256,6 +266,12 @@ E , a |- F , E' , a'        ::  :: field_typing :: 'field_typing_' by
 const_fold ( e ) % 8 = 0
 --------------------------  :: alignment
 E , a |- align e , E , const_fold ( e )
+
+% A label is simply added to the environment as a label; in
+% particular, the current alignment is unchanged.
+x not in dom(E)
+--------------------------  :: label
+E , a |- x : label , E ; x : label , a
 
 % We don't have a single rule for x : tau, but instead seperate out
 % the rules for the top level cases of tau.  This is to specially
