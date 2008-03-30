@@ -1,8 +1,12 @@
-metavar field, x, y, name, n  ::= {{ lex alphanum }} {{ com field label }}
+metavar field, x, y, name, n            ::= {{ lex alphanum }} {{ com field label }}
 
-metavar integer_literal, i ::=   {{ lex numeral }} {{ com Literal integers }}
+metavar integer_literal, i              ::= {{ lex numeral }}  {{ com Literal integers }}
 
-metavar alignment, current_alignment    ::=   {{ lex alphanum }} {{ com Alignment expression }}
+metavar alignment, current_alignment    ::= {{ lex alphanum }} {{ com Alignment expression }}
+
+metavar value, v                        ::= {{ lex numeral }}  {{ com Constant values }}
+
+indexvar index, j, k                    ::= {{ lex numeral }}  {{ com Indices }}
 
 grammar
 
@@ -20,16 +24,17 @@ base, b :: '' ::=                               {{ com Base types }}
 
 % Note that this definition allows fields inside structs to have
 % struct types.  Also, the value expressions for fields are seperated
-% out into a separate syntactic rule, and after field declarations:
-% this has been done to ease the typing specification, since the
-% environment for the value expressions includes _all_ the fields in
-% the enclosing struct, including fields that lexically come later in
-% the actual language.
+% out into a separate syntactic rule, and appear in a struct after
+% field declarations.  This has been done to ease the typing
+% specification, since the environment for the value expressions
+% includes _all_ the fields in the enclosing struct, including fields
+% that lexically come later in the actual language.
 tau {{ tex \tau }} :: '' ::=                    {{ com Type expressions }}
- | b                        ::  :: base
- | b [ e ]                  ::  :: array
- | struct name { D ;; VD }  ::  :: struct
- | array_struct             ::  :: array_struct
+ | b                            ::  :: base
+ | b [ e ]                      ::  :: array
+ | struct { D ;; VD }           ::  :: struct
+ | </ vj , nj , tauj // j />    ::  :: cases_struct
+ | ( e , tau )                  ::  :: array_struct
 
 % These are expressions that are used to specify array-lengths, and a
 % slight extension of these expressions will be used to specify value
@@ -52,18 +57,14 @@ D :: '' ::=                                     {{ com Declarations }}
  | F ; D                    ::  :: cons_decl
 
 F :: '' ::=                                     {{ com Labeled Fields }}
- | align e                       ::  :: alignment
- | x : label                     ::  :: label
- | x : tau                       ::  :: field
- | x : array ( e ) { D ;; VD }   ::  :: struct_array
- | x : classify (x) { cases }    ::  :: classify
+ | align e                              ::  :: alignment
+ | x : label                            ::  :: label
+ | x : tau                              ::  :: field
+ | x : array ( e ) { D ;; VD }          ::  :: struct_array
+ | x : classify ( y ) { cases }         ::  :: classify
 
 cases :: '' ::=                                 {{ com Classification trees }}
- |                          ::  :: nil_case
- | case cases               ::  :: cons_case
-
-case, c :: '' ::=                               {{ com Classification cases }}
- | exp : name -> { D ;; VD } ::  :: case
+ | </ ej : nj -> { Dj ;; VDj } // j />  ::  :: cases
 
 % The value declarations are unordered, so we should use a list form.
 % This ensures that we use the same environment for each decl, and
@@ -71,8 +72,8 @@ case, c :: '' ::=                               {{ com Classification cases }}
 % had issues with the way I attempted it ...
 
 VD :: '' ::=                                    {{ com Value declarations }}
- |                          ::  :: nil_value_decl
- | V ; VD                   ::  :: cons_value_decl
+ | </ Vj // j />            ::  :: value_decls
+
 
 V :: '' ::=                                     {{ com Value specifications }}
  | x : value_exp            ::  :: value_decl
@@ -88,19 +89,16 @@ value_exp, ve :: '' ::=                         {{ com Value expressions }}
 
 
 path, p :: '' ::=                               {{ com Path expressions }}
- | x                        ::  :: path_root
- | path . x                 ::  :: dot_path
+ | x                        ::  :: path_leaf
+ | path [ n ] . x           ::  :: dot_path
 
 
-% The qualify function prepends the specified path to each field in
-% the domain of the argument environment.
 E :: '' ::=                                     {{ com Typing environments }}
  |                          ::  :: env_nil
  | path : tau               ::  :: env_cons
  | path : label             ::  :: env_label
  | E1 ; E2                  ::  :: env_append
  | E1 \ E2                  ::  :: env_subtract
- | qualify ( path , E )     ::  :: env_qualify
 
 % The ( exp ) production is purely a mechanism to inject expressions
 % as alignments, without disambiguation.  const_fold is a function
@@ -115,16 +113,19 @@ align_expr, a :: '' ::=                         {{ com Alignment expressions }}
  | const_fold ( exp )       ::  :: const_fold
 
 formula :: formula_ ::=
- | judgement                ::  :: judgement
- | path in dom ( E )        ::  :: indomE       {{ tex [[x]]\not\in dom([[E]]) }}
- | path not in dom ( E )    ::  :: notindomE    {{ tex [[x]]\not\in dom([[E]]) }}
- | E ( path ) = tau         ::  :: typeinE
- | E ( path ) = label       ::  :: labelinE
- | a                        ::  :: current_alignment
- | a '%' i1 = i2            ::  :: alignment_boundary
- | a < a'                   ::  :: alignment_compare
- | T_to_int ( tau )         ::  :: type_cast_to_int
- | T_from_int ( tau )       ::  :: type_cast_from_int
+ | judgement                    ::  :: judgement
+ | </ formulaj // j />          ::  :: formula_list
+ | path in dom ( E )            ::  :: indomE       {{ tex [[x]]\not\in dom([[E]]) }}
+ | path not in dom ( E )        ::  :: notindomE    {{ tex [[x]]\not\in dom([[E]]) }}
+ | E ( path ) = tau             ::  :: typeinE
+ | E ( path ) = label           ::  :: labelinE
+ | a                            ::  :: current_alignment
+ | a '%' i1 = i2                ::  :: alignment_boundary
+ | a < a'                       ::  :: alignment_compare
+ | v = a                        ::  :: alignment_equal
+ | T_to_int ( tau )             ::  :: type_cast_to_int
+ | T_from_int ( tau )           ::  :: type_cast_from_int
+ | distinct ( </ nj // j /> )   ::  :: distinct_names
 
 terminals :: '' ::=                             {{ com Syntax terminals }}
  | ->                       ::  :: rarrow       {{ tex \rightarrow }}
@@ -262,10 +263,10 @@ E, a |- int64[e] : Sigma -> T , a + 64*(e)
 % environment without any qualification.  This will be rectified for
 % nested structs, below.  Also, note that the environment used to type
 % VD is the one computed after typing D.
-E , a |- D , E' , a'
-E' |- VD
---------------------------  :: named_struct
-E , a |- struct name { D ;; VD } : Struct, a'
+% E , a |- D , E' , a'
+% E' |- VD
+% --------------------------  :: named_struct
+% E , a |- struct n { D ;; VD } : Struct, a'
 
 % There is no rule for typing an unamed array struct, since this will
 % never appear in the source syntax.
@@ -308,45 +309,39 @@ E , a |- b [ e ] : K , a'
 --------------------------  :: base_array
 E , a |- x : b [ e ] , E ; x : b [ e ] , a'
 
-% In the case where tau is a named struct, we need to handle
-% environments specially: they need to be extended by prepending the
-% struct name as a prefix to each new field added to the environment
-% when typing tau.  This extended environment is used to handle the
-% value expressions that contain paths referring to fields inside the
-% struct.  The typing rules for arrays and classification cases will
-% rely on this rule.
-%
-% Note that the typing computation for D and VD is duplicated in the
-% second and third pre-conditions; it was already done in the first
-% one.  Of course, all this is for notational convenience; a real
-% implementation would use techniques like embedding markers in the
-% environment to make all this efficient.
-E , a |- struct n { D ;; VD } : Struct , a'
-E , a |- D , E' , a'
-E' |- VD
---------------------------  :: struct
-E , a |- x : struct n { D ;; VD } , E ; x : struct n { D ;; } ; qualify ( x . n , E' \ E ) , a'
-
 % The array needs to start and end on a byte-boundary.
+x not in dom(E)
 a % 8 = 0
 E |- e : int
 E , 0 |- D , E' , a'
 ( e ) * a' % 8 = 0
 E' |- VD
 --------------------------  :: array
-E , a |- x : array ( e ) { D ;; VD } , E ; x : array_struct , a + ( e ) * a'
+E , a |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , a + ( e ) * a'
 
 
-% TODO: classify().
+% The field y should not be a label.  The root of the classification
+% tree should be byte-aligned, and each path in the classification
+% tree should end on a byte-aligned boundary.
+x not in dom(E)
+a % 8 = 0
+E ( y ) = tau
+distinct ( </ nj // j /> )
+vj = const_fold ( ej )
+</ E , 0 |- Dj , Ej , aj // j />
+aj % 8 = 0
+</ Ej |- VDj // j />
+--------------------------  :: classify
+E , a |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , a
 
 % Defns to do: cases.
 
 defn
-E |- VD                     ::  :: value_decls_typing :: '' by
+E |- VD                     ::  :: field_values_typing :: '' by
 
-E |- V
---------------------------  :: value_decls
-E |- V ; VD
+</ E |- Vj // j />
+--------------------------  :: field_values_typing
+E |- </ Vj // j />
 
 defn
 E |- V                      ::  :: field_value_typing :: '' by
