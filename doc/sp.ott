@@ -115,10 +115,11 @@ align_expr, a :: '' ::=                         {{ com Alignment expressions }}
 formula :: formula_ ::=
  | judgement                    ::  :: judgement
  | </ formulaj // j />          ::  :: formula_list
- | path in dom ( E )            ::  :: indomE       {{ tex [[x]]\not\in dom([[E]]) }}
- | path not in dom ( E )        ::  :: notindomE    {{ tex [[x]]\not\in dom([[E]]) }}
- | E ( path ) = tau             ::  :: typeinE
- | E ( path ) = label           ::  :: labelinE
+ | E ; x : tau ; E'             ::  :: env
+ | path in dom ( E )            ::  :: in_dom_E         {{ tex [[x]]\not\in dom([[E]]) }}
+ | path not in dom ( E )        ::  :: not_in_dom_E     {{ tex [[x]]\not\in dom([[E]]) }}
+ | x : tau in fields ( tau' )   ::  :: in_fields_tau    {{ tex [[x]] [[:]] [[tau]] \in fields([[tau']]) }}
+ | E ( path ) = label           ::  :: label_in_E
  | a                            ::  :: current_alignment
  | a '%' i1 = i2                ::  :: alignment_boundary
  | a < a'                       ::  :: alignment_compare
@@ -133,6 +134,18 @@ terminals :: '' ::=                             {{ com Syntax terminals }}
 
 defns
 Type_checked_parsing :: '' ::=
+
+defn
+E ( path ) = tau     ::  :: typing_context :: 'typing_context_' by
+
+E1 ; x : tau ; E2
+--------------------------  :: var
+E ( x ) = tau
+
+E ( path ) = </ vj , nj , tauj // j />
+x : tau in fields ( tauj )
+--------------------------  :: path
+E ( path [ nj ] . x ) = tau
 
 % Expression typing is used for array length expressions, and value
 % specifiers.  In the former case, we are interested if the expression
@@ -151,7 +164,6 @@ E |- value_exp : int ::  :: array_size_typing :: 'array_size_typing_' by
 
 --------------------------  :: int
 E |- integer_literal : int
-
 
 % We handle bit-vectors specially, and the generic case below: they
 % can be converted into integers if their length is a constant and
