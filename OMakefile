@@ -1,0 +1,5 @@
+.PHONY: clean
+
+CLEAN = rm -rf
+
+.SUBDIRS: src doc examples

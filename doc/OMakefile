@@ -1,0 +1,17 @@
+.PHONY: clean
+
+OTT = ott
+
+GEN_FILE = ott
+
+$(GEN_FILE).tex: sp.ott
+    $(OTT) -tex $@ -tex_wrap false -show_pre_sort false -show_post_sort false -show_defns false $<
+
+SP = sp
+
+SP_DOC = $(LaTeXDocument $(SP), sp $(GEN_FILE))
+
+.DEFAULT: $(SP_DOC)
+
+clean:
+	rm -rf *.dvi *.aux *.log *.pdf *.ps *.bbl *.blg *.fls $(GEN_FILE).tex

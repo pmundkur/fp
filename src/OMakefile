@@ -1,0 +1,30 @@
+.PHONY: clean
+
+OCAMLFLAGS    += -dtypes
+
+# Runtime library
+
+LIB_FILES[] =
+    sp_lib
+
+LIB = sp_lib
+SP_LIB = $(OCamlLibrary $(LIB), $(LIB_FILES))
+
+
+# Compiler
+
+GEN_FILES = parser.mli parser.ml lexer.ml
+OCamlGeneratedFiles($(GEN_FILES))
+SP_FILES[] =
+    location
+    lexer
+    parser
+    ast
+
+SP = sp
+SP_COMPILER = $(OCamlProgram $(SP), $(SP_FILES))
+
+.DEFAULT: $(SP_COMPILER) $(SP_LIB)
+
+clean:
+    $(CLEAN) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output 

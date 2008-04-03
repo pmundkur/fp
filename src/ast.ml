@@ -1,11 +1,15 @@
-type a' located_nod =
-    { nod : a';
+type 'a located_nod =
+    { nod : 'a;
       location : Location.t }
 
-fun nod_of loc_nod =
-    loc_nod.nod
+let nod_of loc_nod =
+  loc_nod.nod
 
-fun located_nod_of nod loc =
-    { nod = nod;
-      location = loc }
+let location_of loc_nod =
+  loc_nod.location
+
+let located_nod_of nod loc =
+  { nod = nod;
+    location = loc }
+
 

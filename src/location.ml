@@ -1,6 +1,8 @@
+open Lexing
+
 type t = {
-  loc_start : Lexing.position;
-  loc_end : Lexing.position
+  loc_start : position;
+  loc_end : position
 }
 
 let init lexbuf fname =
