@@ -12,7 +12,7 @@
 
 %token <Location.t> DEF ARRAY ALIGN LABEL FORMAT VARIANT CLASSIFY
 
-%token <Location.t> LCURLY RCURLY LPAREN RPAREN LSQUARE RSQUARE
+%token <Location.t> UNIT LCURLY RCURLY LPAREN RPAREN LSQUARE RSQUARE
 %token <Location.t> DOT COMMA SEMI COLON BAR ARROW DEFARROW
 %token <Location.t> EOF
 
@@ -138,6 +138,8 @@ field_attrib:
 ;
 
 exp:
+| UNIT
+    { Unit }
 | INT
     { ConstInt (carrier $1) }
 | INT32

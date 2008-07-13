@@ -105,6 +105,8 @@ rule main = parse
       { make_int (locate lexbuf) (lexeme lexbuf) }
   | ident
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
+  | "()"
+      { UNIT (locate lexbuf) }
   | "{" "}" "(" ")" "[" "]" ";" ":" "|" "->" "=>" "+" "-" "*" "/"
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
   | eof

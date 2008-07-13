@@ -59,6 +59,7 @@ and type_exp =
 and classify_case = case_name * exp * format
 
 and exp =
+  | Unit
   | Var of path
   | ConstInt of int
   | ConstInt32 of Int32.t
