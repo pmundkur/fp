@@ -1,63 +1,67 @@
-type 'a located_nod
+type syntax_error =
+  | Illegal_character of char
+  | Unmatched_comment
+  | Unterminated_comment
 
-val nod_of : 'a located_nod -> 'a
+exception Syntax_error of syntax_error * Lexing.position
 
-val location_of : 'a located_nod -> Location.t
+exception Parsing_error of Location.t * string
 
-val located_nod_of : 'a -> Location.t -> 'a located_nod
+type default = bool
 
-type default = string option
+type decl_name = string Location.located_node
 
-type decl_name = string located_nod
+type field_name = string Location.located_node
 
-type field_name = string located_nod
+type case_name = string Location.located_node
 
-type case_name = string located_nod
+type fun_name = string Location.located_node
 
-type fun_name = string located_nod
+type type_name = string Location.located_node
 
-type type_name = string located_nod
-
-type path =
-  | Root of field_name
-  | Path of path * case_name * field_name
+type label_name = string Location.located_node
 
 type decl =
-  | Variant of decl_name * variant located_nod
-  | Format of decl_name * format located_nod
-
-and located_decl = decl located_nod
+  | Variant of decl_name * variant
+  | Format of decl_name * format
 
 and variant = (exp * case_name * default) list
+
+and format = field list
+
+and field =
+  | Named_field of field_name * field_type
+  | Align of exp
+
+and field_type =
+  | Simple of type_exp * field_attrib list
+  | Array of exp * format
+  | Classify of exp * classify_case list
+  | Label
+
+and field_attrib =
+  | Max of exp
+  | Min of exp
+  | Const of exp
+  | Default  of exp
+  | Value of exp
+  | VariantRef of decl_name
+  | VariantInline of variant
+
+and type_exp =
+  | Base of type_name
+  | Vector of type_name * exp
+
+and classify_case = case_name * exp * format
 
 and exp =
   | Var of path
   | ConstInt of int
   | ConstInt32 of Int32.t
   | ConstInt64 of Int64.t
-  | Fun of fun_name * (exp located_nod) list
+  | Fun of fun_name * exp list
 
-and field_attrib =
-  | Max of exp located_nod
-  | Min of exp located_nod
-  | Const of exp located_nod
-  | Default  of exp located_nod
-  | Value of exp located_nod
+and path =
+  | Root of field_name
+  | Path of path * case_name * field_name
 
-and type_exp =
-  | Base of type_name
-  | Vector of type_name * exp located_nod
-
-and field =
-  | Named_field of field_name * field_type located_nod
-  | Align of exp located_nod
-
-and field_type =
-  | Simple of type_exp located_nod * field_attrib list
-  | Array of exp located_nod * format located_nod
-  | Classify of exp located_nod * classify_case list
-  | Label
-
-and classify_case = case_name * exp located_nod * format located_nod
-
-and format = (field located_nod) list

@@ -1,20 +1,14 @@
 {
   open Lexing
   open Parser
-  open Location
-
-  type error =
-    | Illegal_character of char
-    | Unmatched_comment
-    | Unterminated_comment
-
-  exception Error of error * position
+  open Ast
 
   let keyword_list = [
     ("def", fun l -> DEF l);
     ("array", fun l -> ARRAY l);
     ("align", fun l -> ALIGN l);
-    ("struct", fun l -> STRUCT l);
+    ("label", fun l -> LABEL l);
+    ("format", fun l -> FORMAT l);
     ("variant", fun l -> VARIANT l);
     ("classify", fun l -> CLASSIFY l);
 
@@ -38,7 +32,7 @@
     ("/", fun l -> DIV l);
   ]
 
-  let (keyword_table : (string, (location -> token)) Hashtbl.t) = Hashtbl.create 10
+  let (keyword_table : (string, (Location.t -> token)) Hashtbl.t) = Hashtbl.create 10
   let _ = List.iter (fun (str, f) -> Hashtbl.add keyword_table str f) keyword_list
 
   let lookup_id loc str =
@@ -52,12 +46,23 @@
   let depth = ref 0
   let comment_start = ref dummy_pos
 
+  let init lexbuf fname =
+    lexbuf.lex_curr_p <-
+      { pos_fname = fname;
+	pos_lnum = 1;
+	pos_bol = 0;
+	pos_cnum = 0 }
+
+  let newline lexbuf =
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with
+			     pos_lnum = lexbuf.lex_curr_p.pos_lnum + 1;
+			     pos_bol = lexbuf.lex_curr_p.pos_cnum }
+
   let locate lexbuf =
-    { loc_start = lexeme_start_p lexbuf;
-      loc_end = lexeme_end_p lexbuf }
+    Location.make_location (lexeme_start_p lexbuf) (lexeme_end_p lexbuf)
 
   let raise_error e pos =
-    raise Error (e, pos)
+    raise (Syntax_error (e, pos))
 
   let trim_suffix lex n =
     String.sub lex 0 ((String.length lex) - n)

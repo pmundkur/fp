@@ -5,9 +5,21 @@ type t = {
   loc_end : position
 }
 
-let init lexbuf fname =
-  lexbuf.lex_curr_p <-
-    { pos_fname = fname;
-      pos_lnum = 1;
-      pos_bol = 0;
-      pos_cnum = 0 }
+let make_location s e =
+  { loc_start = s;
+    loc_end = e }
+
+type 'a located_node =
+    { node : 'a;
+      location : t }
+
+let node_of loc_node =
+  loc_node.node
+
+let location_of loc_node =
+  loc_node.location
+
+let make_located_node node loc =
+  { node = node;
+    location = loc }
+
