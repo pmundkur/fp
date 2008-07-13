@@ -5,26 +5,26 @@ OCAMLFLAGS    += -dtypes
 # Runtime library
 
 LIB_FILES[] =
-    sp_lib
+    fp_lib
 
-LIB = sp_lib
-SP_LIB = $(OCamlLibrary $(LIB), $(LIB_FILES))
+LIB = fp_lib
+FP_LIB = $(OCamlLibrary $(LIB), $(LIB_FILES))
 
 
 # Compiler
 
 GEN_FILES = parser.mli parser.ml lexer.ml
 OCamlGeneratedFiles($(GEN_FILES))
-SP_FILES[] =
+FP_FILES[] =
     location
     lexer
     parser
     ast
 
-SP = sp
-SP_COMPILER = $(OCamlProgram $(SP), $(SP_FILES))
+FP = fp
+FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))
 
-.DEFAULT: $(SP_COMPILER) $(SP_LIB)
+.DEFAULT: $(FP_COMPILER) $(FP_LIB)
 
 clean:
-    $(CLEAN) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output 
+    $(CLEAN) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output
