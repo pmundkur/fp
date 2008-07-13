@@ -3,6 +3,12 @@
   open Parser
   open Ast
 
+  let raise_syntax_error e pos =
+    raise (Syntax_error (e, pos))
+
+  let raise_parse_error e loc =
+    raise (Parsing_error (e, loc))
+
   let keyword_list = [
     ("def", fun l -> DEF l);
     ("array", fun l -> ARRAY l);
@@ -41,7 +47,7 @@
       match String.get str 0 with
         | 'A' .. 'Z' -> UCID (loc, str)
         | 'a' .. 'z' -> LCID (loc, str)
-        | _ ->          OP (loc, str)
+        | _ ->          raise_parse_error (Unknown_operator str) loc
 
   let depth = ref 0
   let comment_start = ref dummy_pos
@@ -60,9 +66,6 @@
 
   let locate lexbuf =
     Location.make_location (lexeme_start_p lexbuf) (lexeme_end_p lexbuf)
-
-  let raise_error e pos =
-    raise (Syntax_error (e, pos))
 
   let trim_suffix lex n =
     String.sub lex 0 ((String.length lex) - n)
@@ -90,7 +93,7 @@ rule main = parse
   | ['\n']
       { newline lexbuf; main lexbuf }
   | "*/"
-      { raise_error Unmatched_comment (lexeme_start_p lexbuf) }
+      { raise_syntax_error Unmatched_comment (lexeme_start_p lexbuf) }
   | "/*"
       { depth := 1; comment_start := lexeme_start_p lexbuf;
         comment lexbuf; main lexbuf }
@@ -113,7 +116,7 @@ and comment = parse
   | "*/"
       { depth := pred !depth; if !depth > 0 then comment lexbuf }
   | eof
-      { raise_error Unterminated_comment !comment_start }
+      { raise_syntax_error Unterminated_comment !comment_start }
   | _
       { comment lexbuf }
 

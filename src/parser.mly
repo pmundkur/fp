@@ -6,8 +6,8 @@
   let token_to_located_node tok =
     Location.make_located_node (carrier tok) (loc tok)
 
-  let parsing_error loc msg =
-    raise (Parsing_error (loc, msg))
+  let raise_parse_error e loc =
+    raise (Parsing_error (e, loc))
 %}
 
 %token <Location.t> DEF ARRAY ALIGN LABEL FORMAT VARIANT CLASSIFY
@@ -16,10 +16,11 @@
 %token <Location.t> DOT COMMA SEMI COLON BAR ARROW DEFARROW
 %token <Location.t> EOF
 
-%token <Location.t * string> UCID LCID OP
+%token <Location.t * string> UCID LCID
 %token <Location.t> PLUS MINUS TIMES DIV
 %left PLUS MINUS
 %left TIMES DIV
+
 
 %token <Location.t * int> INT
 %token <Location.t * Int32.t> INT32
@@ -74,10 +75,10 @@ format:
 ;
 
 fields:
-| field
-    { [ $1 ] }
 | fields SEMI field
     { $3 :: $1 }
+| field
+    { [ $1 ] }
 ;
 
 field:
@@ -128,7 +129,7 @@ field_attrib:
 	  | "const" -> Const e
 	  | "default" -> Default e
 	  | "value" -> Value e
-	  |  n -> parsing_error (loc $1) (Printf.sprintf "Unknown field attribute \"%s\"" n)
+	  |  n -> raise_parse_error (Unknown_field_attribute n) (loc $1)
     }
 | VARIANT LCID
     { VariantRef (token_to_located_node $2) }
@@ -137,6 +138,14 @@ field_attrib:
 ;
 
 exp:
+| INT
+    { ConstInt (carrier $1) }
+| INT32
+    { ConstInt32 (carrier $1) }
+| INT64
+    { ConstInt64 (carrier $1) }
+| path
+    { Var $1 }
 | LCID LPAREN exp_list RPAREN
     { Fun ((token_to_located_node $1), (List.rev $3)) }
 | exp PLUS exp
@@ -147,25 +156,15 @@ exp:
     { Fun ((Location.make_located_node  "*" $2), [$1; $3]) }
 | exp DIV exp
     { Fun ((Location.make_located_node  "/" $2), [$1; $3]) }
-| exp OP exp
-    { Fun ((token_to_located_node $2), [$1; $3]) }
 | LPAREN exp RPAREN
     { $2 }
-| path
-    { Var $1 }
-| INT
-    { ConstInt (carrier $1) }
-| INT32
-    { ConstInt32 (carrier $1) }
-| INT64
-    { ConstInt64 (carrier $1) }
 ;
 
 exp_list:
 | exp_list COMMA exp
     { $3 :: $1 }
-| /* epsilon */
-    { [] }
+| exp
+    { [ $1 ] }
 ;
 
 path:

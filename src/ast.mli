@@ -5,7 +5,11 @@ type syntax_error =
 
 exception Syntax_error of syntax_error * Lexing.position
 
-exception Parsing_error of Location.t * string
+type parse_error =
+  | Unknown_operator of string
+  | Unknown_field_attribute of string
+
+exception Parsing_error of parse_error * Location.t
 
 type default = bool
 
