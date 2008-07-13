@@ -350,7 +350,7 @@ module Env = struct
           fn env
 end
 
-module type SP_bit_elem = sig
+module type FP_bit_elem = sig
   type t
   type v
   val rep_to_env : t -> Env.t
@@ -364,7 +364,7 @@ module type SP_bit_elem = sig
   val to_int : v -> int
 end
 
-module SP_bit : (SP_bit_elem with type v = int) = struct
+module FP_bit : (FP_bit_elem with type v = int) = struct
   type t = Env.t
   type v = int
 
@@ -372,7 +372,7 @@ module SP_bit : (SP_bit_elem with type v = int) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_valid t) || (Env.bit_length t) <> 1 then
-      raise (Env.Invalid_op "SP_bit.env_to_rep");
+      raise (Env.Invalid_op "FP_bit.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -398,7 +398,7 @@ module SP_bit : (SP_bit_elem with type v = int) = struct
   let to_int (v : v) = v
 end
 
-module SP_bit_vector = struct
+module FP_bit_vector = struct
   type t = Env.t
   type v = int
 
@@ -423,13 +423,13 @@ module SP_bit_vector = struct
     marshal env t
 end
 
-module type SP_elem = sig
-  include SP_bit_elem
+module type FP_elem = sig
+  include FP_bit_elem
 
   val size : int
 end
 
-module SP_byte : (SP_elem with type v = char) = struct
+module FP_byte : (FP_elem with type v = char) = struct
   type t = Env.t
   type v = char
 
@@ -439,7 +439,7 @@ module SP_byte : (SP_elem with type v = char) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise (Env.Invalid_op "SP_byte.env_to_rep");
+    then raise (Env.Invalid_op "FP_byte.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -463,7 +463,7 @@ module SP_byte : (SP_elem with type v = char) = struct
   let to_int (v : v) = int_of_char v
 end
 
-module SP_int16 : (SP_elem with type v = int) = struct
+module FP_int16 : (FP_elem with type v = int) = struct
   type t = Env.t
   type v = int
 
@@ -473,7 +473,7 @@ module SP_int16 : (SP_elem with type v = int) = struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise (Env.Invalid_op "SP_int16.env_to_rep");
+    then raise (Env.Invalid_op "FP_int16.env_to_rep");
     (t : t)
 
   let read (t : t) =
@@ -513,25 +513,25 @@ module SP_int16 : (SP_elem with type v = int) = struct
   let to_int (v : v) = v
 end
 
-module SP_int32 : (SP_elem with type v = Int32.t) = struct
+module FP_int32 : (FP_elem with type v = Int32.t) = struct
   type t = Env.t
   type v = Int32.t
 
-  let size = 2 * SP_int16.size
+  let size = 2 * FP_int16.size
 
   let rep_to_env (t : t) = (t : Env.t)
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise (Env.Invalid_op "SP_int32.env_to_rep");
+    then raise (Env.Invalid_op "FP_int32.env_to_rep");
     (t : t)
 
   let read (t : t) =
     let module I = Int32 in
-    let t0, e0 = SP_int16.unmarshal t in
-    let t1, _ = SP_int16.unmarshal e0 in
-    let i0 = I.of_int (SP_int16.read t0) in
-    let i1 = I.of_int (SP_int16.read t1) in
+    let t0, e0 = FP_int16.unmarshal t in
+    let t1, _ = FP_int16.unmarshal e0 in
+    let i0 = I.of_int (FP_int16.read t0) in
+    let i1 = I.of_int (FP_int16.read t1) in
     let i = match Env.endian t with
       | Env.Big_endian -> I.add (I.shift_left i0 16) i1
       | Env.Little_endian -> I.add i0 (I.shift_left i1 16)
@@ -548,9 +548,9 @@ module SP_int32 : (SP_elem with type v = Int32.t) = struct
     let next =
       match Env.endian env with
         | Env.Big_endian ->
-            snd (SP_int16.marshal (snd (SP_int16.marshal env i1)) i0)
+            snd (FP_int16.marshal (snd (FP_int16.marshal env i1)) i0)
         | Env.Little_endian ->
-            snd (SP_int16.marshal (snd (SP_int16.marshal env i0)) i1)
+            snd (FP_int16.marshal (snd (FP_int16.marshal env i0)) i1)
     in
       (Env.sub env 0 size : t), next
 
@@ -565,25 +565,25 @@ module SP_int32 : (SP_elem with type v = Int32.t) = struct
   let to_int (v : v) = Int32.to_int v
 end
 
-module SP_int64 : (SP_elem with type v = Int64.t) = struct
+module FP_int64 : (FP_elem with type v = Int64.t) = struct
   type t = Env.t
   type v = Int64.t
 
-  let size = 2 * SP_int32.size
+  let size = 2 * FP_int32.size
 
   let rep_to_env (t : t) = (t : Env.t)
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
-    then raise (Env.Invalid_op "SP_int64.env_to_rep");
+    then raise (Env.Invalid_op "FP_int64.env_to_rep");
     (t : t)
 
   let read (t : t) =
     let module I = Int64 in
-    let t0, e0 = SP_int32.unmarshal t in
-    let t1, _ = SP_int32.unmarshal e0 in
-    let i0 = I.of_int32 (SP_int32.read t0) in
-    let i1 = I.of_int32 (SP_int32.read t1) in
+    let t0, e0 = FP_int32.unmarshal t in
+    let t1, _ = FP_int32.unmarshal e0 in
+    let i0 = I.of_int32 (FP_int32.read t0) in
+    let i1 = I.of_int32 (FP_int32.read t1) in
     let i = match Env.endian t with
       | Env.Big_endian -> I.add (I.shift_left i0 32) i1
       | Env.Little_endian -> I.add i0 (I.shift_left i1 32)
@@ -600,10 +600,10 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
     let next =
       match Env.endian env with
         | Env.Big_endian -> begin
-            snd (SP_int32.marshal (snd (SP_int32.marshal env i1)) i0)
+            snd (FP_int32.marshal (snd (FP_int32.marshal env i1)) i0)
           end
         | Env.Little_endian ->
-            snd (SP_int32.marshal (snd (SP_int32.marshal env i0)) i1)
+            snd (FP_int32.marshal (snd (FP_int32.marshal env i0)) i1)
     in
       (Env.sub env 0 size : t), next
 
@@ -618,7 +618,7 @@ module SP_int64 : (SP_elem with type v = Int64.t) = struct
   let to_int (v : v) = Int64.to_int v
 end
 
-module type SP_array_sig = sig
+module type FP_array_sig = sig
   type t
   type v
   type elem_v
@@ -636,8 +636,8 @@ module type SP_array_sig = sig
   val copy : t -> Env.t -> t * Env.t
 end
 
-module SP_array (E : SP_elem)
-  : (SP_array_sig with type v = E.v array and type elem_v = E.v) =
+module FP_array (E : FP_elem)
+  : (FP_array_sig with type v = E.v array and type elem_v = E.v) =
 struct
   type t = Env.t
   type v = E.v array
@@ -647,7 +647,7 @@ struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t) mod E.size <> 0
-    then raise (Env.Invalid_op "SP_array.env_to_rep");
+    then raise (Env.Invalid_op "FP_array.env_to_rep");
     (t : t)
 
   let size (t : t) =
@@ -686,7 +686,7 @@ struct
     marshal env (read t)
 end
 
-module SP_byte_vector  = SP_array (SP_byte)
-module SP_int16_vector = SP_array (SP_int16)
-module SP_int32_vector = SP_array (SP_int32)
-module SP_int64_vector = SP_array (SP_int64)
+module FP_byte_vector  = FP_array (FP_byte)
+module FP_int16_vector = FP_array (FP_int16)
+module FP_int32_vector = FP_array (FP_int32)
+module FP_int64_vector = FP_array (FP_int64)
