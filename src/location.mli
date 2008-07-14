@@ -1,5 +1,9 @@
 type t
 
+val start_of : t -> Lexing.position
+
+val end_of : t -> Lexing.position
+
 val make_location : Lexing.position -> Lexing.position -> t
 type 'a located_node
 

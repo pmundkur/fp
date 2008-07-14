@@ -5,6 +5,12 @@ type t = {
   loc_end : position
 }
 
+let start_of l =
+  l.loc_start
+
+let end_of l =
+  l.loc_end
+
 let make_location s e =
   { loc_start = s;
     loc_end = e }

@@ -55,14 +55,14 @@
   let init lexbuf fname =
     lexbuf.lex_curr_p <-
       { pos_fname = fname;
-	pos_lnum = 1;
-	pos_bol = 0;
-	pos_cnum = 0 }
+        pos_lnum = 1;
+        pos_bol = 0;
+        pos_cnum = 0 }
 
   let newline lexbuf =
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with
-			     pos_lnum = lexbuf.lex_curr_p.pos_lnum + 1;
-			     pos_bol = lexbuf.lex_curr_p.pos_cnum }
+                             pos_lnum = lexbuf.lex_curr_p.pos_lnum + 1;
+                             pos_bol = lexbuf.lex_curr_p.pos_cnum }
 
   let locate lexbuf =
     Location.make_location (lexeme_start_p lexbuf) (lexeme_end_p lexbuf)
@@ -107,10 +107,12 @@ rule main = parse
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
   | "()"
       { UNIT (locate lexbuf) }
-  | "{" "}" "(" ")" "[" "]" ";" ":" "|" "->" "=>" "+" "-" "*" "/"
+  | "{" | "}" | "(" | ")" | "[" | "]" | ";" | ":" | "|" | "->" | "=>" | "+" | "-" | "*" | "/"
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
   | eof
       { EOF (locate lexbuf) }
+  | _
+      { raise_syntax_error (Illegal_character (lexeme_char lexbuf 0)) (lexeme_start_p lexbuf) }
 
 and comment = parse
   | "/*"
@@ -121,4 +123,3 @@ and comment = parse
       { raise_syntax_error Unterminated_comment !comment_start }
   | _
       { comment lexbuf }
-

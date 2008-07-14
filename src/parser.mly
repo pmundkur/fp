@@ -91,7 +91,7 @@ field:
 field_type:
 | CLASSIFY LPAREN LCID RPAREN LCURLY cases RCURLY
     { let e = Var (Root (token_to_located_node $3)) in
-	Classify (e, (List.rev $6))
+        Classify (e, (List.rev $6))
     }
 | ARRAY LPAREN exp RPAREN format
     { Array ($3, $5) }
@@ -123,13 +123,13 @@ field_attribs:
 field_attrib:
 | LCID LPAREN exp RPAREN
     { let e = $3 in
-	match carrier $1 with
-	  | "max" -> Max e
-	  | "min" -> Min e
-	  | "const" -> Const e
-	  | "default" -> Default e
-	  | "value" -> Value e
-	  |  n -> raise_parse_error (Unknown_field_attribute n) (loc $1)
+        match carrier $1 with
+          | "max" -> Max e
+          | "min" -> Min e
+          | "const" -> Const e
+          | "default" -> Default e
+          | "value" -> Value e
+          |  n -> raise_parse_error (Unknown_field_attribute n) (loc $1)
     }
 | VARIANT LCID
     { VariantRef (token_to_located_node $2) }
