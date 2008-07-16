@@ -12,8 +12,9 @@ grammar
 
 kind, K :: '' ::=                               {{ com Kinds }}
  | T                        ::  :: base_type    {{ com Base types }}
- | Sigma -> T               ::  :: array_type   {{ com Array types }}  {{ tex \sigma\rightarrow [[T]] }}
+ | Sigma -> T               ::  :: vectors      {{ com Vector types }}  {{ tex \sigma\rightarrow [[T]] }}
  | Struct                   ::  :: struct_type  {{ com Struct types }}
+ | Sigma -> Struct          ::  :: array        {{ com Array types }}   {{ tex \sigma\rightarrow [[Struct]] }}
 
 base, b :: '' ::=                               {{ com Base types }}
  | bit                      ::  :: bit
@@ -31,12 +32,12 @@ base, b :: '' ::=                               {{ com Base types }}
 % that lexically come later in the actual language.
 tau {{ tex \tau }} :: '' ::=                    {{ com Type expressions }}
  | b                            ::  :: base
- | b [ e ]                      ::  :: array
+ | b [ e ]                      ::  :: vector
  | struct { D ;; VD }           ::  :: struct
  | </ vj , nj , tauj // j />    ::  :: cases_struct
  | ( e , tau )                  ::  :: array_struct
 
-% These are expressions that are used to specify array-lengths, and a
+% These are expressions that are used to specify vector-lengths, and a
 % slight extension of these expressions will be used to specify value
 % specifications.
 exp, e :: '' ::=                                {{ com Expressions }}
@@ -110,7 +111,8 @@ align_expr, a :: '' ::=                         {{ com Alignment expressions }}
  | ( exp )                  ::  :: align_exp
  | a1 + a2                  ::  :: align_plus
  | a1 * a2                  ::  :: align_multiple
- | const_fold ( exp )       ::  :: const_fold
+ | const_fold ( exp )       ::  :: align_const_fold
+ | sizeof ( tau )           ::  :: align_sizeof
 
 formula :: formula_ ::=
  | judgement                    ::  :: judgement
@@ -147,11 +149,11 @@ x : tau in fields ( tauj )
 --------------------------  :: path
 E ( path [ nj ] . x ) = tau
 
-% Expression typing is used for array length expressions, and value
-% specifiers.  In the former case, we are interested if the expression
-% can be typed as an integer.  In the latter case, we are interested
-% if the value expression can be typed with the type carried by the
-% field.
+% Expression typing is used for vector and array length expressions,
+% and value specifiers.  In the former case, we are interested if the
+% expression can be typed as an integer.  In the latter case, we are
+% interested if the value expression can be typed with the type
+% carried by the field.
 %
 % Although array expressions and value expressions have been
 % differentiated syntactically above (to handle paths in value
@@ -253,22 +255,34 @@ E , a |- int64 : T , a + 64
 a % 8 = 0
 E |- e : int
 --------------------------  :: byte_vector
-E, a |- byte[e] : Sigma -> T , a + 8*(e)
+E, a |- byte[e] : Sigma -> T , a + 8 * (e)
 
 a % 8 = 0
 E |- e : int
 --------------------------  :: int16_vector
-E, a |- int16[e] : Sigma -> T , a + 16*(e)
+E, a |- int16[e] : Sigma -> T , a + 16 * (e)
 
 a % 8 = 0
 E |- e : int
 --------------------------  :: int32_vector
-E, a |- int32[e] : Sigma -> T , a + 32*(e)
+E, a |- int32[e] : Sigma -> T , a + 32 * (e)
 
 a % 8 = 0
 E |- e : int
 --------------------------  :: int64_vector
-E, a |- int64[e] : Sigma -> T , a + 64*(e)
+E, a |- int64[e] : Sigma -> T , a + 64 * (e)
+
+a % 8 = 0
+--------------------------  :: struct
+E, a |- struct { D ;; VD } : Struct, a + 8 * sizeof( struct { D ;; VD } )
+
+a % 8 = 0
+--------------------------  :: array
+E, a |- ( e, tau ) : Sigma -> Struct, a + 8 * (e) * sizeof( tau )
+
+% For cases, we need to check that each case branch will leave the
+% subsequent fields suitably aligned.  Note that case fields in series
+% will cause branching to multiply.
 
 % This rule type checks a top-level struct.  Note that the environment
 % threading in this rule adds the fields in the struct to the
@@ -318,7 +332,7 @@ E , a |- x : b , E ; x : b , a'
 
 x not in dom(E)
 E , a |- b [ e ] : K , a'
---------------------------  :: base_array
+--------------------------  :: vector
 E , a |- x : b [ e ] , E ; x : b [ e ] , a'
 
 % The array needs to start and end on a byte-boundary.
