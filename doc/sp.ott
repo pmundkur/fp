@@ -10,32 +10,22 @@ indexvar index, j, k                    ::= {{ lex numeral }}  {{ com Indices }}
 
 grammar
 
+% Kinds of types.  Vectors and arrays are treated separately, since we
+% don't have arrays of classifications (i.e. Sigma -> Map).
 kind, K :: '' ::=                               {{ com Kinds }}
- | T                        ::  :: base_type    {{ com Base types }}
- | Sigma -> T               ::  :: vectors      {{ com Vector types }}  {{ tex \sigma\rightarrow [[T]] }}
- | Struct                   ::  :: struct_type  {{ com Struct types }}
- | Sigma -> Struct          ::  :: array        {{ com Array types }}   {{ tex \sigma\rightarrow [[Struct]] }}
+ | T                                ::  :: base_type    {{ com Base types }}
+ | Sigma -> T                       ::  :: vectors      {{ com Vector types }}  {{ tex \sigma\rightarrow [[T]] }}
+ | Struct                           ::  :: struct_type  {{ com Struct types }}
+ | Sigma -> Struct                  ::  :: array        {{ com Array types }}   {{ tex \sigma\rightarrow [[Struct]] }}
+ | Map                              ::  :: map          {{ com Cases types }}
 
+% Primitive types.
 base, b :: '' ::=                               {{ com Base types }}
  | bit                      ::  :: bit
  | byte                     ::  :: byte
  | int16                    ::  :: int16
  | int32                    ::  :: int32
  | int64                    ::  :: int64
-
-% Note that this definition allows fields inside structs to have
-% struct types.  Also, the value expressions for fields are seperated
-% out into a separate syntactic rule, and appear in a struct after
-% field declarations.  This has been done to ease the typing
-% specification, since the environment for the value expressions
-% includes _all_ the fields in the enclosing struct, including fields
-% that lexically come later in the actual language.
-tau {{ tex \tau }} :: '' ::=                    {{ com Type expressions }}
- | b                            ::  :: base
- | b [ e ]                      ::  :: vector
- | struct { D ;; VD }           ::  :: struct
- | </ vj , nj , tauj // j />    ::  :: cases_struct
- | ( e , tau )                  ::  :: array_struct
 
 % These are expressions that are used to specify vector-lengths, and a
 % slight extension of these expressions will be used to specify value
@@ -53,10 +43,26 @@ exp, e :: '' ::=                                {{ com Expressions }}
  | num_set_bits x           ::  :: num_set_bits
  | remaining ()             ::  :: remaining
 
+% Note that this definition allows fields inside structs to have
+% struct types.  Also, the value expressions for fields are seperated
+% out into a separate syntactic rule, and appear in a struct after
+% field declarations.  This has been done to ease the typing
+% specification, since the environment for the value expressions
+% includes _all_ the fields in the enclosing struct, including fields
+% that lexically come later in the actual language.
+tau {{ tex \tau }} :: '' ::=                    {{ com Type expressions }}
+ | b                            ::  :: base
+ | b [ e ]                      ::  :: vector
+ | struct { D ;; VD }           ::  :: struct
+ | </ vj , nj , tauj // j />    ::  :: cases_struct
+ | ( e , tau )                  ::  :: array_struct
+
+% A sequence of field and alignment declarations.
 D :: '' ::=                                     {{ com Declarations }}
  |                          ::  :: nil_decl
  | F ; D                    ::  :: cons_decl
 
+% A field or alignment declaration.
 F :: '' ::=                                     {{ com Labeled Fields }}
  | align e                              ::  :: alignment
  | x : label                            ::  :: label
@@ -71,10 +77,8 @@ cases :: '' ::=                                 {{ com Classification trees }}
 % This ensures that we use the same environment for each decl, and
 % also enables us to define one less typing production.  However, Ott
 % had issues with the way I attempted it ...
-
 VD :: '' ::=                                    {{ com Value declarations }}
  | </ Vj // j />            ::  :: value_decls
-
 
 V :: '' ::=                                     {{ com Value specifications }}
  | x : value_exp            ::  :: value_decl
@@ -88,11 +92,9 @@ value_exp, ve :: '' ::=                         {{ com Value expressions }}
  | offset path              ::  :: path_offset
  | num_set_bits path        ::  :: path_num_set_bits
 
-
 path, p :: '' ::=                               {{ com Path expressions }}
  | x                        ::  :: path_leaf
  | path [ n ] . x           ::  :: dot_path
-
 
 E :: '' ::=                                     {{ com Typing environments }}
  |                          ::  :: env_nil
@@ -100,6 +102,12 @@ E :: '' ::=                                     {{ com Typing environments }}
  | path : label             ::  :: env_label
  | E1 ; E2                  ::  :: env_append
  | E1 \ E2                  ::  :: env_subtract
+
+% Sets containing field and label names.
+
+S, L :: '' ::=					{{ com Label and name sets }}
+ | Empty                     ::  :: nil		{{ com Empty set }}		{{ tex \empty }}
+ | S + x                     ::  :: set_union	{{ com Set union }}		{{ tex [[S]] \union {[[x]]} }}
 
 % The ( exp ) production is purely a mechanism to inject expressions
 % as alignments, without disambiguation.  const_fold is a function
@@ -118,9 +126,10 @@ formula :: formula_ ::=
  | judgement                    ::  :: judgement
  | </ formulaj // j />          ::  :: formula_list
  | E ; x : tau ; E'             ::  :: env
- | path in dom ( E )            ::  :: in_dom_E         {{ tex [[x]]\not\in dom([[E]]) }}
- | path not in dom ( E )        ::  :: not_in_dom_E     {{ tex [[x]]\not\in dom([[E]]) }}
+ | path in S                    ::  :: in_S             {{ tex [[x]]\not\in [[S]] }}
+ | path not in S                ::  :: not_in_S         {{ tex [[x]]\not\in [[S]] }}
  | x : tau in fields ( tau' )   ::  :: in_fields_tau    {{ tex [[x]] [[:]] [[tau]] \in fields([[tau']]) }}
+ | n in </ nj // j />           ::  :: in_keys          {{ tex [[n]] \in { [[n]]_j } }}
  | E ( path ) = label           ::  :: label_in_E
  | a                            ::  :: current_alignment
  | a '%' i1 = i2                ::  :: alignment_boundary
@@ -137,6 +146,8 @@ terminals :: '' ::=                             {{ com Syntax terminals }}
 defns
 Type_checked_parsing :: '' ::=
 
+% Environment lookup for variables and paths.
+
 defn
 E ( path ) = tau     ::  :: typing_context :: 'typing_context_' by
 
@@ -145,10 +156,13 @@ E1 ; x : tau ; E2
 E ( x ) = tau
 
 E ( path ) = </ vj , nj , tauj // j />
+n in </ nj // j />
 x : tau in fields ( tauj )
 --------------------------  :: path
-E ( path [ nj ] . x ) = tau
+E ( path [ n ] . x ) = tau
 
+% Rules to type length expressions.
+%
 % Expression typing is used for vector and array length expressions,
 % and value specifiers.  In the former case, we are interested if the
 % expression can be typed as an integer.  In the latter case, we are
@@ -224,8 +238,15 @@ E |- num_set_bits path  : int
 --------------------------  :: remaining
 E |- remaining ()  : int
 
+% Rules to ensure that type expressions are well-kinded.  We also
+% thread an alignment offset 'a' through the rules, since type
+% expressions are only well-kinded only at certain alignments.
+% Specifically, non-bit-oriented types are only well-kinded at byte
+% offsets.  Hence, all byte-aligned offsets are equivalent to offset
+% 0.
+
 defn
-E , a |- tau : K , a'       ::  :: typing :: 'typing_' by
+E , a |- tau : K , a'       ::  :: kinding :: 'kinding_' by
 
 --------------------------  :: bit
 E , a |- bit : T , a + 1
@@ -238,52 +259,58 @@ E, a |- bit[e] : Sigma -> T , a + (e)
 
 a % 8 = 0
 --------------------------  :: byte
-E , a |- byte : T , a + 8
+E , a |- byte : T , 0
 
 a % 8 = 0
 --------------------------  :: int16
-E , a |- int16 : T , a + 16
+E , a |- int16 : T , 0
 
 a % 8 = 0
 --------------------------  :: int32
-E , a |- int32 : T , a + 32
+E , a |- int32 : T , 0
 
 a % 8 = 0
 --------------------------  :: int64
-E , a |- int64 : T , a + 64
+E , a |- int64 : T , 0
 
 a % 8 = 0
 E |- e : int
 --------------------------  :: byte_vector
-E, a |- byte[e] : Sigma -> T , a + 8 * (e)
+E, a |- byte[e] : Sigma -> T , 0
 
 a % 8 = 0
 E |- e : int
 --------------------------  :: int16_vector
-E, a |- int16[e] : Sigma -> T , a + 16 * (e)
+E, a |- int16[e] : Sigma -> T , 0
 
 a % 8 = 0
 E |- e : int
 --------------------------  :: int32_vector
-E, a |- int32[e] : Sigma -> T , a + 32 * (e)
+E, a |- int32[e] : Sigma -> T , 0
 
 a % 8 = 0
 E |- e : int
 --------------------------  :: int64_vector
-E, a |- int64[e] : Sigma -> T , a + 64 * (e)
+E, a |- int64[e] : Sigma -> T , 0
 
 a % 8 = 0
 --------------------------  :: struct
-E, a |- struct { D ;; VD } : Struct, a + 8 * sizeof( struct { D ;; VD } )
+E, a |- struct { D ;; VD } : Struct, 0
 
 a % 8 = 0
 --------------------------  :: array
-E, a |- ( e, tau ) : Sigma -> Struct, a + 8 * (e) * sizeof( tau )
+E, a |- ( e, tau ) : Sigma -> Struct, 0
 
 % For cases, we need to check that each case branch will leave the
-% subsequent fields suitably aligned.  Note that case fields in series
-% will cause branching to multiply.
+% subsequent fields suitably aligned.
+a % 8 = 0
+</ E, a |- tauj : Kj , aj // j />
+</ aj % 8 = 0 // j />
+--------------------------  :: cases
+E, a |- </ vj , nj , tauj // j /> : Map, 0
 
+% TODO:
+%
 % This rule type checks a top-level struct.  Note that the environment
 % threading in this rule adds the fields in the struct to the
 % environment without any qualification.  This will be rectified for
@@ -297,70 +324,86 @@ E, a |- ( e, tau ) : Sigma -> Struct, a + 8 * (e) * sizeof( tau )
 % There is no rule for typing an unamed array struct, since this will
 % never appear in the source syntax.
 
+
+% Rules to process a sequence of field and alignment declarations.
+% Since field and label names cannot conflict, and since there cannot
+% be duplicate field or label names, we thread a set of current names
+% through the rules.
+
 defn
-E , a |- D , E' , a'        ::  :: decls_typing :: 'decls_typing_' by
+E , a , S |- D , E' , a' , S'	::  :: decls_typing :: 'decls_typing_' by
 
 % That's not a typo: it's the null decl!
 --------------------------  :: nil
-E , a |- , E , a
+E , a , S |- , E , a , S
 
-E , a |- F , E' , a'
-E' , a' |- D , E'' , a''
---------------------------  :: cons
-E , a |- F ; D , E'' , a''
+E  , a ,  S  |- F , E'  , a'  , S'
+E' , a' , S' |- D , E'' , a'' , S''
+--------------------------  :: decl_cons
+E , a , S    |- F ; D , E'' , a'' , S''
+
+% Rules to process a single field or alignment declaration.  Alignment
+% declarations update the bit alignment, and field declarations add to
+% the environment as well as update the bit alignment, and so each
+% rule will output a possibly modified environment and an updated bit
+% alignment.  We also thread a set of field and label names to check
+% for conflicts.
 
 defn
-E , a |- F , E' , a'        ::  :: field_typing :: 'field_typing_' by
+E , a , S |- F , E' , a' , S'	::  :: field_typing :: 'field_typing_' by
 
+% We only support constant expressions for alignment values, and only
+% support alignment at byte boundaries.
 const_fold ( e ) % 8 = 0
 --------------------------  :: alignment
-E , a |- align e , E , const_fold ( e )
+E , a , S |- align e , E , 0 , S
 
 % A label is simply added to the environment as a label; in
-% particular, the current alignment is unchanged.
-x not in dom(E)
+% particular, the current alignment is unchanged.  We support labels
+% only at byte boundaries.
+
+a % 8 = 0
+x not in S
 --------------------------  :: label
-E , a |- x : label , E ; x : label , a
+E , a , S |- x : label , E ; x : label , 0 , S + x
 
 % We don't have a single rule for x : tau, but instead seperate out
 % the rules for the top level cases of tau.  This is to specially
 % handle the case where tau is a struct.
-x not in dom(E)
+
+x not in S
 E , a |- b : K , a'
 --------------------------  :: base
-E , a |- x : b , E ; x : b , a'
+E , a , S |- x : b , E ; x : b , a' , S + x
 
-x not in dom(E)
+x not in S
 E , a |- b [ e ] : K , a'
 --------------------------  :: vector
-E , a |- x : b [ e ] , E ; x : b [ e ] , a'
+E , a , S |- x : b [ e ] , E ; x : b [ e ] , a' , S + x
 
 % The array needs to start and end on a byte-boundary.
-x not in dom(E)
+x not in S
 a % 8 = 0
 E |- e : int
-E , 0 |- D , E' , a'
+E , 0 , Empty |- D , E' , a' , S'
 ( e ) * a' % 8 = 0
 E' |- VD
 --------------------------  :: array
-E , a |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , a + ( e ) * a'
-
+E , a , S |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , a + ( e ) * a' , S + x
 
 % The field y should not be a label.  The root of the classification
 % tree should be byte-aligned, and each path in the classification
 % tree should end on a byte-aligned boundary.
-x not in dom(E)
+x not in S
 a % 8 = 0
 E ( y ) = tau
 distinct ( </ nj // j /> )
 vj = const_fold ( ej )
-</ E , 0 |- Dj , Ej , aj // j />
+</ E , 0 , Empty |- Dj , Ej , aj , Sj // j />
 aj % 8 = 0
 </ Ej |- VDj // j />
 --------------------------  :: classify
-E , a |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , a
-
-% Defns to do: cases.
+E , a , S |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , a , S + x
 
 defn
 E |- VD                     ::  :: field_values_typing :: '' by
@@ -377,4 +420,3 @@ E |- value_exp : int
 T_from_int ( tau )
 --------------------------  :: field_value_typing
 E |- x : value_exp
-

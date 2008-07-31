@@ -1,12 +1,13 @@
 TODO:
 
-- Handcode pcap -> ethernet -> ipv4 -> tcp using sp_lib.
+- Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 
-- Add Makefile for above and the docs.
+- Ott: Use a Map kind for case fields.
 
-- Differentiate exception errors that arise when unmarshalling beyond
-  the limit of the buffer.  That way the user can retry with a bigger
-  buffer.
+- Ott: Handle nested structs.  We need to specify an appropriate
+  environment namespace mechanism to handle variable lookups for
+  nested structs.
+
 
 Notes:
 
@@ -34,4 +35,8 @@ Notes:
   object's contents into that view, and returns a new object bound to
   that view.  This copy function handles endianess differences between
   the source and dest environments.
+
+- Lib: We should handle errors that arise when unmarshalling beyond
+  the limit of the buffer by throwing an appropriate exception.  This
+  way, the user can retry with a bigger buffer.
 
