@@ -389,7 +389,7 @@ E , 0 , Empty |- D , E' , a' , S'
 ( e ) * a' % 8 = 0
 E' |- VD
 --------------------------  :: array
-E , a , S |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , a + ( e ) * a' , S + x
+E , a , S |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , 0 , S + x
 
 % The field y should not be a label.  The root of the classification
 % tree should be byte-aligned, and each path in the classification
@@ -403,7 +403,7 @@ vj = const_fold ( ej )
 aj % 8 = 0
 </ Ej |- VDj // j />
 --------------------------  :: classify
-E , a , S |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , a , S + x
+E , a , S |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , 0 , S + x
 
 defn
 E |- VD                     ::  :: field_values_typing :: '' by
