@@ -9,34 +9,129 @@ TODO:
   nested structs.
 
 
+- Ott:  type checking the format generation.
+
+
+  Taking a step back, it is useful to keep in mind that each format
+  specification has two facets: a parsing facet, and a generation
+  facet.
+
+  There are various stages to checking a format specification:
+
+  . type checking the parsing facet
+
+  . type checking the generation facet
+
+    We do both these stages together.
+
+  . sanity checking the generation facet
+
+    This ensures that formats satisfying the value attributes of the
+    fields in the specification can actually be generated, given
+    appropriate inputs.  This primarily involves checking for circular
+    dependencies in the value expressions.
+
+    The scheme to do this uses a fairly obvious dependency graph
+    approach, but is noted here for completeness.  We treat each value
+    expression as a single-level directed tree (i.e. consisting of
+    only a root node and leaf nodes, with edges being directed from
+    the root to the leaves).  The leaf nodes in this tree are of two
+    types: the first type are the variables in the expression that are
+    references to the other fields of the format.  (A field cannot
+    refer to itself in its value expression for obvious reasons.)  We
+    also introduce shadow variables for each array or vector valued
+    field which denote the length of that array or vector.  Value
+    expressions that have a sizeof(field) subexpression will cause the
+    shadow variable for field to be added as a leaf node to the tree.
+
+    Note:
+
+    . shadow variables do not appear in the specification, and hence
+      do not have value expressions, and cannot be the root nodes of
+      any expression trees.
+
+    . fields with array or vector types cannot have value expressions
+      (this is ensured by the type checker, and so there's no need to
+      enforce this at a syntactic level.
+
+    These expression trees are then stitched together by attaching the
+    root node of a field's expression tree to other trees where that
+    field appears as a leaf node.  If the resulting graph has any
+    cycles, then we immediately have an unconstructible format.  (A
+    field refering to itself in its value expression is a special case
+    of this.)
+
+  . checking that the parsing facet and the generation facet describe
+    the same format
+
+    This step is limited in what it can do.  To guarantee that the two
+    facets match, we need to either rely on programmers not making
+    mistakes, or severely limit the expressible formats.  The latter
+    is not advisable, since it can actually be useful to allow the
+    generation of formats that do not follow the parsing
+    specification.  Generating invalid formats can be to test the
+    error handling of the parsing code.
+
+    So this checking stage is used to autocompute as many fields of
+    the format for the generation facet in a manner consistent with
+    the parsing facet of the specification; if we cannot do this, we
+    merely warn about possible inconsistencies, and fall back to
+    requiring the programmer to explicitly provide the field values.
+
+    For example, we would like to check is that in cases of
+
+    format vec { len : int; arr = byte[len] }
+
+    the value for the len field is autocomputed by the generation
+    function for vec from its argument value for the arr value.  This
+    would statically ensure that we don't generate a format where the
+    len value does not match the length of the arr vector.  Needless
+    to say, we cannot autocompute array or vector valued fields.
+
+    To implement the checking described in this section, the
+    dependency graph described above is extended by ensuring that the
+    shadow variable of a array/vector typed field (e.g. arr) is a
+    direct child of fields (e.g. len) that appear in its array length
+    expression; this dependency is marked using a special edge.  This
+    ensures that the programmer has specified a value expression
+    taking into account the parsing-generation linkage, even though we
+    cannot verify its correctness.  If there is no such direct child
+    relationship, then we emit a warning, and do not emit autocompute
+    code for the field (i.e. len).
+
+    Here's an example of a format that would pass this check, but
+    violates parsing-generation correctness:
+
+    format { len: int value(sizeof(arr1) + sizeof(arr2));
+             arr1: int[len];
+             arr2: byte[len+2]; }
+
+    The programmer can generate messages that would cause the
+    corresponding parser is parse garbage.
+
+
 Notes:
 
-- Each datatype is viewed as an interpretation of a view of a
+- A bytestream view is implemented as an abstract datatype in its own
+  module.
+
+- Each datatype is considered to be an interpretation of a view of a
   bytestream.
 
-- To implement this: make all representation types for the viewtype
-  modules the view, not the evaluation type.  The evaluation type
-  needs to also be exported in the module signature, to implement
-  array functors (see below).
+  To implement this, the representation types for the datatype modules
+  are the view, not the evaluation type.  The evaluation type needs to
+  also be exported in the module signature, to implement array
+  functors (see below).
 
-- The array datatype should be implemented as a functor, that takes as
-  an argument the module for a primitive datatype.  Note that arrays
-  of arrays will probably not trivially work with this approach.
+- The array datatype is implemented as a functor, that takes as an
+  argument the module for a primitive datatype.  Note that arrays of
+  arrays will probably not trivially work with this approach.
 
 - The representation type of a dependent sum will be an object of a
-  class whose constructor will take as arguments the implementation
-  views of each label.
+  class whose constructor will take as arguments the representation
+  types of each label.
 
-- To implement array element updates, the lower-level modules
-  implementing each element need to be updatable.  This means given an
-  object bound to a view, we need a way of getting a new object with
-  the same contents bound to a different view.  This is implemented as
-  an object-level copy function, that given a view, marshals the
-  object's contents into that view, and returns a new object bound to
-  that view.  This copy function handles endianess differences between
-  the source and dest environments.
-
-- Lib: We should handle errors that arise when unmarshalling beyond
-  the limit of the buffer by throwing an appropriate exception.  This
-  way, the user can retry with a bigger buffer.
+- Lib: We handle errors that arise when unmarshalling beyond the limit
+  of the buffer by throwing an appropriate exception.  This way, the
+  user can retry with a bigger buffer.
 
