@@ -12,8 +12,8 @@
 
 %token <Location.t> DEF ARRAY ALIGN LABEL FORMAT VARIANT CLASSIFY
 
-%token <Location.t> UNIT LCURLY RCURLY LPAREN RPAREN LSQUARE RSQUARE
-%token <Location.t> DOT COMMA SEMI COLON BAR ARROW DEFARROW
+%token <Location.t> LCURLY RCURLY LPAREN RPAREN LSQUARE RSQUARE
+%token <Location.t> DOT DOTDOT COMMA SEMI COLON BAR ARROW DEFARROW
 %token <Location.t> EOF
 
 %token <Location.t * string> UCID LCID
@@ -58,8 +58,8 @@ variant:
 variant_cases:
 | variant_case
     { [ $1 ] }
-| variant_cases SEMI variant_case
-    { $3 :: $1 }
+| variant_cases variant_case
+    { $2 :: $1 }
 ;
 
 variant_case:
@@ -109,8 +109,21 @@ cases:
 ;
 
 case:
-| BAR exp COLON UCID ARROW format
-    { ((token_to_located_node $4), $2, $6) }
+| case_exp ARROW format
+    { let case_name, case_exp = $1 in
+        case_name, case_exp, $3
+    }
+| case_exp ARROW field
+    { let case_name, case_exp = $1 in
+        case_name, case_exp, [ $3 ]
+    }
+;
+
+case_exp:
+| BAR exp DOTDOT exp COLON UCID
+    { (token_to_located_node $6), (Case_range ($2, $4)) }
+| BAR exp COLON UCID
+    { (token_to_located_node $4), (Case_const $2) }
 ;
 
 field_attribs:
@@ -138,8 +151,6 @@ field_attrib:
 ;
 
 exp:
-| UNIT
-    { Unit }
 | INT
     { ConstInt (carrier $1) }
 | INT32
@@ -167,6 +178,8 @@ exp_list:
     { $3 :: $1 }
 | exp
     { [ $1 ] }
+| /* epsilon */
+    { [] }
 ;
 
 path:

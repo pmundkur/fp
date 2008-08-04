@@ -25,6 +25,7 @@
     ("[", fun l -> LSQUARE l);
     ("]", fun l -> RSQUARE l);
     (".", fun l -> DOT l);
+    ("..", fun l -> DOTDOT l);
     (",", fun l -> COMMA l);
     (";", fun l -> SEMI l);
     (":", fun l -> COLON l);
@@ -82,9 +83,11 @@
       INT64 (loc, (Int64.of_string s))
 }
 
-let int_literal = ['0'-'9']+
-let int32_literal = ['0'-'9']+ "l"
-let int64_literal = ['0'-'9']+ "L"
+let dec_literal = ['0'-'9']+
+let hex_literal = "0x" ['0'-'9' 'a'-'f' 'A'-'F']+
+let num_literal = dec_literal | hex_literal
+let int32_literal = num_literal "l"
+let int64_literal = num_literal "L"
 let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '0'-'9']*
 
 rule main = parse
@@ -101,13 +104,11 @@ rule main = parse
       { make_int64 (locate lexbuf) (lexeme lexbuf) }
   | int32_literal
       { make_int32 (locate lexbuf) (lexeme lexbuf) }
-  | int_literal
+  | num_literal
       { make_int (locate lexbuf) (lexeme lexbuf) }
   | ident
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
-  | "()"
-      { UNIT (locate lexbuf) }
-  | "{" | "}" | "(" | ")" | "[" | "]" | ";" | ":" | "|" | "->" | "=>" | "+" | "-" | "*" | "/"
+  | "{" | "}" | "(" | ")" | "[" | "]" | "." | ".." | "," | ";" | ":" | "|" | "->" | "=>" | "+" | "-" | "*" | "/"
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
   | eof
       { EOF (locate lexbuf) }
@@ -119,6 +120,8 @@ and comment = parse
       { depth := succ !depth; comment lexbuf }
   | "*/"
       { depth := pred !depth; if !depth > 0 then comment lexbuf }
+  | ['\n']
+      { newline lexbuf; comment lexbuf }
   | eof
       { raise_syntax_error Unterminated_comment !comment_start }
   | _

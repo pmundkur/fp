@@ -56,7 +56,11 @@ and type_exp =
   | Base of type_name
   | Vector of type_name * exp
 
-and classify_case = case_name * exp * format
+and classify_case = case_name * case_exp * format
+
+and case_exp =
+  | Case_const of exp
+  | Case_range of exp * exp
 
 and exp =
   | Unit
