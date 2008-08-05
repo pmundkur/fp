@@ -75,7 +75,13 @@ format:
 ;
 
 fields:
-| fields SEMI field
+| field_list opt_semi
+    { $1 }
+| /* epsilon */
+    { [] }
+
+field_list:
+| field_list SEMI field
     { $3 :: $1 }
 | field
     { [ $1 ] }
@@ -196,3 +202,8 @@ type_exp:
     { Base (token_to_located_node $1) }
 ;
 
+opt_semi:
+| SEMI
+    {}
+| /* epsilon */
+    {}
