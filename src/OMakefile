@@ -28,4 +28,4 @@ FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))
 .DEFAULT: $(FP_COMPILER) $(FP_LIB)
 
 clean:
-    $(CLEAN) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output
+    $(CLEAN) $(FP_COMPILER) $(FP_LIB) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output
