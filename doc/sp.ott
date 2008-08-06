@@ -107,7 +107,7 @@ E :: '' ::=                                     {{ com Typing environments }}
 
 S, L :: '' ::=					{{ com Label and name sets }}
  | Empty                     ::  :: nil		{{ com Empty set }}		{{ tex \empty }}
- | S + x                     ::  :: set_union	{{ com Set union }}		{{ tex [[S]] \union {[[x]]} }}
+ | S + x                     ::  :: set_union	{{ com Set union }}		{{ tex [[S]] \cup {[[x]]} }}
 
 % The ( exp ) production is purely a mechanism to inject expressions
 % as alignments, without disambiguation.  const_fold is a function

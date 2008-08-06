@@ -2,15 +2,11 @@ TODO:
 
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 
-- Ott: Use a Map kind for case fields.
-
 - Ott: Handle nested structs.  We need to specify an appropriate
   environment namespace mechanism to handle variable lookups for
   nested structs.
 
-
 - Ott:  type checking the format generation.
-
 
   Taking a step back, it is useful to keep in mind that each format
   specification has two facets: a parsing facet, and a generation
@@ -135,3 +131,4 @@ Notes:
   of the buffer by throwing an appropriate exception.  This way, the
   user can retry with a bigger buffer.
 
+- We use a Map kind for case fields.
