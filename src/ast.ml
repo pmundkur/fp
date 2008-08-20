@@ -68,7 +68,7 @@ and exp =
   | ConstInt of int
   | ConstInt32 of Int32.t
   | ConstInt64 of Int64.t
-  | Fun of fun_name * exp list
+  | Apply of fun_name * exp list
 
 and path =
   | Root of field_name

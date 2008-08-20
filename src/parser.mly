@@ -166,15 +166,15 @@ exp:
 | path
     { Var $1 }
 | LCID LPAREN exp_list RPAREN
-    { Fun ((token_to_located_node $1), (List.rev $3)) }
+    { Apply ((token_to_located_node $1), (List.rev $3)) }
 | exp PLUS exp
-    { Fun ((Location.make_located_node  "+" $2), [$1; $3]) }
+    { Apply ((Location.make_located_node  "+" $2), [$1; $3]) }
 | exp MINUS exp
-    { Fun ((Location.make_located_node  "-" $2), [$1; $3]) }
+    { Apply ((Location.make_located_node  "-" $2), [$1; $3]) }
 | exp TIMES exp
-    { Fun ((Location.make_located_node  "*" $2), [$1; $3]) }
+    { Apply ((Location.make_located_node  "*" $2), [$1; $3]) }
 | exp DIV exp
-    { Fun ((Location.make_located_node  "/" $2), [$1; $3]) }
+    { Apply ((Location.make_located_node  "/" $2), [$1; $3]) }
 | LPAREN exp RPAREN
     { $2 }
 ;
