@@ -20,6 +20,10 @@ FP_FILES[] =
     lexer
     parser
     ast
+    ident
+    env
+    types
+    typing
     fpc
 
 FP = fp

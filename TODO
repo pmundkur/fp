@@ -103,7 +103,37 @@ TODO:
              arr2: byte[len+2]; }
 
     The programmer can generate messages that would cause the
-    corresponding parser is parse garbage.
+    corresponding parser to parse garbage.
+
+- Typechecking output:
+
+  This will be essentially a cooked version of the ast:
+
+  . Variable names will be resolved into identifiers, so that lexical
+    scoping is resolved.  Note that variables in expressions are
+    always references, not definitions.  These references should be
+    represented in a manner that makes it easy to determine the free
+    variables at arbitrary scope (e.g. using an integer to indicate
+    the nesting levels between the variable definition and its
+    reference)
+
+  . Expressions will be constant folded.  Expressions in variant
+    definitions will all be represented as Int64, and will be range
+    checked when downcasting to requested types.
+
+  . Each module will be annotated with the set of identifiers denoting
+    free variables appearing in (possibly nested) value expressions
+    within its body.
+
+- Environment design for the typechecker:
+
+  . This should be designed to as closely mimic the semantics as
+    efficiently as possible; which implies that it should be a stack
+    of mappings, where each mapping can be represented as a list, and
+    each list entry is a cons of an identifier and its env info.
+
+
+
 
 
 Notes:
