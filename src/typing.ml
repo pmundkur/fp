@@ -35,7 +35,7 @@ let can_int_coerce i as_type =
     | Primitive Prim_int32 ->
         (* int could have a precision of either 31 or 63 bits.  We
            need to perform the range comparison in the type with
-           higher precision.  *)
+           higher precision. *)
         if ((Int32.of_int Pervasives.max_int) <> -1l) then
           (* int has a smaller precision than 32 bits *)
           true

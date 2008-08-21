@@ -96,7 +96,7 @@ field:
 
 field_type:
 | CLASSIFY LPAREN LCID RPAREN LCURLY cases RCURLY
-    { let e = Var (Root (token_to_located_node $3)) in
+    { let e = Var (Field (token_to_located_node $3)) in
         Classify (e, (List.rev $6))
     }
 | ARRAY LPAREN exp RPAREN format
@@ -190,9 +190,9 @@ exp_list:
 
 path:
 | LCID
-    { Root (token_to_located_node $1) }
-| path LSQUARE UCID RSQUARE DOT LCID
-    { Path ($1, (token_to_located_node $3), (token_to_located_node $6)) }
+    { Field (token_to_located_node $1) }
+| LCID LSQUARE UCID RSQUARE DOT path
+    { Path ((token_to_located_node $1), (token_to_located_node $3), $6) }
 ;
 
 type_exp:

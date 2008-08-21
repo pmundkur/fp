@@ -71,6 +71,6 @@ and exp =
   | Apply of fun_name * exp list
 
 and path =
-  | Root of field_name
-  | Path of path * case_name * field_name
+  | Field of field_name
+  | Path of field_name * case_name * path
 
