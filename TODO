@@ -117,9 +117,13 @@ TODO:
     the nesting levels between the variable definition and its
     reference)
 
-  . Expressions will be constant folded.  Expressions in variant
-    definitions will all be represented as Int64, and will be range
-    checked when downcasting to requested types.
+  . Expressions will be constant folded.
+
+  . Expressions in variant definitions will all be represented as
+    Int64, and will be range checked when downcasting to requested
+    types.  They are represented as Int64 since they do not have
+    accompanying type annotations.  Expressions in every other context
+    (within a format definition) can have a type deduced for it.
 
   . Each module will be annotated with the set of identifiers denoting
     free variables appearing in (possibly nested) value expressions
