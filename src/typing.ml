@@ -1,6 +1,9 @@
 open Types
 open Ast
 
+exception UnknownIdentifier of string * Location.t
+exception InvalidPath of string * Location.t
+
 let functions = [
   ("+", ([Arg_int_like; Arg_int_like], Arg_int_like));
   ("-", ([Arg_int_like; Arg_int_like], Arg_int_like));
@@ -80,10 +83,81 @@ let can_int64_coerce i as_type =
     | Types.Vector _ ->
         false
 
+let raise_unknown_ident ln =
+  let sym = Location.node_of ln in
+  let loc = Location.location_of ln in
+    raise (UnknownIdentifier (sym, loc))
+
+let raise_invalid_path ln =
+  let sym = Location.node_of ln in
+  let loc = Location.location_of ln in
+    raise (InvalidPath (sym, loc))
+
+let get_field_info env fn =
+    match Env.lookup_field_by_name env (Location.node_of fn) with
+      | None ->
+          raise_unknown_ident fn
+      | Some fi -> fi
+
+let get_field_type env fn =
+  let ((_, t), _) = get_field_info env fn in
+    t
+
+let rec follow_case_path cn path m =
+  let st =
+    try
+      StringMap.find (Location.node_of cn) m
+    with
+      | Not_found ->
+          raise_unknown_ident cn
+  in
+    follow_struct_path st path
+
+and follow_struct_path st path =
+  match path with
+    | Field fn ->
+        Struct_type st
+    | Path (fn, cn, p) ->
+        let ft =
+          try
+            StringMap.find (Location.node_of fn) st
+          with
+            | Not_found ->
+                raise_unknown_ident fn
+        in
+          get_path_type fn cn p ft
+
+and get_path_type fn cn p ft =
+  match ft with
+    | Base_type _
+    | Struct_type _
+    | Types.Label ->
+        raise_invalid_path fn
+    | Map_type m ->
+        follow_case_path cn p m
+
+let lookup_var_type env path =
+  match path with
+    | Field fn ->
+        get_field_type env fn
+    | Path (fn, cn, p) ->
+        get_path_type fn cn p (get_field_type env fn)
+
+let is_type_compat field_type base_type =
+  match (field_type, base_type) with
+    | (Base_type bt, base_type) ->
+        bt = base_type
+    | (Struct_type _, _) ->
+        false
+    | (Map_type _, _) ->
+        false
+    | (Types.Label, _) ->
+        false
+
 let type_check_exp env exp as_type =
   let rec exp_typer = function
   | Unit -> false
-  | Var path -> (* TODO *) false
+  | Var path -> is_type_compat (lookup_var_type env path) as_type
   | ConstInt i -> can_int_coerce i as_type
   | ConstInt32 i -> can_int32_coerce i as_type
   | ConstInt64 i -> can_int64_coerce i as_type
