@@ -1,12 +1,12 @@
 (* types for predefined functions and their arguments *)
 
 type arg_type =
-  | Arg_bit_like
-  | Arg_int_like
-  | Arg_vec_like
-  | Arg_array_like
+  | Arg_int_type
+  | Arg_vector_type
+  | Arg_base_type
+  | Arg_array_type
+  | Arg_unit_type
   | Arg_field_name
-  | Arg_unit
 
 type function_info = arg_type list * arg_type
 
