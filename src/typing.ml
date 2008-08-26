@@ -10,7 +10,11 @@ let functions = [
   ("*", ([Arg_int_like; Arg_int_like], Arg_int_like));
   ("/", ([Arg_int_like; Arg_int_like], Arg_int_like));
 
-  ("sizeof", ([Arg_field_name], Arg_int_like));
+  ("byte_sizeof", ([Arg_field_name], Arg_int_like));
+  ("bit_sizeof", ([Arg_field_name], Arg_int_like));
+  ("length", ([Arg_vec_like], Arg_int_like));
+  ("array_size", ([Arg_array_like], Arg_int_like));
+
   ("offset", ([Arg_field_name], Arg_int_like));
 
   ("num_set_bits", ([Arg_field_name], Arg_int_like));
@@ -131,6 +135,7 @@ and get_path_type fn cn p ft =
   match ft with
     | Base_type _
     | Struct_type _
+    | Array_type _
     | Types.Label ->
         raise_invalid_path fn
     | Map_type m ->
@@ -147,10 +152,9 @@ let is_type_compat field_type base_type =
   match (field_type, base_type) with
     | (Base_type bt, base_type) ->
         bt = base_type
-    | (Struct_type _, _) ->
-        false
-    | (Map_type _, _) ->
-        false
+    | (Struct_type _, _)
+    | (Map_type _, _)
+    | (Array_type _, _)
     | (Types.Label, _) ->
         false
 

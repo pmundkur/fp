@@ -4,6 +4,7 @@ type arg_type =
   | Arg_bit_like
   | Arg_int_like
   | Arg_vec_like
+  | Arg_array_like
   | Arg_field_name
   | Arg_unit
 
@@ -30,6 +31,7 @@ type field_type =
   | Base_type of base_type
   | Struct_type of struct_type
   | Map_type of map_type
+  | Array_type of struct_type
   | Label
 
 and struct_type = field_type StringMap.t
