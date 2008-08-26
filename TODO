@@ -1,7 +1,5 @@
 TODO:
 
-- Eliminate collisions between types and ast.
-
 - Convert type-checking functions to throw exceptions at point of type
   error instead of just returning booleans.
 

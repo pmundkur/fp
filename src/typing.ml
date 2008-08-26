@@ -15,21 +15,21 @@ let raise_arg_count_mismatch fn rcvd expected =
   raise (ArgCountMismatch (fn, rcvd, expected))
 
 let functions = [
-  ("+", ([Arg_int_type; Arg_int_type], Arg_int_type));
-  ("-", ([Arg_int_type; Arg_int_type], Arg_int_type));
-  ("*", ([Arg_int_type; Arg_int_type], Arg_int_type));
-  ("/", ([Arg_int_type; Arg_int_type], Arg_int_type));
+  ("+", ([Targ_int_type; Targ_int_type], Targ_int_type));
+  ("-", ([Targ_int_type; Targ_int_type], Targ_int_type));
+  ("*", ([Targ_int_type; Targ_int_type], Targ_int_type));
+  ("/", ([Targ_int_type; Targ_int_type], Targ_int_type));
 
-  ("byte_sizeof", ([Arg_base_type], Arg_int_type));
-  ("bit_sizeof", ([Arg_base_type], Arg_int_type));
-  ("length", ([Arg_vector_type], Arg_int_type));
-  ("array_size", ([Arg_array_type], Arg_int_type));
+  ("byte_sizeof", ([Targ_base_type], Targ_int_type));
+  ("bit_sizeof", ([Targ_base_type], Targ_int_type));
+  ("length", ([Targ_vector_type], Targ_int_type));
+  ("array_size", ([Targ_array_type], Targ_int_type));
 
-  ("offset", ([Arg_field_name], Arg_int_type));
+  ("offset", ([Targ_field_name], Targ_int_type));
 
-  ("num_set_bits", ([Arg_field_name], Arg_int_type));
+  ("num_set_bits", ([Targ_field_name], Targ_int_type));
 
-  ("remaining", ([Arg_unit_type], Arg_int_type))
+  ("remaining", ([Targ_unit_type], Targ_int_type))
 ]
 
 let populate_functions env =
@@ -48,10 +48,10 @@ let lookup_function_type env fn =
 
 let can_int_coerce i as_type =
   match as_type with
-    | Primitive Prim_bit -> i = 0 || i = 1
-    | Primitive Prim_byte -> i >= 0 && i <= 255
-    | Primitive Prim_int16 -> i >= -32768 && i <= 32767
-    | Primitive Prim_int32 ->
+    | Tprimitive Tprim_bit -> i = 0 || i = 1
+    | Tprimitive Tprim_byte -> i >= 0 && i <= 255
+    | Tprimitive Tprim_int16 -> i >= -32768 && i <= 32767
+    | Tprimitive Tprim_int32 ->
         (* int could have a precision of either 31 or 63 bits.  We
            need to perform the range comparison in the type with
            higher precision. *)
@@ -63,32 +63,32 @@ let can_int_coerce i as_type =
              has higher precision. *)
           (i >= Int32.to_int Int32.min_int
            && i <= Int32.to_int Int32.max_int)
-    | Primitive Prim_int64 -> true  (* for now ;-) *)
+    | Tprimitive Tprim_int64 -> true  (* for now ;-) *)
     | _ -> false
 
 let can_int32_coerce i as_type =
   match as_type with
-    | Primitive Prim_bit -> i = Int32.zero || i = Int32.one
-    | Primitive Prim_byte -> i >= Int32.zero && i <= (Int32.of_int 255)
-    | Primitive Prim_int16 ->
+    | Tprimitive Tprim_bit -> i = Int32.zero || i = Int32.one
+    | Tprimitive Tprim_byte -> i >= Int32.zero && i <= (Int32.of_int 255)
+    | Tprimitive Tprim_int16 ->
         i >= Int32.of_int (-32768)
         && i <= Int32.of_int 32767
-    | Primitive Prim_int32
-    | Primitive Prim_int64 -> true
-    | Types.Vector _ -> false
+    | Tprimitive Tprim_int32
+    | Tprimitive Tprim_int64 -> true
+    | Tvector _ -> false
 
 let can_int64_coerce i as_type =
   match as_type with
-    | Primitive Prim_bit -> i = Int64.zero || i = Int64.one
-    | Primitive Prim_byte -> i >= Int64.zero && i <= (Int64.of_int 255)
-    | Primitive Prim_int16 ->
+    | Tprimitive Tprim_bit -> i = Int64.zero || i = Int64.one
+    | Tprimitive Tprim_byte -> i >= Int64.zero && i <= (Int64.of_int 255)
+    | Tprimitive Tprim_int16 ->
         i >= Int64.of_int (-32768)
         && i <= Int64.of_int 32767
-    | Primitive Prim_int32 ->
+    | Tprimitive Tprim_int32 ->
         i >= Int64.of_int32 Int32.min_int
         && i <= Int64.of_int32 Int32.max_int
-    | Primitive Prim_int64 -> true
-    | Types.Vector _ -> false
+    | Tprimitive Tprim_int64 -> true
+    | Tvector _ -> false
 
 let get_field_info env fn =
     match Env.lookup_field_by_name env (Location.node_of fn) with
@@ -111,8 +111,8 @@ let rec follow_case_path cn path m =
 
 and follow_struct_path st path =
   match path with
-    | Field fn -> Struct_type st
-    | Path (fn, cn, p) ->
+    | Pfield fn -> Tstruct_type st
+    | Ppath (fn, cn, p) ->
         let ft =
           try
             StringMap.find (Location.node_of fn) st
@@ -124,49 +124,49 @@ and follow_struct_path st path =
 
 and get_path_type fn cn p ft =
   match ft with
-    | Base_type _
-    | Struct_type _
-    | Array_type _
-    | Types.Label -> raise_invalid_path fn
-    | Map_type m -> follow_case_path cn p m
+    | Tbase_type _
+    | Tstruct_type _
+    | Tarray_type _
+    | Tlabel -> raise_invalid_path fn
+    | Tmap_type m -> follow_case_path cn p m
 
 let lookup_var_type env path =
   match path with
-    | Field fn -> get_field_type env fn
-    | Path (fn, cn, p) -> get_path_type fn cn p (get_field_type env fn)
+    | Pfield fn -> get_field_type env fn
+    | Ppath (fn, cn, p) -> get_path_type fn cn p (get_field_type env fn)
 
 let is_type_compat field_type base_type =
   match (field_type, base_type) with
-    | (Base_type bt, base_type) -> bt = base_type
-    | (Struct_type _, _)
-    | (Map_type _, _)
-    | (Array_type _, _)
-    | (Types.Label, _) -> false
+    | (Tbase_type bt, base_type) -> bt = base_type
+    | (Tstruct_type _, _)
+    | (Tmap_type _, _)
+    | (Tarray_type _, _)
+    | (Tlabel, _) -> false
 
 let is_arg_type_compat field_type arg_type =
   match (field_type, arg_type) with
-    | (Base_type (Primitive _), Arg_int_type)
-    | (Base_type (Types.Vector _), Arg_vector_type)
-    | (Base_type _ , Arg_base_type)
-    | (Array_type _, Arg_array_type) -> true
+    | (Tbase_type (Tprimitive _), Targ_int_type)
+    | (Tbase_type (Tvector _), Targ_vector_type)
+    | (Tbase_type _ , Targ_base_type)
+    | (Tarray_type _, Targ_array_type) -> true
     | _ -> false
 
 let rec arg_type_check_exp env exp as_arg_type =
   let rec exp_typer = function
-    | Unit -> as_arg_type = Arg_unit_type
-    | Var path ->
+    | Punit -> as_arg_type = Targ_unit_type
+    | Pvar path ->
         (match as_arg_type with
-           | Arg_int_type
-           | Arg_vector_type
-           | Arg_base_type
-           | Arg_array_type ->
+           | Targ_int_type
+           | Targ_vector_type
+           | Targ_base_type
+           | Targ_array_type ->
                is_arg_type_compat (lookup_var_type env path) as_arg_type
-           | Arg_unit_type -> false
-           | Arg_field_name -> true)
-    | ConstInt _
-    | ConstInt32 _
-    | ConstInt64 _ -> as_arg_type = Arg_int_type
-    | Apply (fname, arglist) ->
+           | Targ_unit_type -> false
+           | Targ_field_name -> true)
+    | Pconst_int _
+    | Pconst_int32 _
+    | Pconst_int64 _ -> as_arg_type = Targ_int_type
+    | Papply (fname, arglist) ->
         let (fat, frt) = lookup_function_type env fname in
         let rcvd, expected = List.length arglist, List.length fat in
           if rcvd <> expected then
@@ -182,12 +182,12 @@ let rec arg_type_check_exp env exp as_arg_type =
 
 let type_check_exp env exp as_type =
   let rec exp_typer = function
-    | Unit -> false
-    | Var path -> is_type_compat (lookup_var_type env path) as_type
-    | ConstInt i -> can_int_coerce i as_type
-    | ConstInt32 i -> can_int32_coerce i as_type
-    | ConstInt64 i -> can_int64_coerce i as_type
-    | Apply (fname, arglist) ->
+    | Punit -> false
+    | Pvar path -> is_type_compat (lookup_var_type env path) as_type
+    | Pconst_int i -> can_int_coerce i as_type
+    | Pconst_int32 i -> can_int32_coerce i as_type
+    | Pconst_int64 i -> can_int64_coerce i as_type
+    | Papply (fname, arglist) ->
         let (fat, frt) = lookup_function_type env fname in
         let rcvd, expected = List.length arglist, List.length fat in
           if rcvd <> expected then
@@ -197,6 +197,6 @@ let type_check_exp env exp as_type =
               (fun r ae at ->
                  r && arg_type_check_exp env ae at)
               true arglist fat)
-            && is_arg_type_compat (Base_type as_type) frt
+            && is_arg_type_compat (Tbase_type as_type) frt
   in
     exp_typer exp

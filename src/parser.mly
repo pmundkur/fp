@@ -45,9 +45,9 @@ decls:
 
 decl:
 | DEF VARIANT LCID variant
-    { Variant ((token_to_located_node $3), $4) }
+    { Pvariant ((token_to_located_node $3), $4) }
 | FORMAT LCID format
-    { Format ((token_to_located_node $2), $3) }
+    { Pformat ((token_to_located_node $2), $3) }
 ;
 
 variant:
@@ -89,22 +89,22 @@ field_list:
 
 field:
 | ALIGN exp
-    { Align $2 }
+    { Palign $2 }
 | LCID COLON field_type
-    { Named_field ((token_to_located_node $1), $3) }
+    { Pnamed_field ((token_to_located_node $1), $3) }
 ;
 
 field_type:
 | CLASSIFY LPAREN LCID RPAREN LCURLY cases RCURLY
-    { let e = Var (Field (token_to_located_node $3)) in
-        Classify (e, (List.rev $6))
+    { let e = Pvar (Pfield (token_to_located_node $3)) in
+        Pclassify (e, (List.rev $6))
     }
 | ARRAY LPAREN exp RPAREN format
-    { Array ($3, $5) }
+    { Parray ($3, $5) }
 | type_exp field_attribs
-    { Simple ($1, (List.rev $2)) }
+    { Psimple ($1, (List.rev $2)) }
 | LABEL
-    { Label }
+    { Plabel }
 ;
 
 cases:
@@ -127,9 +127,9 @@ case:
 
 case_exp:
 | BAR exp DOTDOT exp COLON UCID
-    { (token_to_located_node $6), (Case_range ($2, $4)) }
+    { (token_to_located_node $6), (Pcase_range ($2, $4)) }
 | BAR exp COLON UCID
-    { (token_to_located_node $4), (Case_const $2) }
+    { (token_to_located_node $4), (Pcase_const $2) }
 ;
 
 field_attribs:
@@ -143,38 +143,38 @@ field_attrib:
 | LCID LPAREN exp RPAREN
     { let e = $3 in
         match carrier $1 with
-          | "max" -> Max e
-          | "min" -> Min e
-          | "const" -> Const e
-          | "default" -> Default e
-          | "value" -> Value e
+          | "max" -> Pmax e
+          | "min" -> Pmin e
+          | "const" -> Pconst e
+          | "default" -> Pdefault e
+          | "value" -> Pvalue e
           |  n -> raise_parse_error (Unknown_field_attribute n) (loc $1)
     }
 | VARIANT LCID
-    { VariantRef (token_to_located_node $2) }
+    { Pvariant_ref (token_to_located_node $2) }
 | VARIANT variant
-    { VariantInline $2 }
+    { Pvariant_inline $2 }
 ;
 
 exp:
 | INT
-    { ConstInt (carrier $1) }
+    { Pconst_int (carrier $1) }
 | INT32
-    { ConstInt32 (carrier $1) }
+    { Pconst_int32 (carrier $1) }
 | INT64
-    { ConstInt64 (carrier $1) }
+    { Pconst_int64 (carrier $1) }
 | path
-    { Var $1 }
+    { Pvar $1 }
 | LCID LPAREN exp_list RPAREN
-    { Apply ((token_to_located_node $1), (List.rev $3)) }
+    { Papply ((token_to_located_node $1), (List.rev $3)) }
 | exp PLUS exp
-    { Apply ((Location.make_located_node  "+" $2), [$1; $3]) }
+    { Papply ((Location.make_located_node  "+" $2), [$1; $3]) }
 | exp MINUS exp
-    { Apply ((Location.make_located_node  "-" $2), [$1; $3]) }
+    { Papply ((Location.make_located_node  "-" $2), [$1; $3]) }
 | exp TIMES exp
-    { Apply ((Location.make_located_node  "*" $2), [$1; $3]) }
+    { Papply ((Location.make_located_node  "*" $2), [$1; $3]) }
 | exp DIV exp
-    { Apply ((Location.make_located_node  "/" $2), [$1; $3]) }
+    { Papply ((Location.make_located_node  "/" $2), [$1; $3]) }
 | LPAREN exp RPAREN
     { $2 }
 ;
@@ -190,16 +190,16 @@ exp_list:
 
 path:
 | LCID
-    { Field (token_to_located_node $1) }
+    { Pfield (token_to_located_node $1) }
 | LCID LSQUARE UCID RSQUARE DOT path
-    { Path ((token_to_located_node $1), (token_to_located_node $3), $6) }
+    { Ppath ((token_to_located_node $1), (token_to_located_node $3), $6) }
 ;
 
 type_exp:
 | LCID LSQUARE exp RSQUARE
-    { Vector ((token_to_located_node $1), $3) }
+    { Pvector ((token_to_located_node $1), $3) }
 | LCID
-    { Base (token_to_located_node $1) }
+    { Pbase (token_to_located_node $1) }
 ;
 
 opt_semi:

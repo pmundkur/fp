@@ -26,51 +26,51 @@ type type_name = string Location.located_node
 type label_name = string Location.located_node
 
 type decl =
-  | Variant of decl_name * variant
-  | Format of decl_name * format
+  | Pvariant of decl_name * variant
+  | Pformat of decl_name * format
 
 and variant = (exp * case_name * default) list
 
 and format = field list
 
 and field =
-  | Named_field of field_name * field_type
-  | Align of exp
+  | Pnamed_field of field_name * field_type
+  | Palign of exp
 
 and field_type =
-  | Simple of type_exp * field_attrib list
-  | Array of exp * format
-  | Classify of exp * classify_case list
-  | Label
+  | Psimple of type_exp * field_attrib list
+  | Parray of exp * format
+  | Pclassify of exp * classify_case list
+  | Plabel
 
 and field_attrib =
-  | Max of exp
-  | Min of exp
-  | Const of exp
-  | Default  of exp
-  | Value of exp
-  | VariantRef of decl_name
-  | VariantInline of variant
+  | Pmax of exp
+  | Pmin of exp
+  | Pconst of exp
+  | Pdefault  of exp
+  | Pvalue of exp
+  | Pvariant_ref of decl_name
+  | Pvariant_inline of variant
 
 and type_exp =
-  | Base of type_name
-  | Vector of type_name * exp
+  | Pbase of type_name
+  | Pvector of type_name * exp
 
 and classify_case = case_name * case_exp * format
 
 and case_exp =
-  | Case_const of exp
-  | Case_range of exp * exp
+  | Pcase_const of exp
+  | Pcase_range of exp * exp
 
 and exp =
-  | Unit
-  | Var of path
-  | ConstInt of int
-  | ConstInt32 of Int32.t
-  | ConstInt64 of Int64.t
-  | Apply of fun_name * exp list
+  | Punit
+  | Pvar of path
+  | Pconst_int of int
+  | Pconst_int32 of Int32.t
+  | Pconst_int64 of Int64.t
+  | Papply of fun_name * exp list
 
 and path =
-  | Field of field_name
-  | Path of field_name * case_name * path
+  | Pfield of field_name
+  | Ppath of field_name * case_name * path
 
