@@ -1,5 +1,5 @@
 open Lexing
-open Ast
+open Asttypes
 
 let options = []
 

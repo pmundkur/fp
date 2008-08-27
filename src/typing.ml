@@ -1,35 +1,43 @@
-open Types
+open Asttypes
 open Ast
+open Types
 
 exception UnknownIdentifier of string Location.located_node
 exception InvalidPath of string Location.located_node
 exception ArgCountMismatch of fun_name * int (* received *) * int (* expected *)
+exception FieldBaseTypeMismatch of field_type (* received *) * base_type (* expected *) * Location.t
+exception FieldExpTypeMismatch of field_type * exp_type * Location.t
+exception ExpTypeMismatch of exp_type (* received *) * exp_type (* expected *) * Location.t
 
 let raise_unknown_ident ln =
-    raise (UnknownIdentifier ln)
-
+  raise (UnknownIdentifier ln)
 let raise_invalid_path ln =
-    raise (InvalidPath ln)
-
+  raise (InvalidPath ln)
 let raise_arg_count_mismatch fn rcvd expected =
   raise (ArgCountMismatch (fn, rcvd, expected))
+let raise_field_base_type_mismatch ft bt loc =
+  raise (FieldBaseTypeMismatch (ft, bt, loc))
+let raise_field_exp_type_mismatch ft at loc =
+  raise (FieldExpTypeMismatch (ft, at, loc))
+let raise_exp_type_mismatch received expected  loc =
+  raise (ExpTypeMismatch (received, expected, loc))
 
 let functions = [
-  ("+", ([Targ_int_type; Targ_int_type], Targ_int_type));
-  ("-", ([Targ_int_type; Targ_int_type], Targ_int_type));
-  ("*", ([Targ_int_type; Targ_int_type], Targ_int_type));
-  ("/", ([Targ_int_type; Targ_int_type], Targ_int_type));
+  ("+", ([Texp_int_type; Texp_int_type], Texp_int_type));
+  ("-", ([Texp_int_type; Texp_int_type], Texp_int_type));
+  ("*", ([Texp_int_type; Texp_int_type], Texp_int_type));
+  ("/", ([Texp_int_type; Texp_int_type], Texp_int_type));
 
-  ("byte_sizeof", ([Targ_base_type], Targ_int_type));
-  ("bit_sizeof", ([Targ_base_type], Targ_int_type));
-  ("length", ([Targ_vector_type], Targ_int_type));
-  ("array_size", ([Targ_array_type], Targ_int_type));
+  ("byte_sizeof", ([Texp_base_type], Texp_int_type));
+  ("bit_sizeof", ([Texp_base_type], Texp_int_type));
+  ("length", ([Texp_vector_type], Texp_int_type));
+  ("array_size", ([Texp_array_type], Texp_int_type));
 
-  ("offset", ([Targ_field_name], Targ_int_type));
+  ("offset", ([Texp_field_name], Texp_int_type));
 
-  ("num_set_bits", ([Targ_field_name], Targ_int_type));
+  ("num_set_bits", ([Texp_field_name], Texp_int_type));
 
-  ("remaining", ([Targ_unit_type], Targ_int_type))
+  ("remaining", ([Texp_unit_type], Texp_int_type))
 ]
 
 let populate_functions env =
@@ -135,37 +143,50 @@ let lookup_var_type env path =
     | Pfield fn -> get_field_type env fn
     | Ppath (fn, cn, p) -> get_path_type fn cn p (get_field_type env fn)
 
-let is_type_compat field_type base_type =
+let is_field_type_compatible_with_base_type field_type base_type loc =
   match (field_type, base_type) with
     | (Tbase_type bt, base_type) -> bt = base_type
     | (Tstruct_type _, _)
     | (Tmap_type _, _)
     | (Tarray_type _, _)
-    | (Tlabel, _) -> false
+    | (Tlabel, _) ->
+        raise_field_base_type_mismatch field_type base_type loc
 
-let is_arg_type_compat field_type arg_type =
-  match (field_type, arg_type) with
-    | (Tbase_type (Tprimitive _), Targ_int_type)
-    | (Tbase_type (Tvector _), Targ_vector_type)
-    | (Tbase_type _ , Targ_base_type)
-    | (Tarray_type _, Targ_array_type) -> true
-    | _ -> false
+let is_field_type_compatible_with_exp_type field_type exp_type loc =
+  match (field_type, exp_type) with
+    | (Tbase_type (Tprimitive _), Texp_int_type)
+    | (Tbase_type (Tvector _), Texp_vector_type)
+    | (Tbase_type _ , Texp_base_type)
+    | (Tarray_type _, Texp_array_type) -> true
+    | _ ->
+        raise_field_exp_type_mismatch field_type exp_type loc
 
-let rec arg_type_check_exp env exp as_arg_type =
-  let rec exp_typer = function
-    | Punit -> as_arg_type = Targ_unit_type
-    | Pvar path ->
-        (match as_arg_type with
-           | Targ_int_type
-           | Targ_vector_type
-           | Targ_base_type
-           | Targ_array_type ->
-               is_arg_type_compat (lookup_var_type env path) as_arg_type
-           | Targ_unit_type -> false
-           | Targ_field_name -> true)
-    | Pconst_int _
-    | Pconst_int32 _
-    | Pconst_int64 _ -> as_arg_type = Targ_int_type
+let is_exp_type_equal received expected loc =
+  if received = expected then true
+  else raise (ExpTypeMismatch (received, expected, loc))
+
+(* This is used to typecheck expressions in the context of arguments
+   to functions, where the type of the expression needs to match the
+   type of the argument expected by the function. *)
+let rec type_check_exp_as_exp_type env exp as_exp_type =
+  let rec exp_typer exp =
+    match exp.pexp_desc with
+      | Punit ->
+          is_exp_type_equal Texp_unit_type as_exp_type exp.pexp_loc
+      | Pvar path ->
+          (match as_exp_type with
+             | Texp_int_type
+             | Texp_vector_type
+             | Texp_base_type
+             | Texp_array_type
+             | Texp_unit_type ->
+                 (is_field_type_compatible_with_exp_type
+                    (lookup_var_type env path) as_exp_type exp.pexp_loc)
+             | Texp_field_name -> true)
+      | Pconst_int _
+      | Pconst_int32 _
+      | Pconst_int64 _ ->
+          is_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc
     | Papply (fname, arglist) ->
         let (fat, frt) = lookup_function_type env fname in
         let rcvd, expected = List.length arglist, List.length fat in
@@ -173,30 +194,41 @@ let rec arg_type_check_exp env exp as_arg_type =
             raise_arg_count_mismatch fname rcvd expected
           else
             (List.fold_left2
-              (fun r ae at ->
-                 r && arg_type_check_exp env ae at)
-              true arglist fat)
-            && frt = as_arg_type
+               (fun r ae at ->
+                  r && type_check_exp_as_exp_type env ae at)
+               true arglist fat)
+            && is_exp_type_equal frt as_exp_type exp.pexp_loc
   in
     exp_typer exp
 
-let type_check_exp env exp as_type =
-  let rec exp_typer = function
-    | Punit -> false
-    | Pvar path -> is_type_compat (lookup_var_type env path) as_type
-    | Pconst_int i -> can_int_coerce i as_type
-    | Pconst_int32 i -> can_int32_coerce i as_type
-    | Pconst_int64 i -> can_int64_coerce i as_type
-    | Papply (fname, arglist) ->
-        let (fat, frt) = lookup_function_type env fname in
-        let rcvd, expected = List.length arglist, List.length fat in
-          if rcvd <> expected then
-            raise_arg_count_mismatch fname rcvd expected
-          else
-            (List.fold_left2
-              (fun r ae at ->
-                 r && arg_type_check_exp env ae at)
-              true arglist fat)
-            && is_arg_type_compat (Tbase_type as_type) frt
+(* This is used to typecheck expressions in two contexts:
+   . value expressions,
+   . expressions that are values of variant cases.
+   In both cases, the type of the expression will need to match the
+   type of the field, which will be a base_type. *)
+let type_check_exp_as_base_type env exp as_base_type =
+  let rec exp_typer exp =
+    match exp.pexp_desc with
+      | Punit ->
+          (is_field_type_compatible_with_exp_type
+             (Tbase_type as_base_type) Texp_unit_type exp.pexp_loc)
+      | Pvar path ->
+           (is_field_type_compatible_with_base_type
+              (lookup_var_type env path) as_base_type exp.pexp_loc)
+       | Pconst_int i -> can_int_coerce i as_base_type
+       | Pconst_int32 i -> can_int32_coerce i as_base_type
+       | Pconst_int64 i -> can_int64_coerce i as_base_type
+       | Papply (fname, arglist) ->
+           let (fat, frt) = lookup_function_type env fname in
+           let rcvd, expected = List.length arglist, List.length fat in
+             if rcvd <> expected then
+               raise_arg_count_mismatch fname rcvd expected
+             else
+               (List.fold_left2
+                  (fun r ae at ->
+                     r && type_check_exp_as_exp_type env ae at)
+                  true arglist fat)
+               && (is_field_type_compatible_with_exp_type
+                     (Tbase_type as_base_type) frt exp.pexp_loc)
   in
     exp_typer exp

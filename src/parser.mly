@@ -1,4 +1,5 @@
 %{
+  open Asttypes
   open Ast
   (* helpers to process tokens from the lexer *)
   let loc = fst
@@ -8,6 +9,28 @@
 
   let raise_parse_error e loc =
     raise (Parsing_error (e, loc))
+
+  let mk_decl d loc =
+    { pdecl_desc = d; pdecl_loc = loc }
+  let mk_variant v loc =
+    { pvariant_desc = v; pvariant_loc = loc }
+  let mk_format f loc =
+    { pformat_desc = f; pformat_loc = loc }
+  let mk_field f loc =
+    { pfield_desc = f; pfield_loc = loc }
+  let mk_field_type ft loc =
+    { pfield_type_desc = ft; pfield_type_loc = loc }
+  let mk_field_attrib fa loc =
+    { pfield_attrib_desc = fa; pfield_attrib_loc = loc }
+  let mk_type_exp te loc =
+    { ptype_exp_desc = te; ptype_exp_loc = loc }
+  let mk_case_exp ce loc =
+    { pcase_exp_desc = ce; pcase_exp_loc = loc }
+  let mk_exp e loc =
+    { pexp_desc = e; pexp_loc = loc }
+
+  let mk_with_rloc mk d =
+      mk d (Location.symbol_rloc ())
 %}
 
 %token <Location.t> DEF ARRAY ALIGN LABEL FORMAT VARIANT CLASSIFY
@@ -45,14 +68,14 @@ decls:
 
 decl:
 | DEF VARIANT LCID variant
-    { Pvariant ((token_to_located_node $3), $4) }
+    { mk_with_rloc mk_decl (Pvariant ((token_to_located_node $3), $4)) }
 | FORMAT LCID format
-    { Pformat ((token_to_located_node $2), $3) }
+    { mk_with_rloc mk_decl (Pformat ((token_to_located_node $2), $3)) }
 ;
 
 variant:
 | LCURLY variant_cases RCURLY
-    { List.rev $2 }
+    { mk_with_rloc mk_variant (List.rev $2) }
 ;
 
 variant_cases:
@@ -71,7 +94,7 @@ variant_case:
 
 format:
 | LCURLY fields RCURLY
-    { List.rev $2 }
+    { mk_with_rloc mk_format (List.rev $2) }
 ;
 
 fields:
@@ -89,22 +112,23 @@ field_list:
 
 field:
 | ALIGN exp
-    { Palign $2 }
+    { mk_with_rloc mk_field (Palign $2) }
 | LCID COLON field_type
-    { Pnamed_field ((token_to_located_node $1), $3) }
+    { mk_with_rloc mk_field (Pnamed_field ((token_to_located_node $1), $3)) }
 ;
 
 field_type:
 | CLASSIFY LPAREN LCID RPAREN LCURLY cases RCURLY
-    { let e = Pvar (Pfield (token_to_located_node $3)) in
-        Pclassify (e, (List.rev $6))
+    { let loc = Location.rhs_loc 3 in
+      let e = mk_exp (Pvar (Pfield (token_to_located_node $3))) loc in
+        mk_with_rloc mk_field_type (Pclassify (e, (List.rev $6)))
     }
 | ARRAY LPAREN exp RPAREN format
-    { Parray ($3, $5) }
+    { mk_with_rloc mk_field_type (Parray ($3, $5)) }
 | type_exp field_attribs
-    { Psimple ($1, (List.rev $2)) }
+    { mk_with_rloc mk_field_type (Psimple ($1, (List.rev $2))) }
 | LABEL
-    { Plabel }
+    { mk_with_rloc mk_field_type (Plabel) }
 ;
 
 cases:
@@ -121,15 +145,19 @@ case:
     }
 | case_exp ARROW field
     { let case_name, case_exp = $1 in
-        case_name, case_exp, [ $3 ]
+        case_name, case_exp, (mk_format [ $3 ]
+                                (Location.rhs_loc 3))
     }
 ;
 
 case_exp:
 | BAR exp DOTDOT exp COLON UCID
-    { (token_to_located_node $6), (Pcase_range ($2, $4)) }
+    { let lloc, rloc  = Location.rhs_loc 2, Location.rhs_loc 4 in
+      let loc = Location.span lloc rloc in
+      (token_to_located_node $6), mk_case_exp (Pcase_range ($2, $4)) loc }
 | BAR exp COLON UCID
-    { (token_to_located_node $4), (Pcase_const $2) }
+    { let loc = Location.rhs_loc 2 in
+      (token_to_located_node $4), mk_case_exp (Pcase_const $2) loc }
 ;
 
 field_attribs:
@@ -142,6 +170,7 @@ field_attribs:
 field_attrib:
 | LCID LPAREN exp RPAREN
     { let e = $3 in
+      let fa =
         match carrier $1 with
           | "max" -> Pmax e
           | "min" -> Pmin e
@@ -149,32 +178,34 @@ field_attrib:
           | "default" -> Pdefault e
           | "value" -> Pvalue e
           |  n -> raise_parse_error (Unknown_field_attribute n) (loc $1)
+      in
+        mk_with_rloc mk_field_attrib fa
     }
 | VARIANT LCID
-    { Pvariant_ref (token_to_located_node $2) }
+    { mk_with_rloc mk_field_attrib (Pvariant_ref (token_to_located_node $2)) }
 | VARIANT variant
-    { Pvariant_inline $2 }
+    { mk_with_rloc mk_field_attrib (Pvariant_inline $2) }
 ;
 
 exp:
 | INT
-    { Pconst_int (carrier $1) }
+    { mk_with_rloc mk_exp (Pconst_int (carrier $1)) }
 | INT32
-    { Pconst_int32 (carrier $1) }
+    { mk_with_rloc mk_exp (Pconst_int32 (carrier $1)) }
 | INT64
-    { Pconst_int64 (carrier $1) }
+    { mk_with_rloc mk_exp (Pconst_int64 (carrier $1)) }
 | path
-    { Pvar $1 }
+    { mk_with_rloc mk_exp (Pvar $1) }
 | LCID LPAREN exp_list RPAREN
-    { Papply ((token_to_located_node $1), (List.rev $3)) }
+    { mk_with_rloc mk_exp (Papply ((token_to_located_node $1), (List.rev $3))) }
 | exp PLUS exp
-    { Papply ((Location.make_located_node  "+" $2), [$1; $3]) }
+    { mk_with_rloc mk_exp (Papply ((Location.make_located_node  "+" $2), [$1; $3])) }
 | exp MINUS exp
-    { Papply ((Location.make_located_node  "-" $2), [$1; $3]) }
+    { mk_with_rloc mk_exp (Papply ((Location.make_located_node  "-" $2), [$1; $3])) }
 | exp TIMES exp
-    { Papply ((Location.make_located_node  "*" $2), [$1; $3]) }
+    { mk_with_rloc mk_exp (Papply ((Location.make_located_node  "*" $2), [$1; $3])) }
 | exp DIV exp
-    { Papply ((Location.make_located_node  "/" $2), [$1; $3]) }
+    { mk_with_rloc mk_exp (Papply ((Location.make_located_node  "/" $2), [$1; $3])) }
 | LPAREN exp RPAREN
     { $2 }
 ;
@@ -197,9 +228,9 @@ path:
 
 type_exp:
 | LCID LSQUARE exp RSQUARE
-    { Pvector ((token_to_located_node $1), $3) }
+    { mk_with_rloc mk_type_exp (Pvector ((token_to_located_node $1), $3)) }
 | LCID
-    { Pbase (token_to_located_node $1) }
+    { mk_with_rloc mk_type_exp (Pbase (token_to_located_node $1)) }
 ;
 
 opt_semi:

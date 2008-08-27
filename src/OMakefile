@@ -20,6 +20,7 @@ FP_FILES[] =
     lexer
     parser
     ast
+    asttypes
     ident
     env
     types

@@ -1,14 +1,14 @@
-(* types for predefined functions and their arguments *)
+(* types for predefined functions and their expression arguments *)
 
-type arg_type =
-  | Targ_int_type
-  | Targ_vector_type
-  | Targ_base_type
-  | Targ_array_type
-  | Targ_unit_type
-  | Targ_field_name
+type exp_type =
+  | Texp_int_type
+  | Texp_vector_type
+  | Texp_base_type
+  | Texp_array_type
+  | Texp_unit_type
+  | Texp_field_name
 
-type function_info = arg_type list * arg_type
+type function_info = exp_type list * exp_type
 
 (* basic types for fields and expressions *)
 

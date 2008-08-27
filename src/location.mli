@@ -13,3 +13,8 @@ val location_of: 'a located_node -> t
 
 val make_located_node: 'a -> t -> 'a located_node
 
+val symbol_rloc: unit -> t
+
+val rhs_loc: int -> t
+
+val span: t -> t -> t

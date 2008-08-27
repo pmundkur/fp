@@ -1,7 +1,7 @@
 {
   open Lexing
   open Parser
-  open Ast
+  open Asttypes
 
   let raise_syntax_error e pos =
     raise (Syntax_error (e, pos))
