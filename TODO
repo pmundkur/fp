@@ -119,11 +119,18 @@ TODO:
 
   . Expressions will be constant folded.
 
-  . Expressions in variant definitions will all be represented as
-    Int64, and will be range checked when downcasting to requested
-    types.  They are represented as Int64 since they do not have
-    accompanying type annotations.  Expressions in every other context
-    (within a format definition) can have a type deduced for it.
+  . Expressions in variant definitions will be entered into the
+    environment in their AST form, since they cannot be checked or
+    constant folded without knowing their required type.  This is only
+    known when they are associated with a field; so the variant
+    definition is extracted from the environment when processing such
+    a field, and is then type checked and constant-folded in the
+    context of the field that uses it.
+
+    Expressions in every other context (within a format definition)
+    can have a type deduced for it; these contexts are (i) as
+    arguments to a function, (ii) as values of value attributes, and
+    (iii) as values of inline variant definitions.
 
   . Each module will be annotated with the set of identifiers denoting
     free variables appearing in (possibly nested) value expressions

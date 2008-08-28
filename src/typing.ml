@@ -2,25 +2,28 @@ open Asttypes
 open Ast
 open Types
 
-exception UnknownIdentifier of string Location.located_node
-exception InvalidPath of string Location.located_node
-exception ArgCountMismatch of fun_name * int (* received *) * int (* expected *)
-exception FieldBaseTypeMismatch of field_type (* received *) * base_type (* expected *) * Location.t
-exception FieldExpTypeMismatch of field_type * exp_type * Location.t
-exception ExpTypeMismatch of exp_type (* received *) * exp_type (* expected *) * Location.t
+exception Unknown_identifier of string Location.located_node
+exception Invalid_path of string Location.located_node
+exception Arg_count_mismatch of fun_name * int (* received *) * int (* expected *)
+exception Type_mismatch_field_base of field_type (* received *) * base_type (* expected *) * Location.t
+exception Type_mismatch_field_exp of field_type * exp_type * Location.t
+exception Type_mismatch_exp_exp of exp_type (* received *) * exp_type (* expected *) * Location.t
+exception Non_const_expression of Location.t
 
 let raise_unknown_ident ln =
-  raise (UnknownIdentifier ln)
+  raise (Unknown_identifier ln)
 let raise_invalid_path ln =
-  raise (InvalidPath ln)
+  raise (Invalid_path ln)
 let raise_arg_count_mismatch fn rcvd expected =
-  raise (ArgCountMismatch (fn, rcvd, expected))
+  raise (Arg_count_mismatch (fn, rcvd, expected))
 let raise_field_base_type_mismatch ft bt loc =
-  raise (FieldBaseTypeMismatch (ft, bt, loc))
+  raise (Type_mismatch_field_base (ft, bt, loc))
 let raise_field_exp_type_mismatch ft at loc =
-  raise (FieldExpTypeMismatch (ft, at, loc))
-let raise_exp_type_mismatch received expected  loc =
-  raise (ExpTypeMismatch (received, expected, loc))
+  raise (Type_mismatch_field_exp (ft, at, loc))
+let raise_exp_exp_type_mismatch received expected  loc =
+  raise (Type_mismatch_exp_exp (received, expected, loc))
+let raise_non_const_exp loc =
+  raise (Non_const_expression loc)
 
 let functions = [
   ("+", ([Texp_int_type; Texp_int_type], Texp_int_type));
@@ -163,7 +166,19 @@ let is_field_type_compatible_with_exp_type field_type exp_type loc =
 
 let is_exp_type_equal received expected loc =
   if received = expected then true
-  else raise (ExpTypeMismatch (received, expected, loc))
+  else raise_exp_exp_type_mismatch received expected loc
+
+let rec is_exp_const exp =
+  match exp.pexp_desc with
+    | Punit -> true
+    | Pvar _ -> raise_non_const_exp exp.pexp_loc
+    | Pconst_int _
+    | Pconst_int32 _
+    | Pconst_int64 _ -> true
+    | Papply (fname, arglist) ->
+        List.fold_left
+          (fun r a -> r && is_exp_const a)
+          true arglist
 
 (* This is used to typecheck expressions in the context of arguments
    to functions, where the type of the expression needs to match the
@@ -187,17 +202,17 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
       | Pconst_int32 _
       | Pconst_int64 _ ->
           is_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc
-    | Papply (fname, arglist) ->
-        let (fat, frt) = lookup_function_type env fname in
-        let rcvd, expected = List.length arglist, List.length fat in
-          if rcvd <> expected then
-            raise_arg_count_mismatch fname rcvd expected
-          else
-            (List.fold_left2
-               (fun r ae at ->
-                  r && type_check_exp_as_exp_type env ae at)
-               true arglist fat)
-            && is_exp_type_equal frt as_exp_type exp.pexp_loc
+      | Papply (fname, arglist) ->
+          let (fat, frt) = lookup_function_type env fname in
+          let rcvd, expected = List.length arglist, List.length fat in
+            if rcvd <> expected then
+              raise_arg_count_mismatch fname rcvd expected
+            else
+              (List.fold_left2
+                 (fun r ae at ->
+                    r && type_check_exp_as_exp_type env ae at)
+                 true arglist fat)
+              && is_exp_type_equal frt as_exp_type exp.pexp_loc
   in
     exp_typer exp
 
