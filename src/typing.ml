@@ -278,13 +278,14 @@ let check_variant_def vc_list =
     List.iter check_case vc_list
 
 let type_check decls env =
-  let typer decl =
-    match decl.pdecl_desc with
+  let typer e d =
+    match d.pdecl_desc with
       | Pvariant (vn, vd) ->
           check_variant_def vd.pvariant_desc;
-          Env.add_variant_def (Location.node_of vn) vd env
-      | _ (* TODO *) ->
-          env
+          Env.add_variant_def (Location.node_of vn) vd e
+      | Pformat (_, _) ->
+          (* TODO *)
+          e
   in
-    (* TODO *)
-    typer
+    List.fold_left
+      (fun e d -> typer e d) env decls
