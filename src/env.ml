@@ -84,3 +84,8 @@ let add_function fn finfo env =
   let ident = Ident.make_ident fn in
     { env with
         functions = (ident, finfo) :: env.functions }
+
+let add_variant_def vn vinfo env =
+  let ident = Ident.make_ident vn in
+    { env with
+        variants = (ident, vinfo) :: env.variants }

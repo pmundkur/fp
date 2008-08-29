@@ -39,7 +39,7 @@ and struct_type = field_type StringMap.t
 and map_type = struct_type StringMap.t
 
 
-type variant_info = unit
+type variant_info = Ast.variant
 
 type format_info = unit
 

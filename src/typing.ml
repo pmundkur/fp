@@ -9,6 +9,8 @@ exception Type_mismatch_field_base of field_type (* received *) * base_type (* e
 exception Type_mismatch_field_exp of field_type * exp_type * Location.t
 exception Type_mismatch_exp_exp of exp_type (* received *) * exp_type (* expected *) * Location.t
 exception Non_const_expression of Location.t
+exception Non_unique_name of string Location.located_node
+exception Non_unique_default of string Location.located_node (* second *) * string Location.located_node (* first *)
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -24,6 +26,10 @@ let raise_exp_exp_type_mismatch received expected  loc =
   raise (Type_mismatch_exp_exp (received, expected, loc))
 let raise_non_const_exp loc =
   raise (Non_const_expression loc)
+let raise_non_unique_name nm =
+  raise (Non_unique_name nm)
+let raise_non_unique_default second first =
+  raise (Non_unique_default (second, first))
 
 let functions = [
   ("+", ([Texp_int_type; Texp_int_type], Texp_int_type));
@@ -247,3 +253,38 @@ let type_check_exp_as_base_type env exp as_base_type =
                      (Tbase_type as_base_type) frt exp.pexp_loc)
   in
     exp_typer exp
+
+module StringSet = Set.Make (struct type t = string let compare = compare end)
+
+let check_variant_def vc_list =
+  (* . the exps should be const
+     . the case_names should be distinct
+     . there should only be one default
+  *)
+  let names = ref StringSet.empty in
+  let default = ref None in
+  let check_case (ce, cn, def) =
+    let nm = Location.node_of cn in
+      ignore (is_exp_const ce);
+      if StringSet.mem nm !names then begin
+        raise_non_unique_name cn
+      end else begin
+        names := StringSet.add nm !names;
+      end;
+      match !default with
+        | None -> default := Some cn
+        | Some df -> raise_non_unique_default cn df
+  in
+    List.iter check_case vc_list
+
+let type_check decls env =
+  let typer decl =
+    match decl.pdecl_desc with
+      | Pvariant (vn, vd) ->
+          check_variant_def vd.pvariant_desc;
+          Env.add_variant_def (Location.node_of vn) vd env
+      | _ (* TODO *) ->
+          env
+  in
+    (* TODO *)
+    typer

@@ -15,3 +15,4 @@ val lookup_function_by_id: t -> Ident.t -> Types.function_info option
 
 
 val add_function: string -> Types.function_info -> t -> t
+val add_variant_def: string -> Types.variant_info -> t -> t
