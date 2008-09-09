@@ -105,50 +105,6 @@ let lookup_typename env tn =
     | None -> raise_unknown_ident tn
     | Some (_, ti) -> ti
 
-let can_int_coerce i as_type =
-  match as_type with
-    | Tprimitive Tprim_bit -> i = 0 || i = 1
-    | Tprimitive Tprim_byte -> i >= 0 && i <= 255
-    | Tprimitive Tprim_int16 -> i >= -32768 && i <= 32767
-    | Tprimitive Tprim_int32 ->
-        (* int could have a precision of either 31 or 63 bits.  We
-           need to perform the range comparison in the type with
-           higher precision. *)
-        if ((Int32.of_int Pervasives.max_int) <> -1l) then
-          (* int has a smaller precision than 32 bits *)
-          true
-        else
-          (* perform the range comparison in the int type, since it
-             has higher precision. *)
-          (i >= Int32.to_int Int32.min_int
-           && i <= Int32.to_int Int32.max_int)
-    | Tprimitive Tprim_int64 -> true  (* for now ;-) *)
-    | _ -> false
-
-let can_int32_coerce i as_type =
-  match as_type with
-    | Tprimitive Tprim_bit -> i = Int32.zero || i = Int32.one
-    | Tprimitive Tprim_byte -> i >= Int32.zero && i <= (Int32.of_int 255)
-    | Tprimitive Tprim_int16 ->
-        i >= Int32.of_int (-32768)
-        && i <= Int32.of_int 32767
-    | Tprimitive Tprim_int32
-    | Tprimitive Tprim_int64 -> true
-    | Tvector _ -> false
-
-let can_int64_coerce i as_type =
-  match as_type with
-    | Tprimitive Tprim_bit -> i = Int64.zero || i = Int64.one
-    | Tprimitive Tprim_byte -> i >= Int64.zero && i <= (Int64.of_int 255)
-    | Tprimitive Tprim_int16 ->
-        i >= Int64.of_int (-32768)
-        && i <= Int64.of_int 32767
-    | Tprimitive Tprim_int32 ->
-        i >= Int64.of_int32 Int32.min_int
-        && i <= Int64.of_int32 Int32.max_int
-    | Tprimitive Tprim_int64 -> true
-    | Tvector _ -> false
-
 let get_field_info env fn =
     match Env.lookup_field_by_name env (Location.node_of fn) with
       | None -> raise_unknown_ident fn
@@ -292,9 +248,9 @@ let type_check_exp_as_base_type env exp as_base_type =
       | Pvar path ->
            (is_field_type_compatible_with_base_type
               (lookup_var_type env path) as_base_type exp.pexp_loc)
-       | Pconst_int i -> can_int_coerce i as_base_type
-       | Pconst_int32 i -> can_int32_coerce i as_base_type
-       | Pconst_int64 i -> can_int64_coerce i as_base_type
+       | Pconst_int i -> Types.can_coerce_int i as_base_type
+       | Pconst_int32 i -> Types.can_coerce_int32 i as_base_type
+       | Pconst_int64 i -> Types.can_coerce_int64 i as_base_type
        | Papply (fname, arglist) ->
            let (fat, frt) = lookup_function_type env fname in
            let rcvd, expected = List.length arglist, List.length fat in
@@ -352,14 +308,16 @@ let kinding te env cur_align =
         else
           Kbase, (cur_align + ti)
     | Pvector (tn, e) ->
-        let ti = lookup_typename env tn in
+        let tsize = lookup_typename env tn in
         let c = const_fold_as_int env e in
           if is_bit_typename tn then
             Kvector, (cur_align + c)
           else if not (is_byte_aligned cur_align) then
             raise_bad_alignment cur_align 8 te.ptype_exp_loc
           else
-            Kvector, ti * c
+            Kvector, tsize * c
+
+(* type-checker top-level *)
 
 let type_check decls env =
   let typer e d =
@@ -368,6 +326,7 @@ let type_check decls env =
           check_variant_def vd.pvariant_desc;
           Env.add_variant_def (Location.node_of vn) vd e
       | Pformat _ ->
+          (* TODO *)
           e
   in
     List.fold_left

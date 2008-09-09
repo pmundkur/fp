@@ -38,6 +38,7 @@ and struct_type = field_type StringMap.t
 
 and map_type = struct_type StringMap.t
 
+(* information stored in environment *)
 
 type variant_info = Ast.variant
 
@@ -47,9 +48,17 @@ type field_info = field_type
 
 type type_info = int
 
+(* type kinding *)
+
 type kind =
   | Kbase
   | Kvector
   | Kstruct
   | Karray
   | Kmap
+
+(* type coercions *)
+
+val can_coerce_int: int -> base_type -> bool
+val can_coerce_int32: Int32.t -> base_type -> bool
+val can_coerce_int64: Int64.t -> base_type -> bool
