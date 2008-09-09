@@ -293,11 +293,14 @@ E |- e : int
 --------------------------  :: int64_vector
 E, a |- int64[e] : Sigma -> T , 0
 
+% TODO: We need to add some check for D!
 a % 8 = 0
 --------------------------  :: struct
 E, a |- struct { D ;; VD } : Struct, 0
 
+% TODO: We need to add some check for tau!
 a % 8 = 0
+E |- e : int
 --------------------------  :: array
 E, a |- ( e, tau ) : Sigma -> Struct, 0
 

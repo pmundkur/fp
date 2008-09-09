@@ -8,7 +8,7 @@ type exp_type =
   | Texp_unit_type
   | Texp_field_name
 
-type function_info = exp_type list * exp_type
+type function_info = (exp_type list * exp_type) * (int list -> int) option
 
 (* basic types for fields and expressions *)
 
@@ -45,3 +45,11 @@ type format_info = unit
 
 type field_info = field_type
 
+type type_info = int
+
+type kind =
+  | Kbase
+  | Kvector
+  | Kstruct
+  | Karray
+  | Kmap

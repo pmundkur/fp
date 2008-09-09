@@ -3,19 +3,21 @@ type 'a stacked_env =
   | Env_frame of (Ident.t * 'a) list * ('a stacked_env)
 
 type t = {
-  (* Functions are currently predefined only. *)
-  functions : (Ident.t * Types.function_info) list;
+  (* Functions and types are currently predefined only. *)
+  functions: (Ident.t * Types.function_info) list;
+  types: (Ident.t * Types.type_info) list;
 
   (* Variants and formats are defined at the top-level. *)
-  variants : (Ident.t * Types.variant_info) list;
-  formats  : (Ident.t * Types.format_info)  list;
+  variants: (Ident.t * Types.variant_info) list;
+  formats: (Ident.t * Types.format_info)  list;
 
   (* Fields need a dynamic stacked environment. *)
-  fields   : Types.field_info stacked_env;
+  fields: Types.field_info stacked_env;
 }
 
 let new_env () =
-  { functions = [];
+  { types     = [];
+    functions = [];
     variants  = [];
     formats   = [];
     fields    = Env_top }
@@ -79,6 +81,17 @@ let lookup_function_by_name t n =
 
 let lookup_function_by_id t i =
   assoc_by_id t.functions i
+
+let lookup_type_by_name t n =
+  assoc_by_name t.types n
+
+let lookup_type_by_id t i =
+  assoc_by_id t.types i
+
+let add_type tn tinfo env =
+  let ident = Ident.make_ident tn in
+    { env with
+        types = (ident, tinfo) :: env.types }
 
 let add_function fn finfo env =
   let ident = Ident.make_ident fn in

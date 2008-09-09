@@ -9,8 +9,11 @@ exception Type_mismatch_field_base of field_type (* received *) * base_type (* e
 exception Type_mismatch_field_exp of field_type * exp_type * Location.t
 exception Type_mismatch_exp_exp of exp_type (* received *) * exp_type (* expected *) * Location.t
 exception Non_const_expression of Location.t
+exception Non_const_integral_expression of Location.t
+exception Non_const_foldable_function of string Location.located_node
 exception Non_unique_name of string Location.located_node
 exception Non_unique_default of string Location.located_node (* second *) * string Location.located_node (* first *)
+exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -26,28 +29,51 @@ let raise_exp_exp_type_mismatch received expected  loc =
   raise (Type_mismatch_exp_exp (received, expected, loc))
 let raise_non_const_exp loc =
   raise (Non_const_expression loc)
+let raise_non_const_integral_exp loc =
+  raise (Non_const_integral_expression loc)
+let raise_non_const_foldable_function fn =
+  raise (Non_const_foldable_function fn)
 let raise_non_unique_name nm =
   raise (Non_unique_name nm)
 let raise_non_unique_default second first =
   raise (Non_unique_default (second, first))
+let raise_bad_alignment cur_align expected loc =
+  raise (Bad_alignment (cur_align, expected, loc))
+
+let binary op l =
+  assert ((List.length l) = 2);
+  op (List.hd l) (List.hd (List.tl l))
 
 let functions = [
-  ("+", ([Texp_int_type; Texp_int_type], Texp_int_type));
-  ("-", ([Texp_int_type; Texp_int_type], Texp_int_type));
-  ("*", ([Texp_int_type; Texp_int_type], Texp_int_type));
-  ("/", ([Texp_int_type; Texp_int_type], Texp_int_type));
+  ("+", (([Texp_int_type; Texp_int_type], Texp_int_type),
+         Some (binary (+))));
+  ("-", (([Texp_int_type; Texp_int_type], Texp_int_type),
+         Some (binary (-))));
+  ("*", (([Texp_int_type; Texp_int_type], Texp_int_type),
+         Some (binary ( * ))));
+  ("/", (([Texp_int_type; Texp_int_type], Texp_int_type),
+         Some (binary (/))));
 
-  ("byte_sizeof", ([Texp_base_type], Texp_int_type));
-  ("bit_sizeof", ([Texp_base_type], Texp_int_type));
-  ("length", ([Texp_vector_type], Texp_int_type));
-  ("array_size", ([Texp_array_type], Texp_int_type));
+  ("byte_sizeof", (([Texp_base_type], Texp_int_type), None));
+  ("bit_sizeof", (([Texp_base_type], Texp_int_type), None));
+  ("length", (([Texp_vector_type], Texp_int_type), None));
+  ("array_size", (([Texp_array_type], Texp_int_type), None));
 
-  ("offset", ([Texp_field_name], Texp_int_type));
-
-  ("num_set_bits", ([Texp_field_name], Texp_int_type));
-
-  ("remaining", ([Texp_unit_type], Texp_int_type))
+  ("offset", (([Texp_field_name], Texp_int_type), None));
+  ("num_set_bits", (([Texp_field_name], Texp_int_type), None));
+  ("remaining", (([Texp_unit_type], Texp_int_type), None))
 ]
+
+let base_types = [
+  ("bit", 1);
+  ("byte", 8);
+  ("int16", 16);
+  ("int32", 32);
+  ("int64", 64)
+]
+
+let is_bit_typename tn =
+  (Location.node_of tn) = "bit"
 
 let populate_functions env =
   List.fold_left
@@ -55,13 +81,29 @@ let populate_functions env =
        Env.add_function fid finfo e)
     env functions
 
+let populate_base_types env =
+  List.fold_left
+    (fun e (tid, tinfo) ->
+       Env.add_type tid tinfo)
+    env base_types
+
 let init_typing_env () =
   populate_functions (Env.new_env ())
 
 let lookup_function_type env fn =
   match Env.lookup_function_by_name env (Location.node_of fn) with
     | None -> raise_unknown_ident fn
-    | Some (_, fti) -> fti
+    | Some (_, (fti, _)) -> fti
+
+let lookup_function_impl env fn =
+  match Env.lookup_function_by_name env (Location.node_of fn) with
+    | None -> raise_unknown_ident fn
+    | Some (_, (_, f)) -> f
+
+let lookup_typename env tn =
+  match Env.lookup_type_by_name env (Location.node_of tn) with
+    | None -> raise_unknown_ident tn
+    | Some (_, ti) -> ti
 
 let can_int_coerce i as_type =
   match as_type with
@@ -186,6 +228,20 @@ let rec is_exp_const exp =
           (fun r a -> r && is_exp_const a)
           true arglist
 
+let rec const_fold_as_int env exp =
+  match exp.pexp_desc with
+    | Punit
+    | Pvar _ ->
+        raise_non_const_integral_exp exp.pexp_loc
+    | Pconst_int i -> i
+    | Pconst_int32 i -> Int32.to_int i (* TODO: range check *)
+    | Pconst_int64 i -> Int64.to_int i (* TODO: range check *)
+    | Papply (fname, arglist) ->
+        let iargs = List.map (const_fold_as_int env) arglist in
+        match lookup_function_impl env fname with
+          | None -> raise_non_const_foldable_function fname
+          | Some f -> f iargs
+
 (* This is used to typecheck expressions in the context of arguments
    to functions, where the type of the expression needs to match the
    type of the argument expected by the function. *)
@@ -277,14 +333,41 @@ let check_variant_def vc_list =
   in
     List.iter check_case vc_list
 
+let is_byte_aligned a =
+  a mod 8 = 0
+
+(* This implements the base cases of the kinding relation of
+   the specification:
+   	E, a |- tau : K, a'
+*)
+
+let kinding te env cur_align =
+  match te.ptype_exp_desc with
+    | Pbase tn ->
+        let ti = lookup_typename env tn in
+        if is_bit_typename tn then
+          Kbase, (cur_align + 1)
+        else if not (is_byte_aligned cur_align) then
+          raise_bad_alignment cur_align 8 te.ptype_exp_loc
+        else
+          Kbase, (cur_align + ti)
+    | Pvector (tn, e) ->
+        let ti = lookup_typename env tn in
+        let c = const_fold_as_int env e in
+          if is_bit_typename tn then
+            Kvector, (cur_align + c)
+          else if not (is_byte_aligned cur_align) then
+            raise_bad_alignment cur_align 8 te.ptype_exp_loc
+          else
+            Kvector, ti * c
+
 let type_check decls env =
   let typer e d =
     match d.pdecl_desc with
       | Pvariant (vn, vd) ->
           check_variant_def vd.pvariant_desc;
           Env.add_variant_def (Location.node_of vn) vd e
-      | Pformat (_, _) ->
-          (* TODO *)
+      | Pformat _ ->
           e
   in
     List.fold_left
