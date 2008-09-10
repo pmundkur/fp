@@ -38,6 +38,7 @@ and struct_type = field_type StringMap.t
 
 and map_type = struct_type StringMap.t
 
+(* information stored in environment *)
 
 type variant_info = Ast.variant
 
@@ -47,12 +48,16 @@ type field_info = field_type
 
 type type_info = int
 
+(* type kinding *)
+
 type kind =
   | Kbase
   | Kvector
   | Kstruct
   | Karray
   | Kmap
+
+(* type coercions *)
 
 let can_coerce_int i as_type =
   match as_type with
