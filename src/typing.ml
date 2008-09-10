@@ -106,9 +106,9 @@ let lookup_typename env tn =
     | Some (_, ti) -> ti
 
 let get_field_info env fn =
-    match Env.lookup_field_by_name env (Location.node_of fn) with
-      | None -> raise_unknown_ident fn
-      | Some fi -> fi
+  match Env.lookup_field_by_name env (Location.node_of fn) with
+    | None -> raise_unknown_ident fn
+    | Some fi -> fi
 
 let get_field_type env fn =
   let ((_, t), _) = get_field_info env fn in
@@ -197,9 +197,9 @@ let rec const_fold_as_int env exp =
     | Pconst_int64 i -> Int64.to_int i (* TODO: range check *)
     | Papply (fname, arglist) ->
         let iargs = List.map (const_fold_as_int env) arglist in
-        match lookup_function_impl env fname with
-          | None -> raise_non_const_foldable_function fname
-          | Some f -> f iargs
+          match lookup_function_impl env fname with
+            | None -> raise_non_const_foldable_function fname
+            | Some f -> f iargs
 
 (* This is used to typecheck expressions in two contexts:
    . arguments to functions, where the type of the expression needs to
@@ -251,23 +251,23 @@ let type_check_exp_as_base_type env exp as_base_type =
           (check_field_type_compatible_with_exp_type
              (Tbase_type as_base_type) Texp_unit_type exp.pexp_loc)
       | Pvar path ->
-           (check_field_type_compatible_with_base_type
-              (lookup_var_type env path) as_base_type exp.pexp_loc)
-       | Pconst_int i -> Types.can_coerce_int i as_base_type
-       | Pconst_int32 i -> Types.can_coerce_int32 i as_base_type
-       | Pconst_int64 i -> Types.can_coerce_int64 i as_base_type
-       | Papply (fname, arglist) ->
-           let (fat, frt) = lookup_function_type env fname in
-           let rcvd, expected = List.length arglist, List.length fat in
-             if rcvd <> expected then
-               raise_arg_count_mismatch fname rcvd expected
-             else
-               (List.fold_left2
-                  (fun r ae at ->
-                     r && type_check_exp_as_exp_type env ae at)
-                  true arglist fat)
-               && (check_field_type_compatible_with_exp_type
-                     (Tbase_type as_base_type) frt exp.pexp_loc)
+          (check_field_type_compatible_with_base_type
+             (lookup_var_type env path) as_base_type exp.pexp_loc)
+      | Pconst_int i -> Types.can_coerce_int i as_base_type
+      | Pconst_int32 i -> Types.can_coerce_int32 i as_base_type
+      | Pconst_int64 i -> Types.can_coerce_int64 i as_base_type
+      | Papply (fname, arglist) ->
+          let (fat, frt) = lookup_function_type env fname in
+          let rcvd, expected = List.length arglist, List.length fat in
+            if rcvd <> expected then
+              raise_arg_count_mismatch fname rcvd expected
+            else
+              (List.fold_left2
+                 (fun r ae at ->
+                    r && type_check_exp_as_exp_type env ae at)
+                 true arglist fat)
+              && (check_field_type_compatible_with_exp_type
+                    (Tbase_type as_base_type) frt exp.pexp_loc)
   in
     exp_typer exp
 
@@ -308,12 +308,12 @@ let kinding te env cur_align =
   match te.ptype_exp_desc with
     | Pbase tn ->
         let tsize = lookup_typename env tn in
-        if is_bit_typename tn then
-          Kbase, (cur_align + 1)
-        else if not (is_byte_aligned cur_align) then
-          raise_bad_alignment cur_align 8 te.ptype_exp_loc
-        else
-          Kbase, (cur_align + tsize)
+          if is_bit_typename tn then
+            Kbase, (cur_align + 1)
+          else if not (is_byte_aligned cur_align) then
+            raise_bad_alignment cur_align 8 te.ptype_exp_loc
+          else
+            Kbase, (cur_align + tsize)
     | Pvector (tn, e) ->
         if is_bit_typename tn then
           let c = const_fold_as_int env e in
