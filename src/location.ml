@@ -1,8 +1,6 @@
-open Lexing
-
 type t = {
-  loc_start : position;
-  loc_end : position
+  loc_start : Lexing.position;
+  loc_end : Lexing.position
 }
 
 let start_of l =
@@ -14,6 +12,10 @@ let end_of l =
 let make_location s e =
   { loc_start = s;
     loc_end = e }
+
+let dummy_loc =
+  { loc_start = Lexing.dummy_pos;
+    loc_end = Lexing.dummy_pos }
 
 type 'a located_node =
     { node : 'a;
@@ -38,7 +40,7 @@ let rhs_loc i =
     loc_end = Parsing.rhs_end_pos i }
 
 let span s e =
-  if s.loc_start.pos_cnum <= e.loc_start.pos_cnum then
+  if s.loc_start.Lexing.pos_cnum <= e.loc_start.Lexing.pos_cnum then
     { loc_start = s.loc_start;
       loc_end = e.loc_end }
   else

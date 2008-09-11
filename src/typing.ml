@@ -14,6 +14,7 @@ exception Non_const_foldable_function of string Location.located_node
 exception Non_unique_name of string Location.located_node
 exception Non_unique_default of string Location.located_node (* second *) * string Location.located_node (* first *)
 exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
+exception Invalid_align of int * Location.t
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -39,6 +40,9 @@ let raise_non_unique_default second first =
   raise (Non_unique_default (second, first))
 let raise_bad_alignment cur_align expected loc =
   raise (Bad_alignment (cur_align, expected, loc))
+let raise_invalid_align align loc =
+  raise (Invalid_align (align, loc))
+
 
 let binary op l =
   assert ((List.length l) = 2);
@@ -65,11 +69,11 @@ let functions = [
 ]
 
 let base_types = [
-  ("bit", 1);
-  ("byte", 8);
-  ("int16", 16);
-  ("int32", 32);
-  ("int64", 64)
+  ("bit", (Tprim_bit, 1));
+  ("byte", (Tprim_byte, 8));
+  ("int16", (Tprim_int16, 16));
+  ("int32", (Tprim_int32, 32));
+  ("int64", (Tprim_int64, 64))
 ]
 
 let is_bit_typename tn =
@@ -77,14 +81,16 @@ let is_bit_typename tn =
 
 let populate_functions env =
   List.fold_left
-    (fun e (fid, finfo) ->
-       Env.add_function fid finfo e)
+    (fun e (fn, finfo) ->
+       let fid = Ident.make_from_string fn Location.dummy_loc in
+         Env.add_function fid finfo e)
     env functions
 
 let populate_base_types env =
   List.fold_left
-    (fun e (tid, tinfo) ->
-       Env.add_type tid tinfo)
+    (fun e (tn, tinfo) ->
+       let tid = Ident.make_from_string tn Location.dummy_loc in
+         Env.add_type tid tinfo)
     env base_types
 
 let init_typing_env () =
@@ -100,10 +106,15 @@ let lookup_function_impl env fn =
     | None -> raise_unknown_ident fn
     | Some (_, (_, f)) -> f
 
-let lookup_typename env tn =
+let lookup_typename_size env tn =
   match Env.lookup_type_by_name env (Location.node_of tn) with
     | None -> raise_unknown_ident tn
-    | Some (_, ti) -> ti
+    | Some (_, (_, tsize)) -> tsize
+
+let lookup_typename_type env tn =
+  match Env.lookup_type_by_name env (Location.node_of tn) with
+    | None -> raise_unknown_ident tn
+    | Some (_, (t, _)) -> t
 
 let get_field_info env fn =
   match Env.lookup_field_by_name env (Location.node_of fn) with
@@ -111,7 +122,7 @@ let get_field_info env fn =
     | Some fi -> fi
 
 let get_field_type env fn =
-  let ((_, t), _) = get_field_info env fn in
+  let (_, t) = get_field_info env fn in
     t
 
 let rec follow_case_path cn path m =
@@ -299,15 +310,14 @@ let is_byte_aligned a =
 
 (* This implements the base cases of the kinding relation of
    the specification:
-   	E, a |- tau : K, a'
-
+        E, a |- tau : K, a'
    Alignment is computed in units of bits, modulo 8.
 *)
 
-let kinding te env cur_align =
+let kinding env cur_align te =
   match te.ptype_exp_desc with
     | Pbase tn ->
-        let tsize = lookup_typename env tn in
+        let tsize = lookup_typename_size env tn in
           if is_bit_typename tn then
             Kbase, (cur_align + 1)
           else if not (is_byte_aligned cur_align) then
@@ -325,6 +335,43 @@ let kinding te env cur_align =
           Kvector, 0
         end
 
+(* This implements the field-checking relation:
+        E, a, S |- F, E', a', S'
+
+   However, instead of using an explicit name set S, we instead
+   thread a list containing (field_ident, field_attrib list) tuples,
+   to process once we know all the fields and their types.  We
+   collect idents to know which fields we've processed; we can't use
+   the environment for this since that won't give us the field
+   order.  Field attributes are processed after all the fields are
+   typed, and so need to be collected.
+*)
+
+type typed_field =
+  | Tnamed_field of Ident.t
+  | Talign of int
+
+let field_check (env, cur_align, fl) f =
+  match f.pfield_desc with
+    | Palign e ->
+        let c = const_fold_as_int env e in
+          if not (is_byte_aligned c) then
+            raise_invalid_align c e.pexp_loc
+          else
+            (env, 0, (Talign c)::fl)
+    | Pnamed_field (fn, ft) ->
+        match ft.pfield_type_desc with
+          | Plabel ->
+              if not (is_byte_aligned cur_align) then
+                raise_bad_alignment cur_align 8 ft.pfield_type_loc
+              else begin
+                let fi = Ident.make_from_node fn in
+                let e = Env.add_field fi Tlabel env in
+                  (e, cur_align, (Tnamed_field fi)::fl)
+              end
+          | _ -> (* TODO *)
+              (env, cur_align, fl)
+
 (* type-checker top-level *)
 
 let type_check decls env =
@@ -332,7 +379,7 @@ let type_check decls env =
     match d.pdecl_desc with
       | Pvariant (vn, vd) ->
           check_variant_def vd.pvariant_desc;
-          Env.add_variant_def (Location.node_of vn) vd e
+          Env.add_variant_def (Ident.make_from_node vn) vd e
       | Pformat _ ->
           (* TODO *)
           e

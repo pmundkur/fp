@@ -5,6 +5,9 @@ val start_of: t -> Lexing.position
 val end_of: t -> Lexing.position
 
 val make_location: Lexing.position -> Lexing.position -> t
+
+val dummy_loc: t
+
 type 'a located_node
 
 val node_of: 'a located_node -> 'a

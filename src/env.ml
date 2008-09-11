@@ -12,7 +12,7 @@ type t = {
   formats: (Ident.t * Types.format_info)  list;
 
   (* Fields need a dynamic stacked environment. *)
-  fields: Types.field_info stacked_env;
+  fields: (Ident.t * Types.field_info) list;
 }
 
 let new_env () =
@@ -20,7 +20,7 @@ let new_env () =
     functions = [];
     variants  = [];
     formats   = [];
-    fields    = Env_top }
+    fields    = [] }
 
 let assoc_match match_fn ret_fn frame n =
   let rec assc l =
@@ -45,7 +45,7 @@ let assoc_by_id frame i =
     (fun i info -> Some info)
     frame i
 
-let lookup_field assoc_fn env sym =
+(*let lookup_field assoc_fn env sym =
   let rec lookup_with_nesting env' depth =
     match env' with
       | Env_top -> None
@@ -63,6 +63,13 @@ let lookup_field_by_name t n =
 
 let lookup_field_by_id t i =
   lookup_field assoc_by_id t.fields i
+*)
+
+let lookup_field_by_name t n =
+  assoc_by_name t.fields n
+
+let lookup_field_by_id t i =
+  assoc_by_id t.fields i
 
 let lookup_variant_by_name t n =
   assoc_by_name t.variants n
@@ -88,17 +95,18 @@ let lookup_type_by_name t n =
 let lookup_type_by_id t i =
   assoc_by_id t.types i
 
-let add_type tn tinfo env =
-  let ident = Ident.make_ident tn in
-    { env with
-        types = (ident, tinfo) :: env.types }
+let add_type tid tinfo env =
+  { env with
+      types = (tid, tinfo) :: env.types }
 
-let add_function fn finfo env =
-  let ident = Ident.make_ident fn in
-    { env with
-        functions = (ident, finfo) :: env.functions }
+let add_function fid finfo env =
+  { env with
+      functions = (fid, finfo) :: env.functions }
 
-let add_variant_def vn vinfo env =
-  let ident = Ident.make_ident vn in
-    { env with
-        variants = (ident, vinfo) :: env.variants }
+let add_variant_def vid vinfo env =
+  { env with
+      variants = (vid, vinfo) :: env.variants }
+
+let add_field fid finfo env =
+  { env with
+      fields = (fid, finfo) :: env.fields }

@@ -46,7 +46,7 @@ type format_info = unit
 
 type field_info = field_type
 
-type type_info = int
+type type_info = prim_type * int
 
 (* type kinding *)
 
