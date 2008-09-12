@@ -96,39 +96,30 @@ let populate_base_types env =
 let init_typing_env () =
   populate_functions (Env.new_env ())
 
-let lookup_function_type env fn =
+let lookup_function_info env fn =
   match Env.lookup_function_by_name env (Location.node_of fn) with
     | None -> raise_unknown_ident fn
-    | Some (_, (fti, _)) -> fti
+    | Some (fid, (fti, _)) -> (fid, fti)
 
 let lookup_function_impl env fn =
   match Env.lookup_function_by_name env (Location.node_of fn) with
     | None -> raise_unknown_ident fn
     | Some (_, (_, f)) -> f
 
-let lookup_typename_size env tn =
+let lookup_typename env tn =
   match Env.lookup_type_by_name env (Location.node_of tn) with
     | None -> raise_unknown_ident tn
-    | Some (_, (_, tsize)) -> tsize
-
-let lookup_typename_type env tn =
-  match Env.lookup_type_by_name env (Location.node_of tn) with
-    | None -> raise_unknown_ident tn
-    | Some (_, (t, _)) -> t
+    | Some tni -> tni
 
 let get_field_info env fn =
   match Env.lookup_field_by_name env (Location.node_of fn) with
     | None -> raise_unknown_ident fn
     | Some fi -> fi
 
-let get_field_type env fn =
-  let (_, t) = get_field_info env fn in
-    t
-
 let rec follow_case_path cn path m =
   let st =
     try
-      StringMap.find (Location.node_of cn) m
+      snd (StringMap.find (Location.node_of cn) m)
     with
       | Not_found ->
           raise_unknown_ident cn
@@ -136,16 +127,18 @@ let rec follow_case_path cn path m =
     follow_struct_path st path
 
 and follow_struct_path st path =
-  match path with
-    | Pfield fn -> Tstruct_type st
+  let get_field_in_st fn st =
+    try
+      StringMap.find (Location.node_of fn) st
+    with
+      | Not_found ->
+          raise_unknown_ident fn
+  in
+    match path with
+      | Pfield fn ->
+          get_field_in_st fn st
     | Ppath (fn, cn, p) ->
-        let ft =
-          try
-            StringMap.find (Location.node_of fn) st
-          with
-            | Not_found ->
-                raise_unknown_ident fn
-        in
+        let ft = snd (get_field_in_st fn st) in
           get_path_type fn cn p ft
 
 and get_path_type fn cn p ft =
@@ -156,16 +149,19 @@ and get_path_type fn cn p ft =
     | Tlabel -> raise_invalid_path fn
     | Tmap_type m -> follow_case_path cn p m
 
-let lookup_var_type env path =
+let lookup_var env path =
   match path with
-    | Pfield fn -> get_field_type env fn
-    | Ppath (fn, cn, p) -> get_path_type fn cn p (get_field_type env fn)
+    | Pfield fn ->
+        get_field_info env fn
+    | Ppath (fn, cn, p) ->
+        get_path_type fn cn p (snd (get_field_info env fn))
 
 (* The type compatibility check functions either return true or throw an exception. *)
 
 let check_field_type_compatible_with_base_type field_type base_type loc =
   match (field_type, base_type) with
-    | (Tbase_type bt, base_type) when bt = base_type -> true
+    | (Tbase_type bt, base_type) when bt = base_type ->
+        ()
     | (Tbase_type _, _)
     | (Tstruct_type _, _)
     | (Tmap_type _, _)
@@ -178,13 +174,14 @@ let check_field_type_compatible_with_exp_type field_type exp_type loc =
     | (Tbase_type (Tprimitive _), Texp_int_type)
     | (Tbase_type (Tvector _), Texp_vector_type)
     | (Tbase_type _ , Texp_base_type)
-    | (Tarray_type _, Texp_array_type) -> true
+    | (Tarray_type _, Texp_array_type) ->
+        ()
     | _ ->
         raise_field_exp_type_mismatch field_type exp_type loc
 
 let check_exp_type_equal received expected loc =
-  if received = expected then true
-  else raise_exp_exp_type_mismatch received expected loc
+  if received <> expected then
+    raise_exp_exp_type_mismatch received expected loc
 
 let rec check_exp_const exp =
   match exp.pexp_desc with
@@ -221,32 +218,47 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
   let rec exp_typer exp =
     match exp.pexp_desc with
       | Punit ->
-          check_exp_type_equal Texp_unit_type as_exp_type exp.pexp_loc
+          check_exp_type_equal Texp_unit_type as_exp_type exp.pexp_loc;
+          Texp_unit
       | Pvar path ->
-          (match as_exp_type with
-             | Texp_int_type
-             | Texp_vector_type
-             | Texp_base_type
-             | Texp_array_type
-             | Texp_unit_type ->
-                 (check_field_type_compatible_with_exp_type
-                    (lookup_var_type env path) as_exp_type exp.pexp_loc)
-             | Texp_field_name -> true)
-      | Pconst_int _
-      | Pconst_int32 _
-      | Pconst_int64 _ ->
-          check_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc
+          let vid =
+            match as_exp_type with
+              | Texp_int_type
+              | Texp_vector_type
+              | Texp_base_type
+              | Texp_array_type
+              | Texp_unit_type ->
+                  let vid, vt = lookup_var env path in
+                    check_field_type_compatible_with_exp_type
+                      vt as_exp_type exp.pexp_loc;
+                    vid
+              | Texp_field_name ->
+                  fst (lookup_var env path)
+          in
+            Texp_var vid
+      | Pconst_int i ->
+          check_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc;
+          Texp_const_int i
+      | Pconst_int32 i ->
+          check_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc;
+          Texp_const_int32 i
+      | Pconst_int64 i ->
+          check_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc;
+          Texp_const_int64 i
       | Papply (fname, arglist) ->
-          let (fat, frt) = lookup_function_type env fname in
+          let fid, (fat, frt) = lookup_function_info env fname in
           let rcvd, expected = List.length arglist, List.length fat in
             if rcvd <> expected then
               raise_arg_count_mismatch fname rcvd expected
             else
-              (List.fold_left2
-                 (fun r ae at ->
-                    r && type_check_exp_as_exp_type env ae at)
-                 true arglist fat)
-              && check_exp_type_equal frt as_exp_type exp.pexp_loc
+              let targlist =
+                List.map2
+                  (fun ae at ->
+                     type_check_exp_as_exp_type env ae at)
+                  arglist fat
+              in
+                check_exp_type_equal frt as_exp_type exp.pexp_loc;
+                Texp_apply (fid, targlist)
   in
     exp_typer exp
 
@@ -259,26 +271,38 @@ let type_check_exp_as_base_type env exp as_base_type =
   let rec exp_typer exp =
     match exp.pexp_desc with
       | Punit ->
-          (check_field_type_compatible_with_exp_type
-             (Tbase_type as_base_type) Texp_unit_type exp.pexp_loc)
+          check_field_type_compatible_with_exp_type
+            (Tbase_type as_base_type) Texp_unit_type exp.pexp_loc;
+          Texp_unit
       | Pvar path ->
-          (check_field_type_compatible_with_base_type
-             (lookup_var_type env path) as_base_type exp.pexp_loc)
-      | Pconst_int i -> Types.can_coerce_int i as_base_type
-      | Pconst_int32 i -> Types.can_coerce_int32 i as_base_type
-      | Pconst_int64 i -> Types.can_coerce_int64 i as_base_type
+          let vid, vt = lookup_var env path in
+            check_field_type_compatible_with_base_type
+              vt as_base_type exp.pexp_loc;
+            Texp_var vid
+      | Pconst_int i ->
+          ignore (Types.can_coerce_int i as_base_type);
+          Texp_const_int i
+      | Pconst_int32 i ->
+          ignore (Types.can_coerce_int32 i as_base_type);
+          Texp_const_int32 i
+      | Pconst_int64 i ->
+          ignore (Types.can_coerce_int64 i as_base_type);
+          Texp_const_int64 i
       | Papply (fname, arglist) ->
-          let (fat, frt) = lookup_function_type env fname in
+          let fid, (fat, frt) = lookup_function_info env fname in
           let rcvd, expected = List.length arglist, List.length fat in
             if rcvd <> expected then
               raise_arg_count_mismatch fname rcvd expected
             else
-              (List.fold_left2
-                 (fun r ae at ->
-                    r && type_check_exp_as_exp_type env ae at)
-                 true arglist fat)
-              && (check_field_type_compatible_with_exp_type
-                    (Tbase_type as_base_type) frt exp.pexp_loc)
+              let targlist =
+                (List.map2
+                   (fun ae at ->
+                      type_check_exp_as_exp_type env ae at)
+                   arglist fat)
+              in
+                check_field_type_compatible_with_exp_type
+                  (Tbase_type as_base_type) frt exp.pexp_loc;
+                Texp_apply (fid, targlist)
   in
     exp_typer exp
 
@@ -317,23 +341,28 @@ let is_byte_aligned a =
 let kinding env cur_align te =
   match te.ptype_exp_desc with
     | Pbase tn ->
-        let tsize = lookup_typename_size env tn in
+        let _, (pt, ptsize) = lookup_typename env tn in
+        let next_align =
           if is_bit_typename tn then
-            Kbase, (cur_align + 1)
+            cur_align + 1
           else if not (is_byte_aligned cur_align) then
             raise_bad_alignment cur_align 8 te.ptype_exp_loc
           else
-            Kbase, (cur_align + tsize)
+            cur_align + ptsize
+        in
+          (Kprim pt), next_align
     | Pvector (tn, e) ->
-        if is_bit_typename tn then
-          let c = const_fold_as_int env e in
-            Kvector, (cur_align + c)
-        else if not (is_byte_aligned cur_align) then
-          raise_bad_alignment cur_align 8 te.ptype_exp_loc
-        else begin
-          ignore (type_check_exp_as_exp_type env e Texp_int_type);
-          Kvector, 0
-        end
+        let e' = type_check_exp_as_exp_type env e Texp_int_type in
+        let _, (pt, _) = lookup_typename env tn in
+        let next_align =
+          if is_bit_typename tn then
+            cur_align + const_fold_as_int env e
+          else if not (is_byte_aligned cur_align) then
+            raise_bad_alignment cur_align 8 te.ptype_exp_loc
+          else
+            0
+        in
+          Kvector (pt, e'), next_align
 
 (* This implements the field-checking relation:
         E, a, S |- F, E', a', S'
@@ -348,7 +377,7 @@ let kinding env cur_align te =
 *)
 
 type typed_field =
-  | Tnamed_field of Ident.t
+  | Tnamed_field of Ident.t * field_attrib list
   | Talign of int
 
 let field_check (env, cur_align, fl) f =
@@ -367,7 +396,7 @@ let field_check (env, cur_align, fl) f =
               else begin
                 let fi = Ident.make_from_node fn in
                 let e = Env.add_field fi Tlabel env in
-                  (e, cur_align, (Tnamed_field fi)::fl)
+                  (e, cur_align, (Tnamed_field (fi, []))::fl)
               end
           | _ -> (* TODO *)
               (env, cur_align, fl)

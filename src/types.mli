@@ -19,9 +19,17 @@ type prim_type =
   | Tprim_int32
   | Tprim_int64
 
+type texp =
+  | Texp_unit
+  | Texp_var of Ident.t
+  | Texp_const_int of int
+  | Texp_const_int32 of Int32.t
+  | Texp_const_int64 of Int64.t
+  | Texp_apply of Ident.t * texp list
+
 type base_type =
   | Tprimitive of prim_type
-  | Tvector of prim_type * prim_type
+  | Tvector of prim_type * texp
 
 (* constructed types for fields *)
 
@@ -34,9 +42,11 @@ type field_type =
   | Tarray_type of struct_type
   | Tlabel
 
-and struct_type = field_type StringMap.t
+and struct_entry = Ident.t * field_type
+and struct_type = struct_entry StringMap.t
 
-and map_type = struct_type StringMap.t
+and map_entry = Ident.t * struct_type
+and map_type = map_entry StringMap.t
 
 (* information stored in environment *)
 
@@ -51,8 +61,8 @@ type type_info = prim_type * int
 (* type kinding *)
 
 type kind =
-  | Kbase
-  | Kvector
+  | Kprim of prim_type
+  | Kvector of prim_type * texp
   | Kstruct
   | Karray
   | Kmap
