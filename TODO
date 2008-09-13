@@ -105,6 +105,20 @@ TODO:
     The programmer can generate messages that would cause the
     corresponding parser to parse garbage.
 
+  A note on scoping for nested formats: This differs for the parsing
+  and the generation facets.  The reason for this is that during
+  parsing, the formats are constructed from outside in.  Hence, any
+  expressions used during parsing (e.g vector and array length
+  expressions) can contain free variables referring to the embedding
+  format.  However, the generation facet constructs formats from
+  inside out: a nested format does not know where it will be embedded,
+  and hence any expressions used during generation (e.g. value
+  expressions) cannot (i.e. _should_ not: this needs to be enforced
+  during typechecking) contain free variables referring to embedding
+  formats.  (Incidentally, the specification needs to be fixed to
+  incorporate this check.)
+
+
 - Typechecking output:
 
   This will be essentially a cooked version of the ast:
