@@ -58,15 +58,6 @@ type field_info = field_type
 
 type type_info = prim_type * int
 
-(* type kinding *)
-
-type kind =
-  | Kprim of prim_type
-  | Kvector of prim_type * texp
-  | Kstruct
-  | Karray
-  | Kmap
-
 (* type coercions *)
 
 let can_coerce_int i as_type =

@@ -336,6 +336,10 @@ let is_byte_aligned a =
    the specification:
         E, a |- tau : K, a'
    Alignment is computed in units of bits, modulo 8.
+
+   It returns the field_type representation of the base type
+   expression.
+
 *)
 
 let kinding env cur_align te =
@@ -350,7 +354,7 @@ let kinding env cur_align te =
           else
             cur_align + ptsize
         in
-          (Kprim pt), next_align
+          (Tprimitive pt), next_align
     | Pvector (tn, e) ->
         let e' = type_check_exp_as_exp_type env e Texp_int_type in
         let _, (pt, _) = lookup_typename env tn in
@@ -362,7 +366,7 @@ let kinding env cur_align te =
           else
             0
         in
-          Kvector (pt, e'), next_align
+          Tvector (pt, e'), next_align
 
 (* This implements the field-checking relation:
         E, a, S |- F, E', a', S'
@@ -387,19 +391,24 @@ let field_check (env, cur_align, fl) f =
           if not (is_byte_aligned c) then
             raise_invalid_align c e.pexp_loc
           else
-            (env, 0, (Talign c)::fl)
+            env, 0, (Talign c)::fl
     | Pnamed_field (fn, ft) ->
         match ft.pfield_type_desc with
+          | Psimple (te, fal) ->
+              let bt, next_align = kinding env cur_align te in
+              let fi = Ident.make_from_node fn in
+              let e = Env.add_field fi (Tbase_type bt) env in
+                e, next_align, (Tnamed_field (fi, fal))::fl
           | Plabel ->
               if not (is_byte_aligned cur_align) then
                 raise_bad_alignment cur_align 8 ft.pfield_type_loc
               else begin
                 let fi = Ident.make_from_node fn in
                 let e = Env.add_field fi Tlabel env in
-                  (e, cur_align, (Tnamed_field (fi, []))::fl)
+                  e, cur_align, (Tnamed_field (fi, []))::fl
               end
           | _ -> (* TODO *)
-              (env, cur_align, fl)
+              env, cur_align, fl
 
 (* type-checker top-level *)
 
