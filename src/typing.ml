@@ -52,23 +52,23 @@ let binary op l =
   op (List.hd l) (List.hd (List.tl l))
 
 let functions = [
-  ("+", (([Texp_int_type; Texp_int_type], Texp_int_type),
+  ("+", (([Texp_type_int; Texp_type_int], Texp_type_int),
          Some (binary (+))));
-  ("-", (([Texp_int_type; Texp_int_type], Texp_int_type),
+  ("-", (([Texp_type_int; Texp_type_int], Texp_type_int),
          Some (binary (-))));
-  ("*", (([Texp_int_type; Texp_int_type], Texp_int_type),
+  ("*", (([Texp_type_int; Texp_type_int], Texp_type_int),
          Some (binary ( * ))));
-  ("/", (([Texp_int_type; Texp_int_type], Texp_int_type),
+  ("/", (([Texp_type_int; Texp_type_int], Texp_type_int),
          Some (binary (/))));
 
-  ("byte_sizeof", (([Texp_base_type], Texp_int_type), None));
-  ("bit_sizeof", (([Texp_base_type], Texp_int_type), None));
-  ("length", (([Texp_vector_type], Texp_int_type), None));
-  ("array_size", (([Texp_array_type], Texp_int_type), None));
+  ("byte_sizeof", (([Texp_type_base], Texp_type_int), None));
+  ("bit_sizeof", (([Texp_type_base], Texp_type_int), None));
+  ("length", (([Texp_type_vector], Texp_type_int), None));
+  ("array_size", (([Texp_type_array], Texp_type_int), None));
 
-  ("offset", (([Texp_field_name], Texp_int_type), None));
-  ("num_set_bits", (([Texp_field_name], Texp_int_type), None));
-  ("remaining", (([Texp_unit_type], Texp_int_type), None))
+  ("offset", (([Texp_type_field], Texp_type_int), None));
+  ("num_set_bits", (([Texp_type_field], Texp_type_int), None));
+  ("remaining", (([Texp_type_unit], Texp_type_int), None))
 ]
 
 let base_types = [
@@ -174,10 +174,10 @@ let check_field_type_compatible_with_base_type field_type base_type loc =
 
 let check_field_type_compatible_with_exp_type field_type exp_type loc =
   match (field_type, exp_type) with
-    | (Ttype_base (Tbase_primitive _), Texp_int_type)
-    | (Ttype_base (Tbase_vector _), Texp_vector_type)
-    | (Ttype_base _ , Texp_base_type)
-    | (Ttype_array _, Texp_array_type) ->
+    | (Ttype_base (Tbase_primitive _), Texp_type_int)
+    | (Ttype_base (Tbase_vector _), Texp_type_vector)
+    | (Ttype_base _ , Texp_type_base)
+    | (Ttype_array _, Texp_type_array) ->
         ()
     | _ ->
         raise_field_exp_type_mismatch field_type exp_type loc
@@ -221,32 +221,32 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
   let rec exp_typer exp =
     match exp.pexp_desc with
       | Pexp_unit ->
-          check_exp_type_equal Texp_unit_type as_exp_type exp.pexp_loc;
+          check_exp_type_equal Texp_type_unit as_exp_type exp.pexp_loc;
           Texp_unit
       | Pexp_var path ->
           let vid =
             match as_exp_type with
-              | Texp_int_type
-              | Texp_vector_type
-              | Texp_base_type
-              | Texp_array_type
-              | Texp_unit_type ->
+              | Texp_type_int
+              | Texp_type_vector
+              | Texp_type_base
+              | Texp_type_array
+              | Texp_type_unit ->
                   let vid, vt = lookup_var env path in
                     check_field_type_compatible_with_exp_type
                       vt as_exp_type exp.pexp_loc;
                     vid
-              | Texp_field_name ->
+              | Texp_type_field ->
                   fst (lookup_var env path)
           in
             Texp_var vid
       | Pexp_const_int i ->
-          check_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc;
+          check_exp_type_equal Texp_type_int as_exp_type exp.pexp_loc;
           Texp_const_int i
       | Pexp_const_int32 i ->
-          check_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc;
+          check_exp_type_equal Texp_type_int as_exp_type exp.pexp_loc;
           Texp_const_int32 i
       | Pexp_const_int64 i ->
-          check_exp_type_equal Texp_int_type as_exp_type exp.pexp_loc;
+          check_exp_type_equal Texp_type_int as_exp_type exp.pexp_loc;
           Texp_const_int64 i
       | Pexp_apply (fname, arglist) ->
           let fid, (fat, frt) = lookup_function_info env fname in
@@ -275,7 +275,7 @@ let type_check_exp_as_base_type env exp as_base_type =
     match exp.pexp_desc with
       | Pexp_unit ->
           check_field_type_compatible_with_exp_type
-            (Ttype_base as_base_type) Texp_unit_type exp.pexp_loc;
+            (Ttype_base as_base_type) Texp_type_unit exp.pexp_loc;
           Texp_unit
       | Pexp_var path ->
           let vid, vt = lookup_var env path in
@@ -359,7 +359,7 @@ let kinding env cur_align te =
         in
           (Tbase_primitive pt), next_align
     | Pvector (tn, e) ->
-        let e' = type_check_exp_as_exp_type env e Texp_int_type in
+        let e' = type_check_exp_as_exp_type env e Texp_type_int in
         let _, (pt, _) = lookup_typename env tn in
         let next_align =
           if is_bit_typename tn then
@@ -389,14 +389,14 @@ let is_field_name_used fn fl =
        | Field (id, _) -> Ident.name_of id = Location.node_of fn)
     fl
 
-let field_check (env, cur_align, fl) f =
+let rec field_check (env, cur_align, fl) f =
   match f.pfield_desc with
-    | Pfield_align e ->
-        let c = const_fold_as_int env e in
+    | Pfield_align a ->
+        let c = const_fold_as_int env a in
           if not (is_byte_aligned c) then
-            raise_invalid_align c e.pexp_loc
+            raise_invalid_align c a.pexp_loc
           else
-            env, 0, (Align c)::fl
+            env, 0, (Align c) :: fl
     | Pfield_name (fn, ft) ->
         if is_field_name_used fn fl then
           raise_duplicate_field fn;
@@ -405,17 +405,30 @@ let field_check (env, cur_align, fl) f =
               let bt, next_align = kinding env cur_align te in
               let fi = Ident.make_from_node fn in
               let e = Env.add_field fi (Ttype_base bt) env in
-                e, next_align, (Field (fi, fal))::fl
+                e, next_align, (Field (fi, fal)) :: fl
           | Ptype_label ->
               if not (is_byte_aligned cur_align) then
                 raise_bad_alignment cur_align 8 ft.pfield_type_loc
               else begin
                 let fi = Ident.make_from_node fn in
                 let e = Env.add_field fi Ttype_label env in
-                  e, cur_align, (Field (fi, []))::fl
+                  e, cur_align, (Field (fi, [])) :: fl
+              end
+          | Ptype_array (len, fmt) ->
+              if not (is_byte_aligned cur_align) then
+                raise_bad_alignment cur_align 8 ft.pfield_type_loc
+              else begin
+                let tlen = type_check_exp_as_exp_type env len Texp_type_int in
+                let st = format_check env fmt in
+                let fi = Ident.make_from_node fn in
+                let e = Env.add_field fi (Ttype_array (tlen, st)) env in
+                  e, 0, (Field (fi, [])) :: fl
               end
           | _ -> (* TODO *)
               env, cur_align, fl
+
+and format_check env fmt =
+  []
 
 (* type-checker top-level *)
 

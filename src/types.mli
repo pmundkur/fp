@@ -1,12 +1,12 @@
 (* types for predefined functions and their expression arguments *)
 
 type exp_type =
-  | Texp_int_type
-  | Texp_vector_type
-  | Texp_base_type
-  | Texp_array_type
-  | Texp_unit_type
-  | Texp_field_name
+  | Texp_type_int
+  | Texp_type_vector
+  | Texp_type_base
+  | Texp_type_array
+  | Texp_type_unit
+  | Texp_type_field
 
 type function_info = (exp_type list * exp_type) * (int list -> int) option
 
@@ -19,37 +19,37 @@ type primitive =
   | Tprim_int32
   | Tprim_int64
 
-type texp =
+type exp =
   | Texp_unit
   | Texp_var of Ident.t
   | Texp_const_int of int
   | Texp_const_int32 of Int32.t
   | Texp_const_int64 of Int64.t
-  | Texp_apply of Ident.t * texp list
+  | Texp_apply of Ident.t * exp list
 
 type base_type =
   | Tbase_primitive of primitive
-  | Tbase_vector of primitive * texp
+  | Tbase_vector of primitive * exp
 
-type variant = (texp * Asttypes.case_name * Asttypes.default) list
+type variant = (exp * Asttypes.case_name * Asttypes.default) list
 
 (* constructed types for fields *)
 
 module StringMap: Map.S with type key = string
 
 type field_attrib =
-  | Tattrib_max of texp
-  | Tattrib_min of texp
-  | Tattrib_const of texp
-  | Tattrib_default  of texp
-  | Tattrib_value of texp
+  | Tattrib_max of exp
+  | Tattrib_min of exp
+  | Tattrib_const of exp
+  | Tattrib_default  of exp
+  | Tattrib_value of exp
   | Tattrib_variant of variant
 
 type field_type =
   | Ttype_base of base_type
   | Ttype_struct of struct_type
   | Ttype_map of map_type
-  | Ttype_array of struct_type
+  | Ttype_array of exp * struct_type
   | Ttype_label
 
 and field_entry =
