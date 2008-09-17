@@ -5,8 +5,8 @@ type decl =
       pdecl_loc: Location.t }
 
 and decl_desc =
-  | Pvariant of decl_name * variant
-  | Pformat of decl_name * format
+  | Pdecl_variant of decl_name * variant
+  | Pdecl_format of decl_name * format
 
 and variant =
     { pvariant_desc: variant_desc;
@@ -25,31 +25,31 @@ and field =
       pfield_loc: Location.t }
 
 and field_desc =
-  | Pnamed_field of field_name * field_type
-  | Palign of exp
+  | Pfield_name of field_name * field_type
+  | Pfield_align of exp
 
 and field_type =
     { pfield_type_desc: field_type_desc;
       pfield_type_loc: Location.t }
 
 and field_type_desc =
-  | Psimple of type_exp * field_attrib list
-  | Parray of exp * format
-  | Pclassify of exp * classify_case list
-  | Plabel
+  | Ptype_simple of type_exp * field_attrib list
+  | Ptype_array of exp * format
+  | Ptype_classify of exp * classify_case list
+  | Ptype_label
 
 and field_attrib =
     { pfield_attrib_desc: field_attrib_desc;
       pfield_attrib_loc: Location.t }
 
 and field_attrib_desc =
-  | Pmax of exp
-  | Pmin of exp
-  | Pconst of exp
-  | Pdefault  of exp
-  | Pvalue of exp
-  | Pvariant_ref of decl_name
-  | Pvariant_inline of variant
+  | Pattrib_max of exp
+  | Pattrib_min of exp
+  | Pattrib_const of exp
+  | Pattrib_default  of exp
+  | Pattrib_value of exp
+  | Pattrib_variant_ref of decl_name
+  | Pattrib_variant_inline of variant
 
 and type_exp =
     { ptype_exp_desc: type_exp_desc;
@@ -74,12 +74,12 @@ and exp =
       pexp_loc: Location.t }
 
 and exp_desc =
-  | Punit
-  | Pvar of path
-  | Pconst_int of int
-  | Pconst_int32 of Int32.t
-  | Pconst_int64 of Int64.t
-  | Papply of fun_name * exp list
+  | Pexp_unit
+  | Pexp_var of path
+  | Pexp_const_int of int
+  | Pexp_const_int32 of Int32.t
+  | Pexp_const_int64 of Int64.t
+  | Pexp_apply of fun_name * exp list
 
 and path =
   | Pfield of field_name

@@ -12,7 +12,7 @@ type function_info = (exp_type list * exp_type) * (int list -> int) option
 
 (* basic types for fields and expressions *)
 
-type prim_type =
+type primitive =
   | Tprim_bit
   | Tprim_byte
   | Tprim_int16
@@ -28,22 +28,35 @@ type texp =
   | Texp_apply of Ident.t * texp list
 
 type base_type =
-  | Tprimitive of prim_type
-  | Tvector of prim_type * texp
+  | Tbase_primitive of primitive
+  | Tbase_vector of primitive * texp
+
+type variant = (texp * Asttypes.case_name * Asttypes.default) list
 
 (* constructed types for fields *)
 
 module StringMap: Map.S with type key = string
 
-type field_type =
-  | Tbase_type of base_type
-  | Tstruct_type of struct_type
-  | Tmap_type of map_type
-  | Tarray_type of struct_type
-  | Tlabel
+type field_attrib =
+  | Tattrib_max of texp
+  | Tattrib_min of texp
+  | Tattrib_const of texp
+  | Tattrib_default  of texp
+  | Tattrib_value of texp
+  | Tattrib_variant of variant
 
-and struct_entry = Ident.t * field_type
-and struct_type = struct_entry StringMap.t
+type field_type =
+  | Ttype_base of base_type
+  | Ttype_struct of struct_type
+  | Ttype_map of map_type
+  | Ttype_array of struct_type
+  | Ttype_label
+
+and field_entry =
+  | Tfield_name of Ident.t * field_type * field_attrib list
+  | Tfield_align of int
+
+and struct_type = field_entry list
 
 and map_entry = Ident.t * struct_type
 and map_type = map_entry StringMap.t
@@ -56,7 +69,12 @@ type format_info = unit
 
 type field_info = field_type
 
-type type_info = prim_type * int
+type type_info = primitive * int
+
+(* type utilities *)
+
+val is_field_name_in_struct: string -> struct_type -> bool
+val get_field_type: string -> struct_type -> (Ident.t * field_type)
 
 (* type coercions *)
 

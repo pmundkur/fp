@@ -1,5 +1,15 @@
 TODO:
 
+- Ott: Fix the spec; its broken!
+
+  Lookup field variables in value expressions in a restricted
+  environment consisting only of the fields in the first enclosing
+  struct.  This is to avoid enclosed structs depending on values in
+  their enclosing structs (i.e. a layering violation).
+
+- Struct type: implement it as a list of struct entries.  The current
+  implementation does not handle alignment fields, which are anonymous.
+
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 
 - Ott: Handle nested structs.  We need to specify an appropriate
@@ -115,9 +125,9 @@ TODO:
   and hence any expressions used during generation (e.g. value
   expressions) cannot (i.e. _should_ not: this needs to be enforced
   during typechecking) contain free variables referring to embedding
-  formats.  (Incidentally, the specification needs to be fixed to
-  incorporate this check.)
-
+  formats.  In other words, this is an implementation of the layering
+  principle, and having enclosed formats referring to enclosing
+  formats is a layering violation.
 
 - Typechecking output:
 
