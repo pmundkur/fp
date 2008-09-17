@@ -16,6 +16,7 @@ exception Non_unique_default of string Location.located_node (* second *) * stri
 exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
 exception Invalid_align of int * Location.t
 exception Duplicate_field of string Location.located_node
+exception Invalid_classify_expr of Location.t
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -45,7 +46,8 @@ let raise_invalid_align align loc =
   raise (Invalid_align (align, loc))
 let raise_duplicate_field fn =
   raise (Duplicate_field fn)
-
+let raise_invalid_classify_expr loc =
+  raise (Invalid_classify_expr loc)
 
 let binary op l =
   assert ((List.length l) = 2);
@@ -93,11 +95,11 @@ let populate_base_types env =
   List.fold_left
     (fun e (tn, tinfo) ->
        let tid = Ident.make_from_string tn Location.dummy_loc in
-         Env.add_type tid tinfo)
+         Env.add_type tid tinfo e)
     env base_types
 
 let init_typing_env () =
-  populate_functions (Env.new_env ())
+  populate_functions (populate_base_types (Env.new_env ()))
 
 let lookup_function_info env fn =
   match Env.lookup_function_by_name env (Location.node_of fn) with
@@ -389,7 +391,32 @@ let is_field_name_used fn fl =
        | Field (id, _) -> Ident.name_of id = Location.node_of fn)
     fl
 
-let rec field_check (env, cur_align, fl) f =
+let type_attrib f ft fal env =
+  List.map
+    (fun fa ->
+       match fa.pfield_attrib_desc, ft with
+         | Pattrib_max e, Ttype_base bt ->
+             Tattrib_max (type_check_exp_as_base_type env e bt)
+         | Pattrib_min e, Ttype_base bt ->
+             Tattrib_min (type_check_exp_as_base_type env e bt)
+         | Pattrib_const e, Ttype_base bt ->
+             Tattrib_const (type_check_exp_as_base_type env e bt)
+               (* TODO: e should be checked to be constant matching the type! *)
+         | Pattrib_default e, Ttype_base bt ->
+             Tattrib_default (type_check_exp_as_base_type env e bt)
+         | Pattrib_value e, Ttype_base bt ->
+             Tattrib_value (type_check_exp_as_base_type env e bt)
+         | Pattrib_variant_ref _, _
+         | Pattrib_variant_inline _, _ ->
+             (* TODO *)
+             raise Not_found
+         | _ ->
+             (* TODO: mismatched field type and attribute! *)
+             raise Not_found
+    )
+    fal
+
+let rec type_field (env, cur_align, fl) f =
   match f.pfield_desc with
     | Pfield_align a ->
         let c = const_fold_as_int env a in
@@ -419,16 +446,61 @@ let rec field_check (env, cur_align, fl) f =
                 raise_bad_alignment cur_align 8 ft.pfield_type_loc
               else begin
                 let tlen = type_check_exp_as_exp_type env len Texp_type_int in
-                let st = format_check env fmt in
+                let st = type_format env fmt in
                 let fi = Ident.make_from_node fn in
                 let e = Env.add_field fi (Ttype_array (tlen, st)) env in
                   e, 0, (Field (fi, [])) :: fl
               end
-          | _ -> (* TODO *)
-              env, cur_align, fl
+          | Ptype_classify (e, cl) ->
+              (* Restrict classification expressions to variables to
+                 simplify typing, for now. *)
+              let _ = match e.pexp_desc with
+                | Pexp_var _ ->
+                    (* TODO:
 
-and format_check env fmt =
-  []
+                       Lookup type t of the field var, and
+                       type_check_exp_as_base_type e t; and ditto for
+                       for all exps e in cl.
+
+                       Ensure all the classification tags in cl are
+                       unique.
+
+                       type_format for each format in cl.
+
+                       Construct the map type, and enter it into the
+                       env.
+
+                    *)
+                    ()
+                | _ ->
+                    raise_invalid_classify_expr e.pexp_loc
+              in
+                env, cur_align, fl
+
+and type_format env fmt =
+  let lookup_type fid env =
+    match Env.lookup_field_by_id env fid with
+      | None -> assert false
+      | Some ft -> ft
+  in
+  let ext_env, align, fl =
+    List.fold_left type_field (env, 0, []) fmt.pformat_desc
+  in
+    (* Construct environment for typing value expressions. *)
+  let _ (* value_env *) =
+    List.fold_left
+      (fun e f ->
+          match f with
+            | Align _ ->
+                e
+            | Field (id, _) ->
+                Env.add_field id (lookup_type id ext_env) e)
+      (init_typing_env ())
+      (List.rev fl)
+  in
+    if not (is_byte_aligned align) then
+      raise_invalid_align align fmt.pformat_loc;
+    []
 
 (* type-checker top-level *)
 
