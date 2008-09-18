@@ -3,20 +3,23 @@ open Ast
 open Types
 
 exception Unknown_identifier of string Location.located_node
-exception Invalid_path of string Location.located_node
+exception Invalid_path of field_name
 exception Arg_count_mismatch of fun_name * int (* received *) * int (* expected *)
 exception Type_mismatch_field_base of field_type (* received *) * base_type (* expected *) * Location.t
 exception Type_mismatch_field_exp of field_type * exp_type * Location.t
 exception Type_mismatch_exp_exp of exp_type (* received *) * exp_type (* expected *) * Location.t
 exception Non_const_expression of Location.t
 exception Non_const_integral_expression of Location.t
-exception Non_const_foldable_function of string Location.located_node
-exception Non_unique_name of string Location.located_node
-exception Non_unique_default of string Location.located_node (* second *) * string Location.located_node (* first *)
+exception Non_const_foldable_function of fun_name
+exception Non_unique_case_name of case_name
+exception Non_unique_case_default of case_name (* second *) * case_name (* first *)
 exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
 exception Invalid_align of int * Location.t
 exception Duplicate_field of string Location.located_node
 exception Invalid_classify_expr of Location.t
+exception Duplicate_attribute of field_name * string * Location.t
+exception Invalid_attribute of field_name * Location.t
+exception Conflicting_attributes of field_name * string * string
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -36,10 +39,10 @@ let raise_non_const_integral_exp loc =
   raise (Non_const_integral_expression loc)
 let raise_non_const_foldable_function fn =
   raise (Non_const_foldable_function fn)
-let raise_non_unique_name nm =
-  raise (Non_unique_name nm)
-let raise_non_unique_default second first =
-  raise (Non_unique_default (second, first))
+let raise_non_unique_case_name nm =
+  raise (Non_unique_case_name nm)
+let raise_non_unique_case_default second first =
+  raise (Non_unique_case_default (second, first))
 let raise_bad_alignment cur_align expected loc =
   raise (Bad_alignment (cur_align, expected, loc))
 let raise_invalid_align align loc =
@@ -48,6 +51,12 @@ let raise_duplicate_field fn =
   raise (Duplicate_field fn)
 let raise_invalid_classify_expr loc =
   raise (Invalid_classify_expr loc)
+let raise_duplicate_attribute fn an loc =
+  raise (Duplicate_attribute (fn, an, loc))
+let raise_invalid_attribute fn loc =
+  raise (Invalid_attribute (fn, loc))
+let raise_conflicting_attributes fn a1 a2 =
+  raise (Conflicting_attributes (fn, a1, a2))
 
 let binary op l =
   assert ((List.length l) = 2);
@@ -324,13 +333,13 @@ let check_variant_def vc_list =
     let nm = Location.node_of cn in
       ignore (check_exp_const ce);
       if StringSet.mem nm !names then begin
-        raise_non_unique_name cn
+        raise_non_unique_case_name cn
       end else begin
         names := StringSet.add nm !names;
       end;
       match !default with
         | None -> default := Some cn
-        | Some df -> raise_non_unique_default cn df
+        | Some df -> raise_non_unique_case_default cn df
   in
     List.iter check_case vc_list
 
@@ -392,29 +401,80 @@ let is_field_name_used fn fl =
     fl
 
 let type_attrib f ft fal env =
-  List.map
-    (fun fa ->
-       match fa.pfield_attrib_desc, ft with
-         | Pattrib_max e, Ttype_base bt ->
-             Tattrib_max (type_check_exp_as_base_type env e bt)
-         | Pattrib_min e, Ttype_base bt ->
-             Tattrib_min (type_check_exp_as_base_type env e bt)
-         | Pattrib_const e, Ttype_base bt ->
-             Tattrib_const (type_check_exp_as_base_type env e bt)
+  let max_present = ref false in
+  let min_present = ref false in
+  let const_present = ref false in
+  let default_present = ref false in
+  let value_present = ref false in
+  let variant_present = ref false in
+  let check_and_mark_present attrib_name flag loc =
+    if !flag then
+      raise_duplicate_attribute f attrib_name loc
+    else
+      flag := true in
+  let check_flags () =
+    (*
+       - (max|min) conflicts with const+variant
+       - const conflicts with default+value+variant
+       - default conflicts with variant
+       - value conflicts with variant
+    *)
+    if !max_present || !min_present then
+      if !const_present then
+        raise_conflicting_attributes f "range" "const"
+      else if !variant_present then
+        raise_conflicting_attributes f "range" "variant"
+      else
+        ()
+    else if !const_present then
+      if !default_present then
+        raise_conflicting_attributes f "const" "default"
+      else if !value_present then
+        raise_conflicting_attributes f "const" "value"
+      else if !variant_present then
+        raise_conflicting_attributes f "const" "variant"
+      else
+        ()
+    else if !default_present && !variant_present then
+      raise_conflicting_attributes f "default" "variant"
+    else if !value_present && !variant_present then
+      raise_conflicting_attributes f "value" "variant"
+    else
+      () in
+  let tal =
+    List.map
+      (fun fa ->
+         match fa.pfield_attrib_desc, ft with
+           | Pattrib_max e, Ttype_base bt ->
+               check_and_mark_present "max" max_present fa.pfield_attrib_loc;
                (* TODO: e should be checked to be constant matching the type! *)
-         | Pattrib_default e, Ttype_base bt ->
-             Tattrib_default (type_check_exp_as_base_type env e bt)
-         | Pattrib_value e, Ttype_base bt ->
-             Tattrib_value (type_check_exp_as_base_type env e bt)
-         | Pattrib_variant_ref _, _
-         | Pattrib_variant_inline _, _ ->
-             (* TODO *)
-             raise Not_found
-         | _ ->
-             (* TODO: mismatched field type and attribute! *)
-             raise Not_found
-    )
-    fal
+               Tattrib_max (type_check_exp_as_base_type env e bt)
+           | Pattrib_min e, Ttype_base bt ->
+               check_and_mark_present "min" min_present fa.pfield_attrib_loc;
+               (* TODO: e should be checked to be constant matching the type! *)
+               Tattrib_min (type_check_exp_as_base_type env e bt)
+           | Pattrib_const e, Ttype_base bt ->
+               check_and_mark_present "const" const_present fa.pfield_attrib_loc;
+               (* TODO: e should be checked to be constant matching the type! *)
+               Tattrib_const (type_check_exp_as_base_type env e bt)
+           | Pattrib_default e, Ttype_base bt ->
+               check_and_mark_present "default" default_present fa.pfield_attrib_loc;
+               Tattrib_default (type_check_exp_as_base_type env e bt)
+           | Pattrib_value e, Ttype_base bt ->
+               check_and_mark_present "value" value_present fa.pfield_attrib_loc;
+               Tattrib_value (type_check_exp_as_base_type env e bt)
+           | Pattrib_variant_ref _, _
+           | Pattrib_variant_inline _, _ ->
+               check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
+               (* TODO *)
+               raise Not_found
+           | _ ->
+               raise_invalid_attribute f fa.pfield_attrib_loc;
+      )
+      fal
+  in
+    check_flags ();
+    tal
 
 let rec type_field (env, cur_align, fl) f =
   match f.pfield_desc with
@@ -481,11 +541,9 @@ and type_format env fmt =
   let lookup_type fid env =
     match Env.lookup_field_by_id env fid with
       | None -> assert false
-      | Some ft -> ft
-  in
+      | Some ft -> ft in
   let ext_env, align, fl =
-    List.fold_left type_field (env, 0, []) fmt.pformat_desc
-  in
+    List.fold_left type_field (env, 0, []) fmt.pformat_desc in
     (* Construct environment for typing value expressions. *)
   let _ (* value_env *) =
     List.fold_left
