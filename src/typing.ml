@@ -382,13 +382,6 @@ let kinding env cur_align te =
         in
           Tbase_vector (pt, e'), next_align
 
-(* This implements the field-checking relation:
-        E, a, S |- F, E', a', S'
-
-   However, instead of using an explicit name set S, we instead thread
-   a list containing information on the fields checked thus far.
-*)
-
 type field_check_info =
   | Align of int
   | Field of Ident.t * Ast.field_attrib list
@@ -399,6 +392,17 @@ let is_field_name_used fn fl =
        | Align _ -> false
        | Field (id, _) -> Ident.name_of id = Location.node_of fn)
     fl
+
+
+(* This is an extension of the typing of value expressions to the
+   typing of field attributes, which were left out of the
+   specification to keep it simple.  The caller supplies the adjusted
+   environment to enforce the layering principle.
+
+   The implemented rule is a generalization of:
+
+	E |- x : value_exp
+*)
 
 let type_attribs f ft fal env =
   let max_present = ref false in
@@ -414,10 +418,10 @@ let type_attribs f ft fal env =
       flag := true in
   let check_flags () =
     (*
-       - (max|min) conflicts with const+variant
-       - const conflicts with default+value+variant
-       - default conflicts with variant
-       - value conflicts with variant
+      - (max|min) conflicts with const+variant
+      - const conflicts with default+value+variant
+      - default conflicts with variant
+      - value conflicts with variant
     *)
     if !max_present || !min_present then
       if !const_present then
@@ -475,6 +479,13 @@ let type_attribs f ft fal env =
   in
     check_flags ();
     tal
+
+(* This implements the field-checking relation:
+        E, a, S |- F, E', a', S'
+
+   However, instead of using an explicit name set S, we instead thread
+   a list containing information on the fields checked thus far.
+*)
 
 let rec type_field (env, cur_align, fl) f =
   match f.pfield_desc with
@@ -541,6 +552,15 @@ let rec type_field (env, cur_align, fl) f =
                   env, cur_align, fl
               end
 
+(* This function gets used in the typing of fields that have
+   struct-oriented types, i.e. arrays and classifications.
+
+   The layering principle is enforced here, via the adjustment of the
+   environment in which the field attributes, especially the value
+   expression attribute (i.e. the "value expression" of the
+   specification) are typed in.
+*)
+
 and type_format env fmt =
   let lookup_type fid env =
     match Env.lookup_field_by_id env fid with
@@ -561,13 +581,13 @@ and type_format env fmt =
   let get_field_entries venv fl =
     List.fold_left
       (fun accu f ->
-          match f with
-            | Align i ->
-                (Tfield_align i) :: accu
-            | Field (id, al) ->
-                let ft = lookup_type id venv in
-                let tal = type_attribs id ft al venv in
-                  (Tfield_name (id, ft, tal)) :: accu)
+         match f with
+           | Align i ->
+               (Tfield_align i) :: accu
+           | Field (id, al) ->
+               let ft = lookup_type id venv in
+               let tal = type_attribs id ft al venv in
+                 (Tfield_name (id, ft, tal)) :: accu)
       [] fl in
   let ext_env, align, fl = type_fields () in
   let venv = get_value_env ext_env fl in

@@ -384,19 +384,27 @@ E , a |- b [ e ] : K , a'
 --------------------------  :: vector
 E , a , S |- x : b [ e ] , E ; x : b [ e ] , a' , S + x
 
-% The array needs to start and end on a byte-boundary.
+% The array needs to start and end on a byte-boundary.  Note the
+% adjustment of the environment for typing value expressions.  This is
+% to enforce layering, i.e. generation code of embedded struct fields
+% cannot depend on the embedding environment.  This ensures that
+% structs can be generated bottom up.
+
 x not in S
 a % 8 = 0
 E |- e : int
 E , 0 , Empty |- D , E' , a' , S'
 ( e ) * a' % 8 = 0
-E' |- VD
+E' \ E |- VD
 --------------------------  :: array
 E , a , S |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , 0 , S + x
 
 % The field y should not be a label.  The root of the classification
 % tree should be byte-aligned, and each path in the classification
-% tree should end on a byte-aligned boundary.
+% tree should end on a byte-aligned boundary.  Layering is again
+% enforced by adjusting the environment the value expressions of each
+% classified struct are typed in.
+
 x not in S
 a % 8 = 0
 E ( y ) = tau
@@ -404,7 +412,7 @@ distinct ( </ nj // j /> )
 vj = const_fold ( ej )
 </ E , 0 , Empty |- Dj , Ej , aj , Sj // j />
 aj % 8 = 0
-</ Ej |- VDj // j />
+</ Ej \ E |- VDj // j />
 --------------------------  :: classify
 E , a , S |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , 0 , S + x
 
