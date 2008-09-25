@@ -19,3 +19,5 @@ val add_type: Ident.t -> Types.type_info -> t -> t
 val add_function: Ident.t -> Types.function_info -> t -> t
 val add_variant_def: Ident.t -> Types.variant_info -> t -> t
 val add_field: Ident.t -> Types.field_info -> t -> t
+
+val make_from_template: Types.field_info Ident.env -> t -> t

@@ -1,14 +1,19 @@
 TODO:
 
+- Refactor the Env module into two: a base module implementing just
+  the lookup facility, mapping idents to abstract types.  The Env used
+  during typechecking can then be implemented as a set of these.  The
+  struct type can then embed the base module to perform ident lookups.
+
+  The Env should probably also be split up into static (functions,
+  types) and dynamic components.
+
 - Ott: Fix the spec; its broken!
 
   Lookup field variables in value expressions in a restricted
   environment consisting only of the fields in the first enclosing
   struct.  This is to avoid enclosed structs depending on values in
   their enclosing structs (i.e. a layering violation).
-
-- Struct type: implement it as a list of struct entries.  The current
-  implementation does not handle alignment fields, which are anonymous.
 
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 

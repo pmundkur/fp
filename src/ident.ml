@@ -21,3 +21,34 @@ let location_of i = i.loc
 
 let compare i1 i2 =
   compare i1.stamp i2.stamp
+
+
+type 'a env = (t * 'a) list
+
+let empty_env = []
+
+let add id info env =
+  (id, info) :: env
+
+let assoc_match match_fn ret_fn env n =
+  let rec assc l =
+    match l with
+      | [] ->
+          None
+      | (i, info) :: tl ->
+          if match_fn i n then ret_fn i info
+          else assc tl
+  in
+    assc env
+
+let assoc_by_name env n =
+  assoc_match
+    (fun i n -> name_of i = n)
+    (fun i info -> Some (i, info))
+    env n
+
+let assoc_by_id env i =
+  assoc_match
+    (fun i n -> compare i n = 0)
+    (fun i info -> Some info)
+    env i
