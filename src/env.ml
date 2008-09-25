@@ -65,6 +65,5 @@ let add_field fid finfo env =
   { env with
       fields = Ident.add fid finfo env.fields }
 
-let make_from_template field_env env =
-  { env with
-      fields = field_env }
+let extract_field_env env =
+  env.fields

@@ -1,5 +1,10 @@
 .PHONY: clean
 
+# Hook in Jun Furuse's ocamlspot
+
+#OCAMLC = /home/prashanth/src/ocamlspotter/ocaml-src/install/bin/ocamlc.opt
+#OCAMLOPT = /home/prashanth/src/ocamlspotter/ocaml-src/install/bin/ocamlopt.opt
+
 OCAMLFLAGS    += -dtypes
 
 # Runtime library
@@ -33,4 +38,4 @@ FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))
 .DEFAULT: $(FP_COMPILER) $(FP_LIB)
 
 clean:
-    $(CLEAN) $(FP_COMPILER) $(FP_LIB) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output
+    $(CLEAN) $(FP_COMPILER) $(FP_LIB) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output *.spot

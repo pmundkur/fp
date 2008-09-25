@@ -56,7 +56,12 @@ and field_entry =
   | Tfield_name of Ident.t * field_type * field_attrib list
   | Tfield_align of int
 
-and struct_type = field_entry list
+and field_info = field_type
+
+(* the struct type embeds the environment in which the field
+   identifiers are defined.
+*)
+and struct_type = (field_entry list) * field_info Ident.env
 
 and map_entry = Ident.t * struct_type
 and map_type = map_entry StringMap.t
@@ -66,8 +71,6 @@ and map_type = map_entry StringMap.t
 type variant_info = Ast.variant
 
 type format_info = unit
-
-type field_info = field_type
 
 type type_info = primitive * int
 

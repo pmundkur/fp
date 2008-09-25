@@ -56,7 +56,9 @@ and field_entry =
   | Tfield_name of Ident.t * field_type * field_attrib list
   | Tfield_align of int
 
-and struct_type = field_entry list
+and field_info = field_type  (* stored in environment *)
+
+and struct_type = (field_entry list) * field_info Ident.env
 
 and map_entry = Ident.t * struct_type
 and map_type = map_entry StringMap.t
@@ -67,8 +69,6 @@ type variant_info = Ast.variant
 
 type format_info = unit
 
-type field_info = field_type
-
 type type_info = primitive * int
 
 (* type utilities *)
@@ -78,7 +78,7 @@ let is_field_name_in_struct fn st =
     (function
        | Tfield_name (id, _, _) -> String.compare (Ident.name_of id) fn = 0
        | Tfield_align _ -> false)
-    st
+    (fst st)
 
 let get_field_type fn st =
   let rec getter = function
@@ -92,7 +92,7 @@ let get_field_type fn st =
         else
           getter tl
   in
-    getter st
+    getter (fst st)
 
 (* type coercions *)
 

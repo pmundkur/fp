@@ -17,9 +17,9 @@ exception Bad_alignment of int (* current alignment *) * int (* required alignme
 exception Invalid_align of int * Location.t
 exception Duplicate_field of string Location.located_node
 exception Invalid_classify_expr of Location.t
-exception Duplicate_attribute of field_name * string * Location.t
-exception Invalid_attribute of field_name * Location.t
-exception Conflicting_attributes of field_name * string * string
+exception Duplicate_attribute of Ident.t * string * Location.t
+exception Invalid_attribute of Ident.t * Location.t
+exception Conflicting_attributes of Ident.t * string * string
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -400,7 +400,7 @@ let is_field_name_used fn fl =
        | Field (id, _) -> Ident.name_of id = Location.node_of fn)
     fl
 
-let type_attrib f ft fal env =
+let type_attribs f ft fal env =
   let max_present = ref false in
   let min_present = ref false in
   let const_present = ref false in
@@ -512,53 +512,66 @@ let rec type_field (env, cur_align, fl) f =
                   e, 0, (Field (fi, [])) :: fl
               end
           | Ptype_classify (e, cl) ->
-              (* Restrict classification expressions to variables to
-                 simplify typing, for now. *)
-              let _ = match e.pexp_desc with
-                | Pexp_var _ ->
-                    (* TODO:
+              if not (is_byte_aligned cur_align) then
+                raise_bad_alignment cur_align 8 ft.pfield_type_loc
+              else begin
+                (* Restrict classification expressions to variables to
+                   simplify typing, for now. *)
+                let _ = match e.pexp_desc with
+                  | Pexp_var _ ->
+                      (* TODO:
 
-                       Lookup type t of the field var, and
-                       type_check_exp_as_base_type e t; and ditto for
-                       for all exps e in cl.
+                         Lookup type t of the field var, and
+                         type_check_exp_as_base_type e t; and ditto for
+                         for all exps e in cl.
 
-                       Ensure all the classification tags in cl are
-                       unique.
+                         Ensure all the classification tags in cl are
+                         unique.
 
-                       type_format for each format in cl.
+                         type_format for each format in cl.
 
-                       Construct the map type, and enter it into the
-                       env.
+                         Construct the map type, and enter it into the
+                         env.
 
-                    *)
-                    ()
-                | _ ->
-                    raise_invalid_classify_expr e.pexp_loc
-              in
-                env, cur_align, fl
+                      *)
+                      ()
+                  | _ ->
+                      raise_invalid_classify_expr e.pexp_loc
+                in
+                  env, cur_align, fl
+              end
 
 and type_format env fmt =
   let lookup_type fid env =
     match Env.lookup_field_by_id env fid with
       | None -> assert false
       | Some ft -> ft in
-  let ext_env, align, fl =
+  let type_fields () =
     List.fold_left type_field (env, 0, []) fmt.pformat_desc in
-    (* Construct environment for typing value expressions. *)
-  let _ (* value_env *) =
+  let get_value_env ext_env fl =
     List.fold_left
       (fun e f ->
-          match f with
-            | Align _ ->
-                e
-            | Field (id, _) ->
-                Env.add_field id (lookup_type id ext_env) e)
+         match f with
+           | Align _ ->
+               e
+           | Field (id, _) ->
+               Env.add_field id (lookup_type id ext_env) e)
       (init_typing_env ())
-      (List.rev fl)
-  in
-    if not (is_byte_aligned align) then
-      raise_invalid_align align fmt.pformat_loc;
-    []
+      (List.rev fl) in
+  let get_field_entries venv fl =
+    List.fold_left
+      (fun accu f ->
+          match f with
+            | Align i ->
+                (Tfield_align i) :: accu
+            | Field (id, al) ->
+                let ft = lookup_type id venv in
+                let tal = type_attribs id ft al venv in
+                  (Tfield_name (id, ft, tal)) :: accu)
+      [] fl in
+  let ext_env, align, fl = type_fields () in
+  let venv = get_value_env ext_env fl in
+    (get_field_entries venv fl), (Env.extract_field_env venv)
 
 (* type-checker top-level *)
 
