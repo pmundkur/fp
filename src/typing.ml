@@ -257,7 +257,7 @@ let const_fold_as_int env exp =
     (* TODO: range check *)
     Int64.to_int i64
 
-let rec const_fold_as_base_type env bt exp id loc =
+let rec const_fold_as_base_type env exp bt id loc =
   match bt with
     | Tbase_vector _ -> raise_invalid_attribute id loc
     | Tbase_primitive Tprim_bit ->
@@ -500,16 +500,16 @@ let type_attribs f ft fal env =
          match fa.pfield_attrib_desc, ft with
            | Pattrib_max e, Ttype_base bt ->
                check_and_mark_present "max" max_present fa.pfield_attrib_loc;
-               (* TODO: e should be checked to be constant matching the type! *)
-               Tattrib_max (type_check_exp_as_base_type env e bt)
+               ignore (type_check_exp_as_base_type env e bt);
+               Tattrib_max (const_fold_as_base_type env e bt f fa.pfield_attrib_loc)
            | Pattrib_min e, Ttype_base bt ->
                check_and_mark_present "min" min_present fa.pfield_attrib_loc;
-               (* TODO: e should be checked to be constant matching the type! *)
-               Tattrib_min (type_check_exp_as_base_type env e bt)
+               ignore (type_check_exp_as_base_type env e bt);
+               Tattrib_min (const_fold_as_base_type env e bt f fa.pfield_attrib_loc)
            | Pattrib_const e, Ttype_base bt ->
                check_and_mark_present "const" const_present fa.pfield_attrib_loc;
-               (* TODO: e should be checked to be constant matching the type! *)
-               Tattrib_const (type_check_exp_as_base_type env e bt)
+               ignore (type_check_exp_as_base_type env e bt);
+               Tattrib_const (const_fold_as_base_type env e bt f fa.pfield_attrib_loc)
            | Pattrib_default e, Ttype_base bt ->
                check_and_mark_present "default" default_present fa.pfield_attrib_loc;
                Tattrib_default (type_check_exp_as_base_type env e bt)
