@@ -8,7 +8,7 @@ type exp_type =
   | Texp_type_unit
   | Texp_type_field
 
-type function_info = (exp_type list * exp_type) * (int list -> int) option
+type function_info = (exp_type list * exp_type) * (Int64.t list -> Int64.t) option
 
 (* basic types for fields and expressions *)
 
@@ -22,6 +22,9 @@ type primitive =
 type exp =
   | Texp_unit
   | Texp_var of Ident.t
+  | Texp_const_bit of int
+  | Texp_const_byte of int
+  | Texp_const_int16 of int
   | Texp_const_int of int
   | Texp_const_int32 of Int32.t
   | Texp_const_int64 of Int64.t

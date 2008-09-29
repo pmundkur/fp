@@ -11,6 +11,7 @@ exception Type_mismatch_exp_exp of exp_type (* received *) * exp_type (* expecte
 exception Non_const_expression of Location.t
 exception Non_const_integral_expression of Location.t
 exception Non_const_foldable_function of fun_name
+exception Invalid_const_expression of primitive * Location.t
 exception Non_unique_case_name of case_name
 exception Non_unique_case_default of case_name (* second *) * case_name (* first *)
 exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
@@ -39,6 +40,8 @@ let raise_non_const_integral_exp loc =
   raise (Non_const_integral_expression loc)
 let raise_non_const_foldable_function fn =
   raise (Non_const_foldable_function fn)
+let raise_invalid_const_expression pt loc =
+  raise (Invalid_const_expression (pt, loc))
 let raise_non_unique_case_name nm =
   raise (Non_unique_case_name nm)
 let raise_non_unique_case_default second first =
@@ -64,13 +67,13 @@ let binary op l =
 
 let functions = [
   ("+", (([Texp_type_int; Texp_type_int], Texp_type_int),
-         Some (binary (+))));
+         Some (binary (Int64.add))));
   ("-", (([Texp_type_int; Texp_type_int], Texp_type_int),
-         Some (binary (-))));
+         Some (binary (Int64.sub))));
   ("*", (([Texp_type_int; Texp_type_int], Texp_type_int),
-         Some (binary ( * ))));
+         Some (binary (Int64.mul))));
   ("/", (([Texp_type_int; Texp_type_int], Texp_type_int),
-         Some (binary (/))));
+         Some (binary (Int64.div))));
 
   ("byte_sizeof", (([Texp_type_base], Texp_type_int), None));
   ("bit_sizeof", (([Texp_type_base], Texp_type_int), None));
@@ -209,19 +212,65 @@ let rec check_exp_const exp =
           (fun r a -> r && check_exp_const a)
           true arglist
 
-let rec const_fold_as_int env exp =
+let rec const_fold_as_int64 env exp =
   match exp.pexp_desc with
     | Pexp_unit
     | Pexp_var _ ->
         raise_non_const_integral_exp exp.pexp_loc
-    | Pexp_const_int i -> i
-    | Pexp_const_int32 i -> Int32.to_int i (* TODO: range check *)
-    | Pexp_const_int64 i -> Int64.to_int i (* TODO: range check *)
+    | Pexp_const_int i -> Int64.of_int i
+    | Pexp_const_int32 i -> Int64.of_int32 i
+    | Pexp_const_int64 i -> i
     | Pexp_apply (fname, arglist) ->
-        let iargs = List.map (const_fold_as_int env) arglist in
+        let iargs = List.map (const_fold_as_int64 env) arglist in
           match lookup_function_impl env fname with
             | None -> raise_non_const_foldable_function fname
             | Some f -> f iargs
+
+let const_fold_as_bit env exp =
+  let i = Int64.to_int (const_fold_as_int64 env exp) in
+    if i <> 0 && i <> 1 then
+      raise_invalid_const_expression Tprim_bit exp.pexp_loc
+    else
+      i
+
+let const_fold_as_byte env exp =
+  let i = Int64.to_int (const_fold_as_int64 env exp) in
+    if i < 0 || i > 255 then
+      raise_invalid_const_expression Tprim_byte exp.pexp_loc
+    else
+      i
+
+let const_fold_as_int16 env exp =
+  let i = Int64.to_int (const_fold_as_int64 env exp) in
+    if i < -32768 || i > 32767  then
+      raise_invalid_const_expression Tprim_byte exp.pexp_loc
+    else
+      i
+
+let const_fold_as_int32 env exp =
+  let i64 = const_fold_as_int64 env exp in
+    (* TODO: range check *)
+    Int32.of_int (Int64.to_int i64)
+
+let const_fold_as_int env exp =
+  let i64 = const_fold_as_int64 env exp in
+    (* TODO: range check *)
+    Int64.to_int i64
+
+let rec const_fold_as_base_type env bt exp id loc =
+  match bt with
+    | Tbase_vector _ -> raise_invalid_attribute id loc
+    | Tbase_primitive Tprim_bit ->
+        Texp_const_bit (const_fold_as_bit env exp)
+    | Tbase_primitive Tprim_byte ->
+        Texp_const_byte (const_fold_as_byte env exp)
+    | Tbase_primitive Tprim_int16 ->
+        Texp_const_int16 (const_fold_as_int16 env exp)
+    | Tbase_primitive Tprim_int32 ->
+        Texp_const_int32 (const_fold_as_int32 env exp)
+    | Tbase_primitive Tprim_int64 ->
+        Texp_const_int64 (const_fold_as_int64 env exp)
+
 
 (* This is used to typecheck expressions in two contexts:
    . arguments to functions, where the type of the expression needs to
