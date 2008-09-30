@@ -21,6 +21,7 @@ exception Invalid_classify_expr of Location.t
 exception Duplicate_attribute of Ident.t * string * Location.t
 exception Invalid_attribute of Ident.t * Location.t
 exception Conflicting_attributes of Ident.t * string * string
+exception Attribute_type_error of Ident.t * Location.t
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -60,6 +61,8 @@ let raise_invalid_attribute fn loc =
   raise (Invalid_attribute (fn, loc))
 let raise_conflicting_attributes fn a1 a2 =
   raise (Conflicting_attributes (fn, a1, a2))
+let raise_attribute_type_error id loc =
+  raise (Attribute_type_error (id, loc))
 
 let binary op l =
   assert ((List.length l) = 2);
@@ -257,9 +260,9 @@ let const_fold_as_int env exp =
     (* TODO: range check *)
     Int64.to_int i64
 
-let rec const_fold_as_base_type env exp bt id loc =
+let const_fold_as_base_type env exp bt id loc =
   match bt with
-    | Tbase_vector _ -> raise_invalid_attribute id loc
+    | Tbase_vector _ -> raise_attribute_type_error id loc
     | Tbase_primitive Tprim_bit ->
         Texp_const_bit (const_fold_as_bit env exp)
     | Tbase_primitive Tprim_byte ->
@@ -443,6 +446,25 @@ let is_field_name_used fn fl =
     fl
 
 
+let type_check_variant_attrib env f bt v =
+  let pt =
+    match bt with
+      | Tbase_vector _ ->
+          raise_attribute_type_error f v.pvariant_loc
+      | Tbase_primitive p -> p in
+  let cfold vc =
+    match pt with
+      | Tprim_bit -> Texp_const_bit (const_fold_as_bit env vc)
+      | Tprim_byte -> Texp_const_byte (const_fold_as_byte env vc)
+      | Tprim_int16 -> Texp_const_int16 (const_fold_as_int16 env vc)
+      | Tprim_int32 -> Texp_const_int32 (const_fold_as_int32 env vc)
+      | Tprim_int64 -> Texp_const_int64 (const_fold_as_int64 env vc)
+  in
+    List.map
+      (fun (e, cn, d) -> (cfold e), cn, d)
+      v.pvariant_desc
+
+
 (* This is an extension of the typing of value expressions to the
    typing of field attributes, which were left out of the
    specification to keep it simple.  The caller supplies the adjusted
@@ -453,7 +475,7 @@ let is_field_name_used fn fl =
 	E |- x : value_exp
 *)
 
-let type_attribs f ft fal env =
+let type_attribs env f ft fal =
   let max_present = ref false in
   let min_present = ref false in
   let const_present = ref false in
@@ -494,6 +516,10 @@ let type_attribs f ft fal env =
       raise_conflicting_attributes f "value" "variant"
     else
       () in
+  let get_variant_def env vn =
+    match Env.lookup_variant_by_name env (Location.node_of vn) with
+      | None -> raise_unknown_ident vn
+      | Some vd -> vd in
   let tal =
     List.map
       (fun fa ->
@@ -516,11 +542,14 @@ let type_attribs f ft fal env =
            | Pattrib_value e, Ttype_base bt ->
                check_and_mark_present "value" value_present fa.pfield_attrib_loc;
                Tattrib_value (type_check_exp_as_base_type env e bt)
-           | Pattrib_variant_ref _, _
-           | Pattrib_variant_inline _, _ ->
+           | Pattrib_variant_ref vn, Ttype_base bt ->
                check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
-               (* TODO *)
-               raise Not_found
+               let _, vdef = get_variant_def env vn in
+                 Tattrib_variant (type_check_variant_attrib env f bt vdef)
+           | Pattrib_variant_inline vdef, Ttype_base bt ->
+               check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
+               check_variant_def vdef.pvariant_desc;
+               Tattrib_variant (type_check_variant_attrib env f bt vdef)
            | _ ->
                raise_invalid_attribute f fa.pfield_attrib_loc;
       )
@@ -635,7 +664,7 @@ and type_format env fmt =
                (Tfield_align i) :: accu
            | Field (id, al) ->
                let ft = lookup_type id venv in
-               let tal = type_attribs id ft al venv in
+               let tal = type_attribs venv id ft al in
                  (Tfield_name (id, ft, tal)) :: accu)
       [] fl in
   let ext_env, align, fl = type_fields () in
@@ -644,7 +673,7 @@ and type_format env fmt =
 
 (* type-checker top-level *)
 
-let type_check decls env =
+let type_check env decls =
   let typer e d =
     match d.pdecl_desc with
       | Pdecl_variant (vn, vd) ->
