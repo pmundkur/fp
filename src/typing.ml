@@ -693,9 +693,9 @@ let type_check env decls =
       | Pdecl_variant (vn, vd) ->
           check_variant_def vd.pvariant_desc;
           Env.add_variant_def (Ident.make_from_node vn) vd e
-      | Pdecl_format _ ->
-          (* TODO *)
-          e
+      | Pdecl_format (fn, fmt) ->
+          let tfmt = type_format e fmt in
+            Env.add_format_def (Ident.make_from_node fn) tfmt e
   in
     List.fold_left
       (fun e d -> typer e d) env decls

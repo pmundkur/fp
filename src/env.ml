@@ -65,5 +65,9 @@ let add_field fid finfo env =
   { env with
       fields = Ident.add fid finfo env.fields }
 
+let add_format_def fid finfo env =
+  { env with
+      formats = Ident.add fid finfo env.formats }
+
 let extract_field_env env =
   env.fields

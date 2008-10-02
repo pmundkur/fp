@@ -74,7 +74,7 @@ and map_type = map_entry StringMap.t
 
 type variant_info = Ast.variant
 
-type format_info = unit
+type format_info = struct_type
 
 type type_info = primitive * int
 
