@@ -36,6 +36,10 @@ type base_type =
 
 type variant = (exp * Asttypes.case_name * Asttypes.default) list
 
+type case_exp =
+  | Tcase_const of exp
+  | Tcase_range of exp * exp
+
 (* constructed types for fields *)
 
 module StringMap: Map.S with type key = string
@@ -51,7 +55,7 @@ type field_attrib =
 type field_type =
   | Ttype_base of base_type
   | Ttype_struct of struct_type
-  | Ttype_map of map_type
+  | Ttype_map of exp * map_type
   | Ttype_array of exp * struct_type
   | Ttype_label
 
@@ -66,7 +70,7 @@ and field_info = field_type
 *)
 and struct_type = (field_entry list) * field_info Ident.env
 
-and map_entry = Ident.t * struct_type
+and map_entry = Ident.t * case_exp * struct_type
 and map_type = map_entry StringMap.t
 
 (* information stored in environment *)

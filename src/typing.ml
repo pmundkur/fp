@@ -17,11 +17,14 @@ exception Non_unique_case_default of case_name (* second *) * case_name (* first
 exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
 exception Invalid_align of int * Location.t
 exception Duplicate_field of string Location.located_node
+exception Unsupported_classify_expr of Location.t
 exception Invalid_classify_expr of Location.t
 exception Duplicate_attribute of Ident.t * string * Location.t
 exception Invalid_attribute of Ident.t * Location.t
 exception Conflicting_attributes of Ident.t * string * string
-exception Attribute_type_error of Ident.t * Location.t
+exception Invalid_variant_type of Ident.t * Location.t
+exception Invalid_const_type of Ident.t * Location.t
+exception Duplicate_classify_case of case_name
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -53,6 +56,8 @@ let raise_invalid_align align loc =
   raise (Invalid_align (align, loc))
 let raise_duplicate_field fn =
   raise (Duplicate_field fn)
+let raise_unsupported_classify_expr loc =
+  raise (Unsupported_classify_expr loc)
 let raise_invalid_classify_expr loc =
   raise (Invalid_classify_expr loc)
 let raise_duplicate_attribute fn an loc =
@@ -61,8 +66,12 @@ let raise_invalid_attribute fn loc =
   raise (Invalid_attribute (fn, loc))
 let raise_conflicting_attributes fn a1 a2 =
   raise (Conflicting_attributes (fn, a1, a2))
-let raise_attribute_type_error id loc =
-  raise (Attribute_type_error (id, loc))
+let raise_invalid_variant_type id loc =
+  raise (Invalid_variant_type (id, loc))
+let raise_invalid_const_type id loc =
+  raise (Invalid_const_type (id, loc))
+let raise_duplicate_classify_case cn =
+  raise (Duplicate_classify_case cn)
 
 let binary op l =
   assert ((List.length l) = 2);
@@ -139,7 +148,8 @@ let get_field_info env fn =
 let rec follow_case_path cn path m =
   let st =
     try
-      snd (StringMap.find (Location.node_of cn) m)
+      let _, _, st = StringMap.find (Location.node_of cn) m in
+        st
     with
       | Not_found ->
           raise_unknown_ident cn
@@ -167,7 +177,7 @@ and get_path_type fn cn p ft =
     | Ttype_struct _
     | Ttype_array _
     | Ttype_label -> raise_invalid_path fn
-    | Ttype_map m -> follow_case_path cn p m
+    | Ttype_map (_, m) -> follow_case_path cn p m
 
 let lookup_var env path =
   match path with
@@ -262,7 +272,7 @@ let const_fold_as_int env exp =
 
 let const_fold_as_base_type env exp bt id loc =
   match bt with
-    | Tbase_vector _ -> raise_attribute_type_error id loc
+    | Tbase_vector _ -> raise_invalid_const_type id loc
     | Tbase_primitive Tprim_bit ->
         Texp_const_bit (const_fold_as_bit env exp)
     | Tbase_primitive Tprim_byte ->
@@ -328,9 +338,10 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
   in
     exp_typer exp
 
-(* This is used to typecheck expressions in two contexts:
+(* This is used to typecheck expressions in the following contexts:
    . value expressions,
-   . expressions that are values of variant cases.
+   . expressions that are values of variant cases,
+   . expressions in classify cases
    In both cases, the type of the expression will need to match the
    type of the field, which will be a base_type. *)
 let type_check_exp_as_base_type env exp as_base_type =
@@ -450,7 +461,7 @@ let type_check_variant_attrib env f bt v =
   let pt =
     match bt with
       | Tbase_vector _ ->
-          raise_attribute_type_error f v.pvariant_loc
+          raise_invalid_variant_type f v.pvariant_loc
       | Tbase_primitive p -> p in
   let cfold vc =
     match pt with
@@ -472,7 +483,7 @@ let type_check_variant_attrib env f bt v =
 
    The implemented rule is a generalization of:
 
-	E |- x : value_exp
+        E |- x : value_exp
 *)
 
 let type_attribs env f ft fal =
@@ -576,59 +587,62 @@ let rec type_field (env, cur_align, fl) f =
     | Pfield_name (fn, ft) ->
         if is_field_name_used fn fl then
           raise_duplicate_field fn;
-        match ft.pfield_type_desc with
-          | Ptype_simple (te, fal) ->
-              let bt, next_align = kinding env cur_align te in
-              let fi = Ident.make_from_node fn in
-              let e = Env.add_field fi (Ttype_base bt) env in
-                e, next_align, (Field (fi, fal)) :: fl
-          | Ptype_label ->
-              if not (is_byte_aligned cur_align) then
-                raise_bad_alignment cur_align 8 ft.pfield_type_loc
-              else begin
-                let fi = Ident.make_from_node fn in
+        let fi = Ident.make_from_node fn in
+          match ft.pfield_type_desc with
+            | Ptype_simple (te, fal) ->
+                let bt, next_align = kinding env cur_align te in
+                let e = Env.add_field fi (Ttype_base bt) env in
+                  e, next_align, (Field (fi, fal)) :: fl
+            | Ptype_label ->
+                if not (is_byte_aligned cur_align) then
+                  raise_bad_alignment cur_align 8 ft.pfield_type_loc;
                 let e = Env.add_field fi Ttype_label env in
                   e, cur_align, (Field (fi, [])) :: fl
-              end
-          | Ptype_array (len, fmt) ->
-              if not (is_byte_aligned cur_align) then
-                raise_bad_alignment cur_align 8 ft.pfield_type_loc
-              else begin
-                let tlen = type_check_exp_as_exp_type env len Texp_type_int in
-                let st = type_format env fmt in
-                let fi = Ident.make_from_node fn in
-                let e = Env.add_field fi (Ttype_array (tlen, st)) env in
-                  e, 0, (Field (fi, [])) :: fl
-              end
-          | Ptype_classify (e, cl) ->
-              if not (is_byte_aligned cur_align) then
-                raise_bad_alignment cur_align 8 ft.pfield_type_loc
-              else begin
+            | Ptype_array (len, fmt) ->
+                if not (is_byte_aligned cur_align) then
+                  raise_bad_alignment cur_align 8 ft.pfield_type_loc
+                else begin
+                  let tlen = type_check_exp_as_exp_type env len Texp_type_int in
+                  let st = type_format env fmt in
+                  let e = Env.add_field fi (Ttype_array (tlen, st)) env in
+                    e, 0, (Field (fi, [])) :: fl
+                end
+            | Ptype_classify (e, cl) ->
+                if not (is_byte_aligned cur_align) then
+                  raise_bad_alignment cur_align 8 ft.pfield_type_loc;
                 (* Restrict classification expressions to variables to
                    simplify typing, for now. *)
-                let _ = match e.pexp_desc with
-                  | Pexp_var _ ->
-                      (* TODO:
-
-                         Lookup type t of the field var, and
-                         type_check_exp_as_base_type e t; and ditto for
-                         for all exps e in cl.
-
-                         Ensure all the classification tags in cl are
-                         unique.
-
-                         type_format for each format in cl.
-
-                         Construct the map type, and enter it into the
-                         env.
-
-                      *)
-                      ()
+                let eid, et = match e.pexp_desc with
+                  | Pexp_var v ->
+                      lookup_var env v
                   | _ ->
-                      raise_invalid_classify_expr e.pexp_loc
-                in
-                  env, cur_align, fl
-              end
+                      raise_unsupported_classify_expr e.pexp_loc in
+                let bt = match et with
+                  | Ttype_base bt -> bt
+                  | _ -> raise_invalid_classify_expr e.pexp_loc in
+                let tcl =
+                  List.fold_left
+                    (fun a (cn, ce, fmt) ->
+                       let cid = Ident.make_from_node cn in
+                       let cnm = Location.node_of cn in
+                         if List.mem_assoc cnm a then
+                           raise_duplicate_classify_case cn;
+                         let te = match ce.pcase_exp_desc with
+                           | Pcase_const c ->
+                               Tcase_const (const_fold_as_base_type env c bt cid c.pexp_loc)
+                           | Pcase_range (l, r) ->
+                               let tl = const_fold_as_base_type env l bt cid l.pexp_loc in
+                               let tr = const_fold_as_base_type env r bt cid r.pexp_loc in
+                                 Tcase_range (tl, tr) in
+                         let tfmt = type_format env fmt in
+                           (cnm, (cid, te, tfmt)) :: a)
+                    [] cl in
+                let m = List.fold_left
+                  (fun m (nm, (cid, te, tfmt)) ->
+                     StringMap.add nm (cid, te, tfmt) m)
+                  StringMap.empty tcl in
+                let e = Env.add_field fi (Ttype_map (Texp_var eid, m)) env in
+                  e, 0, (Field (fi, [])) :: fl
 
 (* This function gets used in the typing of fields that have
    struct-oriented types, i.e. arrays and classifications.
