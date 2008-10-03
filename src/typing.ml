@@ -756,6 +756,9 @@ let handle_typing_exception e =
      | Invalid_const_type (fid, loc) ->
          Printf.fprintf stderr "%a: an expression cannot be constant folded due to its type"
            Location.pr_location loc
+     | Duplicate_classify_case cn ->
+         Printf.fprintf stderr "%a: duplicate classify branch name \"%s\""
+           Location.pr_location (Location.location_of cn) (Location.node_of cn)
      | e ->
          raise e
   );

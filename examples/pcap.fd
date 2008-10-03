@@ -10,7 +10,7 @@ format pcap_header {
 format pcap_entry {
     sec: int32;
     usec: int32;
-    cap_len: int32 value(sizeof(data));
+    cap_len: int32 value(byte_sizeof(data));
     real_len: int32;
     data: byte[cap_len]
 }
