@@ -256,7 +256,7 @@ let const_fold_as_byte env exp =
 let const_fold_as_int16 env exp =
   let i = Int64.to_int (const_fold_as_int64 env exp) in
     if i < -32768 || i > 32767  then
-      raise_invalid_const_expression Tprim_byte exp.pexp_loc
+      raise_invalid_const_expression Tprim_int16 exp.pexp_loc
     else
       i
 
