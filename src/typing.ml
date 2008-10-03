@@ -94,7 +94,7 @@ let functions = [
 
   ("offset", (([Texp_type_field], Texp_type_int), None));
   ("num_set_bits", (([Texp_type_field], Texp_type_int), None));
-  ("remaining", (([Texp_type_unit], Texp_type_int), None))
+  ("remaining", (([], Texp_type_int), None))
 ]
 
 let base_types = [

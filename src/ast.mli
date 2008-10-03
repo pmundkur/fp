@@ -84,3 +84,6 @@ and exp_desc =
 and path =
   | Pfield of field_name
   | Ppath of field_name * case_name * path
+
+val pr_decl: out_channel -> decl -> unit
+
