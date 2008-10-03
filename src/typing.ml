@@ -400,9 +400,10 @@ let check_variant_def vc_list =
       end else begin
         names := StringSet.add nm !names;
       end;
-      match !default with
-        | None -> default := Some cn
-        | Some df -> raise_non_unique_case_default cn df
+      if def then
+        match !default with
+          | None -> default := Some cn
+          | Some df -> raise_non_unique_case_default cn df
   in
     List.iter check_case vc_list
 
@@ -727,7 +728,7 @@ let handle_typing_exception e =
            Location.pr_location (Location.location_of cn2) (Location.node_of cn2) (Location.node_of cn1)
      | Bad_alignment (cur, reqd, loc) ->
          Printf.fprintf stderr "%a: bad alignment %d, required alignment is %d"
-           Location.pr_location loc cur reqd
+           Location.pr_location loc (cur mod 8) reqd
      | Invalid_align (a, loc) ->
          Printf.fprintf stderr "%a: bad alignment %d"
            Location.pr_location loc a
