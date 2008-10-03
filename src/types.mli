@@ -91,3 +91,10 @@ val get_field_type: string -> struct_type -> (Ident.t * field_type)
 val can_coerce_int: int -> base_type -> bool
 val can_coerce_int32: Int32.t -> base_type -> bool
 val can_coerce_int64: Int64.t -> base_type -> bool
+
+(* printing *)
+
+val pr_exp_type: exp_type -> string
+val pr_primitive: primitive -> string
+val pr_base_type: base_type -> string
+val pr_field_type: field_type -> string

@@ -146,3 +146,32 @@ let can_coerce_int64 i as_type =
         && i <= Int64.of_int32 Int32.max_int
     | Tbase_primitive Tprim_int64 -> true
     | Tbase_vector _ -> false
+
+(* printing *)
+
+let pr_exp_type = function
+  | Texp_type_int -> "int"
+  | Texp_type_vector -> "vector"
+  | Texp_type_base -> "base"
+  | Texp_type_array -> "array"
+  | Texp_type_unit -> "unit"
+  | Texp_type_field -> "field"
+
+let pr_primitive = function
+  | Tprim_bit -> "bit"
+  | Tprim_byte -> "byte"
+  | Tprim_int16 -> "int16"
+  | Tprim_int32 -> "int32"
+  | Tprim_int64 -> "int64"
+
+let pr_base_type = function
+  | Tbase_primitive p -> pr_primitive p
+  | Tbase_vector (p, _) -> pr_primitive p ^ "[]"
+
+let pr_field_type = function
+  | Ttype_base bt -> pr_base_type bt
+  | Ttype_struct _ -> "format"
+  | Ttype_map _ -> "map"
+  | Ttype_array _ -> "array"
+  | Ttype_label -> "label"
+

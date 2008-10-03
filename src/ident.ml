@@ -52,3 +52,6 @@ let assoc_by_id env i =
     (fun i n -> compare i n = 0)
     (fun i info -> Some info)
     env i
+
+let pr_ident_name oc id =
+  Printf.fprintf oc "%s" id.name

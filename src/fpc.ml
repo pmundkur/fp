@@ -61,7 +61,6 @@ let process_file f =
   try
     let ic = open_in f in
     let pt = parse_file f ic in
-      List.iter (fun d -> Ast.pr_decl stdout d) pt;
       ignore (Typing.type_check (Typing.init_typing_env ()) pt)
   with
     | Sys_error s -> prerr_endline s
