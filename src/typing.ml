@@ -298,9 +298,12 @@ let const_fold_as_int env exp =
 
 let const_fold_as_base_type env exp bt id loc =
   match bt with
-    | Tbase_vector (Tprim_bit, Texp_const_int i) ->
-        (* TODO: range check result with bitfield size *)
-        Texp_const_int (const_fold_as_int env exp)
+    | Tbase_vector (Tprim_bit, Texp_const_int vlen) ->
+        let v = const_fold_as_int env exp in
+          if not (Types.within_bit_range v vlen) then
+            raise_type_coercion_as_base_type bt exp.pexp_loc
+          else
+            Texp_const_int v
     | Tbase_vector _ -> raise_invalid_const_type id loc
     | Tbase_primitive Tprim_bit ->
         Texp_const_bit (const_fold_as_bit env exp)

@@ -94,6 +94,7 @@ val get_field_type: string -> struct_type -> (Ident.t * field_type)
 
 (* type coercions *)
 
+val within_bit_range: int -> int -> bool
 val can_coerce_int: int -> base_type -> bool
 val can_coerce_int32: Int32.t -> base_type -> bool
 val can_coerce_int64: Int64.t -> base_type -> bool
