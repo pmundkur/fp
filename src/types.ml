@@ -38,6 +38,8 @@ type base_type =
   | Tbase_primitive of primitive
   | Tbase_vector of primitive * exp
 
+let max_bit_vector_length = 16
+
 type variant = (exp * Asttypes.case_name * Asttypes.default) list
 
 type case_exp =
@@ -107,7 +109,10 @@ let get_field_type fn st =
 
 (* type coercions *)
 
-(* TODO: XXX: handle coercions to bit vectors *)
+let within_bit_range i vlen =
+  assert (0 < vlen && vlen <= max_bit_vector_length);
+  let mask = (0x1 lsl vlen) - 1 in
+    (i land mask) = i
 
 let can_coerce_int i as_type =
   match as_type with
@@ -134,7 +139,9 @@ let can_coerce_int i as_type =
         else
           (i >= 0) && (i <= Int64.to_int 0xffffffffL)
     | Tbase_primitive Tprim_int64 -> true  (* for now ;-) *)
-    | _ -> false
+    | Tbase_vector (Tprim_bit, Texp_const_int vlen) ->
+        within_bit_range i vlen
+    | Tbase_vector _ -> false
 
 let can_coerce_int32 i as_type =
   match as_type with
@@ -150,6 +157,8 @@ let can_coerce_int32 i as_type =
     | Tbase_primitive Tprim_uint32 ->
         i >= 0l
     | Tbase_primitive Tprim_int64 -> true
+    | Tbase_vector (Tprim_bit, Texp_const_int vlen) ->
+        within_bit_range (Int32.to_int i) vlen
     | Tbase_vector _ -> false
 
 let can_coerce_int64 i as_type =
@@ -167,6 +176,8 @@ let can_coerce_int64 i as_type =
     | Tbase_primitive Tprim_uint32 ->
         i >= 0L && i <= 0xffffffffL
     | Tbase_primitive Tprim_int64 -> true
+    | Tbase_vector (Tprim_bit, Texp_const_int vlen) ->
+        within_bit_range (Int64.to_int i) vlen
     | Tbase_vector _ -> false
 
 (* printing *)

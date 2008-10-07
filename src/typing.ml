@@ -472,17 +472,19 @@ let kinding env cur_align te =
     | Pvector (tn, e) ->
         let is_bit_type = is_bit_typename tn in
         let e' = type_check_exp_as_exp_type env e Texp_type_int in
+        let clen_opt =
+          try Some (const_fold_as_int env e)
+          with _ -> None in
         let e' =
-          try
-            let len = const_fold_as_int env e in
-              if len < 0 then
-                raise_negative_vector_len len e.pexp_loc
-              else if is_bit_type && len > 16 then
-                raise_bit_vector_length_limit len 16 e.pexp_loc
-              else
-                Texp_const_int len
-          with _ ->
-            e' in
+          match clen_opt with
+            | None -> e'
+            | Some len ->
+                if len <= 0 then
+                  raise_negative_vector_len len e.pexp_loc
+                else if is_bit_type && len > Types.max_bit_vector_length then
+                  raise_bit_vector_length_limit len Types.max_bit_vector_length e.pexp_loc
+                else
+                  Texp_const_int len in
         let _, (pt, _) = lookup_typename env tn in
         let next_align =
           if is_bit_type then

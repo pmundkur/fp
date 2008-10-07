@@ -38,6 +38,8 @@ type base_type =
   | Tbase_primitive of primitive
   | Tbase_vector of primitive * exp
 
+val max_bit_vector_length: int
+
 type variant = (exp * Asttypes.case_name * Asttypes.default) list
 
 type case_exp =
