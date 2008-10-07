@@ -191,22 +191,23 @@ let lookup_var env path =
 (* The type compatibility check functions either return true or throw an exception. *)
 
 let check_field_type_compatible_with_base_type field_type base_type loc =
-  match (field_type, base_type) with
-    | (Ttype_base bt, base_type) when bt = base_type ->
+  match field_type, base_type with
+    | Ttype_base bt, base_type when bt = base_type ->
         ()
-    | (Ttype_base _, _)
-    | (Ttype_struct _, _)
-    | (Ttype_map _, _)
-    | (Ttype_array _, _)
-    | (Ttype_label, _) ->
+    | Ttype_base _, _
+    | Ttype_struct _, _
+    | Ttype_map _, _
+    | Ttype_array _, _
+    | Ttype_label, _ ->
         raise_field_base_type_mismatch field_type base_type loc
 
 let check_field_type_compatible_with_exp_type field_type exp_type loc =
-  match (field_type, exp_type) with
-    | (Ttype_base (Tbase_primitive _), Texp_type_int)
-    | (Ttype_base (Tbase_vector _), Texp_type_vector)
-    | (Ttype_base _ , Texp_type_base)
-    | (Ttype_array _, Texp_type_array) ->
+  match field_type, exp_type with
+    | Ttype_base (Tbase_primitive _), Texp_type_int
+    | Ttype_base (Tbase_vector _), Texp_type_vector
+    | Ttype_base (Tbase_vector (Tprim_bit, _)), Texp_type_int
+    | Ttype_base _ , Texp_type_base
+    | Ttype_array _, Texp_type_array ->
         ()
     | _ ->
         raise_field_exp_type_mismatch field_type exp_type loc
@@ -288,6 +289,9 @@ let const_fold_as_int env exp =
 
 let const_fold_as_base_type env exp bt id loc =
   match bt with
+    | Tbase_vector (Tprim_bit, Texp_const_int i) ->
+        (* TODO: range check result with bitfield size *)
+        Texp_const_int (const_fold_as_int env exp)
     | Tbase_vector _ -> raise_invalid_const_type id loc
     | Tbase_primitive Tprim_bit ->
         Texp_const_bit (const_fold_as_bit env exp)
@@ -455,6 +459,7 @@ let kinding env cur_align te =
           (Tbase_primitive pt), next_align
     | Pvector (tn, e) ->
         let e' = type_check_exp_as_exp_type env e Texp_type_int in
+        let e' = try Texp_const_int (const_fold_as_int env e) with _ -> e' in
         let _, (pt, _) = lookup_typename env tn in
         let next_align =
           if is_bit_typename tn then
@@ -481,6 +486,9 @@ let is_field_name_used fn fl =
 let type_check_variant_attrib env f bt v =
   let pt =
     match bt with
+      | Tbase_vector (Tprim_bit, Texp_const_int i) ->
+          (* For now, we max out bit-fields at 63 bits. *)
+          Tprim_int64
       | Tbase_vector _ ->
           raise_invalid_variant_type f v.pvariant_loc
       | Tbase_primitive p -> p in
