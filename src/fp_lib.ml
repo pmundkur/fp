@@ -478,6 +478,57 @@ module FP_int16 : (FP_elem with type v = int) = struct
 
   let read (t : t) =
     let b0, b1 = int_of_char (Env.byte_at t 0), int_of_char (Env.byte_at t 1) in
+    let i, sign = match Env.endian t with
+      | Env.Little_endian -> b0 + (b1 lsl 8), b1 lsr 7
+      | Env.Big_endian -> (b0 lsl 8) + b1, b0 lsr 7
+    in
+      ((if sign = 0 then i else (i land 0x7fff) - 0x8000) : v)
+
+  let write (v : v) (t : t) =
+    if v < -0x8000 || v > 0x7fff then
+      raise Arg_out_of_bounds;
+    let env = rep_to_env t in
+    let sign = v < 0 in
+    let b0 = char_of_int (v land 0xff) in
+    let b1 = char_of_int ((if sign then 0x8000 else 0x0) + ((v lsr 8) land 0x7f)) in
+      match Env.endian env with
+        | Env.Big_endian ->
+            Env.set_byte_at env b1 0;
+            Env.set_byte_at env b0 1
+        | Env.Little_endian ->
+            Env.set_byte_at env b0 0;
+            Env.set_byte_at env b1 1
+
+  let unmarshal env =
+    (Env.sub env 0 2 : t), (Env.skip_bytes env 2)
+
+  let marshal env (v : v) =
+    write v env;
+    unmarshal env
+
+  let copy (t : t) env =
+    marshal env (read t)
+
+  let of_int (i : int) = i
+
+  let to_int (v : v) = v
+end
+
+module FP_uint16 : (FP_elem with type v = int) = struct
+  type t = Env.t
+  type v = int
+
+  let size = 2
+
+  let rep_to_env (t : t) = (t : Env.t)
+
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
+    then raise (Env.Invalid_op "FP_uint16.env_to_rep");
+    (t : t)
+
+  let read (t : t) =
+    let b0, b1 = int_of_char (Env.byte_at t 0), int_of_char (Env.byte_at t 1) in
     let i = match Env.endian t with
       | Env.Little_endian -> b0 + (b1 lsl 8)
       | Env.Big_endian -> (b0 lsl 8) + b1
@@ -563,6 +614,75 @@ module FP_int32 : (FP_elem with type v = Int32.t) = struct
   let of_int (i : int) = Int32.of_int i
 
   let to_int (v : v) = Int32.to_int v
+end
+
+module FP_uint32 : (FP_elem with type v = Int32.t) = struct
+  type t = Env.t
+  type v = Int32.t
+
+  let size = 2 * FP_int16.size
+
+  let rep_to_env (t : t) = (t : Env.t)
+
+  let env_to_rep (t : Env.t) =
+    if not (Env.is_byte_aligned t) || (Env.byte_length t <> size)
+    then raise (Env.Invalid_op "FP_int32.env_to_rep");
+    (t : t)
+
+  let read (t : t) =
+    let module I = Int32 in
+    let t0, e0 = FP_int16.unmarshal t in
+    let t1, _ = FP_int16.unmarshal e0 in
+    let i0 = I.of_int (FP_int16.read t0) in
+    let i1 = I.of_int (FP_int16.read t1) in
+    let i = match Env.endian t with
+      | Env.Big_endian -> I.add (I.shift_left i0 16) i1
+      | Env.Little_endian -> I.add i0 (I.shift_left i1 16)
+    in
+      (i : v)
+
+  let unmarshal env =
+    (Env.sub env 0 size : t), (Env.skip_bytes env size)
+
+  let marshal env (v : v) =
+    let module I = Int32 in
+    let i0 = I.to_int (I.logand v 65535l) in
+    let i1 = I.to_int (I.shift_right v 16) in
+    let next =
+      match Env.endian env with
+        | Env.Big_endian ->
+            snd (FP_int16.marshal (snd (FP_int16.marshal env i1)) i0)
+        | Env.Little_endian ->
+            snd (FP_int16.marshal (snd (FP_int16.marshal env i0)) i1)
+    in
+      (Env.sub env 0 size : t), next
+
+  let write (v : v) (t : t) =
+    ignore (marshal (rep_to_env t) v)
+
+  let copy (t : t) env =
+    marshal env (read t)
+
+  let of_int (i : int) =
+    if i < 0 then  (* TODO: check max limit in case where nativeint = int64 *)
+      raise Arg_out_of_bounds;
+    Int32.of_int i
+
+  let to_int (v : v) =
+    if v < 0l then
+      raise Arg_out_of_bounds;
+    Int32.to_int v
+
+  let of_int64 (i : Int64.t) : v =
+    if i < 0L || i > 0xffffffffL then
+      raise Arg_out_of_bounds;
+    Int64.to_int32 i
+
+  let to_int64 (v : v) =
+    if v < 0l then
+      Int64.add (Int64.of_int32 (Int32.logand v 0x7fffffffl)) 0x80000000L
+    else
+      Int64.of_int32 v
 end
 
 module FP_int64 : (FP_elem with type v = Int64.t) = struct
