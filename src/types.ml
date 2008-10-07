@@ -107,6 +107,8 @@ let get_field_type fn st =
 
 (* type coercions *)
 
+(* TODO: XXX: handle coercions to bit vectors *)
+
 let can_coerce_int i as_type =
   match as_type with
     | Tbase_primitive Tprim_bit -> i = 0 || i = 1

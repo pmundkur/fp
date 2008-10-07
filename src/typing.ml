@@ -8,10 +8,13 @@ exception Arg_count_mismatch of fun_name * int (* received *) * int (* expected 
 exception Type_mismatch_field_base of field_type (* received *) * base_type (* expected *) * Location.t
 exception Type_mismatch_field_exp of field_type * exp_type * Location.t
 exception Type_mismatch_exp_exp of exp_type (* received *) * exp_type (* expected *) * Location.t
+exception Type_coercion_as_base_type of base_type * Location.t
 exception Non_const_expression of Location.t
 exception Non_const_integral_expression of Location.t
 exception Non_const_foldable_function of fun_name
 exception Invalid_const_expression of primitive * Location.t
+exception Negative_vector_len of int * Location.t
+exception Bit_vector_length_limit of int (* len *) * int (* limit *) * Location.t
 exception Non_unique_case_name of case_name
 exception Non_unique_case_default of case_name (* second *) * case_name (* first *)
 exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
@@ -38,6 +41,8 @@ let raise_field_exp_type_mismatch ft at loc =
   raise (Type_mismatch_field_exp (ft, at, loc))
 let raise_exp_exp_type_mismatch received expected  loc =
   raise (Type_mismatch_exp_exp (received, expected, loc))
+let raise_type_coercion_as_base_type bt loc =
+  raise (Type_coercion_as_base_type (bt, loc))
 let raise_non_const_exp loc =
   raise (Non_const_expression loc)
 let raise_non_const_integral_exp loc =
@@ -46,6 +51,10 @@ let raise_non_const_foldable_function fn =
   raise (Non_const_foldable_function fn)
 let raise_invalid_const_expression pt loc =
   raise (Invalid_const_expression (pt, loc))
+let raise_negative_vector_len len loc =
+  raise (Negative_vector_len (len, loc))
+let raise_bit_vector_length_limit len limit loc =
+  raise (Bit_vector_length_limit (len, limit, loc))
 let raise_non_unique_case_name nm =
   raise (Non_unique_case_name nm)
 let raise_non_unique_case_default second first =
@@ -204,8 +213,8 @@ let check_field_type_compatible_with_base_type field_type base_type loc =
 let check_field_type_compatible_with_exp_type field_type exp_type loc =
   match field_type, exp_type with
     | Ttype_base (Tbase_primitive _), Texp_type_int
-    | Ttype_base (Tbase_vector _), Texp_type_vector
     | Ttype_base (Tbase_vector (Tprim_bit, _)), Texp_type_int
+    | Ttype_base (Tbase_vector _), Texp_type_vector
     | Ttype_base _ , Texp_type_base
     | Ttype_array _, Texp_type_array ->
         ()
@@ -381,13 +390,16 @@ let type_check_exp_as_base_type env exp as_base_type =
               vt as_base_type exp.pexp_loc;
             Texp_var vid
       | Pexp_const_int i ->
-          ignore (Types.can_coerce_int i as_base_type);
+          if not (Types.can_coerce_int i as_base_type) then
+            raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
           Texp_const_int i
       | Pexp_const_int32 i ->
-          ignore (Types.can_coerce_int32 i as_base_type);
+          if not (Types.can_coerce_int32 i as_base_type) then
+            raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
           Texp_const_int32 i
       | Pexp_const_int64 i ->
-          ignore (Types.can_coerce_int64 i as_base_type);
+          if not (Types.can_coerce_int64 i as_base_type) then
+            raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
           Texp_const_int64 i
       | Pexp_apply (fname, arglist) ->
           let fid, (fat, frt) = lookup_function_info env fname in
@@ -458,11 +470,22 @@ let kinding env cur_align te =
         in
           (Tbase_primitive pt), next_align
     | Pvector (tn, e) ->
+        let is_bit_type = is_bit_typename tn in
         let e' = type_check_exp_as_exp_type env e Texp_type_int in
-        let e' = try Texp_const_int (const_fold_as_int env e) with _ -> e' in
+        let e' =
+          try
+            let len = const_fold_as_int env e in
+              if len < 0 then
+                raise_negative_vector_len len e.pexp_loc
+              else if is_bit_type && len > 16 then
+                raise_bit_vector_length_limit len 16 e.pexp_loc
+              else
+                Texp_const_int len
+          with _ ->
+            e' in
         let _, (pt, _) = lookup_typename env tn in
         let next_align =
-          if is_bit_typename tn then
+          if is_bit_type then
             cur_align + const_fold_as_int env e
           else if not (is_byte_aligned cur_align) then
             raise_bad_alignment cur_align 8 te.ptype_exp_loc
@@ -738,6 +761,9 @@ let handle_typing_exception e =
      | Type_mismatch_exp_exp (rcvd, expct, loc) ->
          Printf.fprintf stderr "%a: type mismatch, %s received, %s expected"
            Location.pr_location loc (pr_exp_type rcvd) (pr_exp_type expct)
+     | Type_coercion_as_base_type (bt, loc) ->
+         Printf.fprintf stderr "%a: type coercion to %s failed"
+           Location.pr_location loc (pr_base_type bt)
      | Non_const_expression loc ->
          Printf.fprintf stderr "%a: non-constant expression"
            Location.pr_location loc
@@ -750,6 +776,12 @@ let handle_typing_exception e =
      | Invalid_const_expression (prim, loc) ->
          Printf.fprintf stderr "%a: constant is invalid as %s\n"
            Location.pr_location loc (pr_primitive prim)
+     | Negative_vector_len (len, loc) ->
+         Printf.fprintf stderr "%a: invalid vector len %d\n"
+           Location.pr_location loc len
+     | Bit_vector_length_limit (len, limit, loc) ->
+         Printf.fprintf stderr "%a: bit vector len %d exceeds current implementation limit of %d\n"
+           Location.pr_location loc len limit
      | Non_unique_case_name cn ->
          Printf.fprintf stderr "%a: duplicate case name \"%s\""
            Location.pr_location (Location.location_of cn) (Location.node_of cn)
