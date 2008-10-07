@@ -16,7 +16,9 @@ type primitive =
   | Tprim_bit
   | Tprim_byte
   | Tprim_int16
+  | Tprim_uint16
   | Tprim_int32
+  | Tprim_uint32
   | Tprim_int64
 
 type exp =
@@ -25,8 +27,10 @@ type exp =
   | Texp_const_bit of int
   | Texp_const_byte of int
   | Texp_const_int16 of int
+  | Texp_const_uint16 of int
   | Texp_const_int of int
   | Texp_const_int32 of Int32.t
+  | Texp_const_uint32 of Int64.t
   | Texp_const_int64 of Int64.t
   | Texp_apply of Ident.t * exp list
 
@@ -106,8 +110,9 @@ let get_field_type fn st =
 let can_coerce_int i as_type =
   match as_type with
     | Tbase_primitive Tprim_bit -> i = 0 || i = 1
-    | Tbase_primitive Tprim_byte -> i >= 0 && i <= 255
+    | Tbase_primitive Tprim_byte -> i >= 0 && i <= 0xff
     | Tbase_primitive Tprim_int16 -> i >= -32768 && i <= 32767
+    | Tbase_primitive Tprim_uint16 -> i >= 0 && i <= 0xffff;
     | Tbase_primitive Tprim_int32 ->
         (* int could have a precision of either 31 or 63 bits.  We
            need to perform the range comparison in the type with
@@ -120,30 +125,45 @@ let can_coerce_int i as_type =
              has higher precision. *)
           (i >= Int32.to_int Int32.min_int
            && i <= Int32.to_int Int32.max_int)
+    | Tbase_primitive Tprim_uint32 ->
+        if ((Int32.of_int Pervasives.max_int) <> -1l) then
+          (* int has a smaller precision than 32 bits *)
+          true
+        else
+          (i >= 0) && (i <= Int64.to_int 0xffffffffL)
     | Tbase_primitive Tprim_int64 -> true  (* for now ;-) *)
     | _ -> false
 
 let can_coerce_int32 i as_type =
   match as_type with
     | Tbase_primitive Tprim_bit -> i = Int32.zero || i = Int32.one
-    | Tbase_primitive Tprim_byte -> i >= Int32.zero && i <= (Int32.of_int 255)
+    | Tbase_primitive Tprim_byte -> i >= Int32.zero && i <= (Int32.of_int 0xff)
     | Tbase_primitive Tprim_int16 ->
-        i >= Int32.of_int (-32768)
-        && i <= Int32.of_int 32767
-    | Tbase_primitive Tprim_int32
+        i >= -32768l
+        && i <= 32767l
+    | Tbase_primitive Tprim_uint16 ->
+        i >= 0l && i <= 0xffffl;
+    | Tbase_primitive Tprim_int32 ->
+        true
+    | Tbase_primitive Tprim_uint32 ->
+        i >= 0l
     | Tbase_primitive Tprim_int64 -> true
     | Tbase_vector _ -> false
 
 let can_coerce_int64 i as_type =
   match as_type with
     | Tbase_primitive Tprim_bit -> i = Int64.zero || i = Int64.one
-    | Tbase_primitive Tprim_byte -> i >= Int64.zero && i <= (Int64.of_int 255)
+    | Tbase_primitive Tprim_byte -> i >= Int64.zero && i <= (Int64.of_int 0xff)
     | Tbase_primitive Tprim_int16 ->
-        i >= Int64.of_int (-32768)
-        && i <= Int64.of_int 32767
+        i >= -32768L
+        && i <= 32767L
+    | Tbase_primitive Tprim_uint16 ->
+        i >= 0L && i <= 0xffffL
     | Tbase_primitive Tprim_int32 ->
         i >= Int64.of_int32 Int32.min_int
         && i <= Int64.of_int32 Int32.max_int
+    | Tbase_primitive Tprim_uint32 ->
+        i >= 0L && i <= 0xffffffffL
     | Tbase_primitive Tprim_int64 -> true
     | Tbase_vector _ -> false
 
@@ -161,7 +181,9 @@ let pr_primitive = function
   | Tprim_bit -> "bit"
   | Tprim_byte -> "byte"
   | Tprim_int16 -> "int16"
+  | Tprim_uint16 -> "uint16"
   | Tprim_int32 -> "int32"
+  | Tprim_uint32 -> "uint32"
   | Tprim_int64 -> "int64"
 
 let pr_base_type = function

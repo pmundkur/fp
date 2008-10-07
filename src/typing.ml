@@ -101,7 +101,9 @@ let base_types = [
   ("bit", (Tprim_bit, 1));
   ("byte", (Tprim_byte, 8));
   ("int16", (Tprim_int16, 16));
+  ("uint16", (Tprim_uint16, 16));
   ("int32", (Tprim_int32, 32));
+  ("uint32", (Tprim_uint32, 32));
   ("int64", (Tprim_int64, 64))
 ]
 
@@ -248,7 +250,7 @@ let const_fold_as_bit env exp =
 
 let const_fold_as_byte env exp =
   let i = Int64.to_int (const_fold_as_int64 env exp) in
-    if i < 0 || i > 255 then
+    if i < 0 || i > 0xff then
       raise_invalid_const_expression Tprim_byte exp.pexp_loc
     else
       i
@@ -260,10 +262,24 @@ let const_fold_as_int16 env exp =
     else
       i
 
+let const_fold_as_uint16 env exp =
+  let i = Int64.to_int (const_fold_as_int64 env exp) in
+    if i < 0 || i > 0xffff  then
+      raise_invalid_const_expression Tprim_uint16 exp.pexp_loc
+    else
+      i
+
 let const_fold_as_int32 env exp =
   let i64 = const_fold_as_int64 env exp in
     (* TODO: range check *)
     Int32.of_int (Int64.to_int i64)
+
+let const_fold_as_uint32 env exp =
+  let i64 = const_fold_as_int64 env exp in
+    if i64 < 0L || i64 > 0xffffffffL then
+      raise_invalid_const_expression Tprim_uint32 exp.pexp_loc
+    else
+      i64
 
 let const_fold_as_int env exp =
   let i64 = const_fold_as_int64 env exp in
@@ -279,8 +295,12 @@ let const_fold_as_base_type env exp bt id loc =
         Texp_const_byte (const_fold_as_byte env exp)
     | Tbase_primitive Tprim_int16 ->
         Texp_const_int16 (const_fold_as_int16 env exp)
+    | Tbase_primitive Tprim_uint16 ->
+        Texp_const_uint16 (const_fold_as_uint16 env exp)
     | Tbase_primitive Tprim_int32 ->
         Texp_const_int32 (const_fold_as_int32 env exp)
+    | Tbase_primitive Tprim_uint32 ->
+        Texp_const_uint32 (const_fold_as_uint32 env exp)
     | Tbase_primitive Tprim_int64 ->
         Texp_const_int64 (const_fold_as_int64 env exp)
 
@@ -469,7 +489,9 @@ let type_check_variant_attrib env f bt v =
       | Tprim_bit -> Texp_const_bit (const_fold_as_bit env vc)
       | Tprim_byte -> Texp_const_byte (const_fold_as_byte env vc)
       | Tprim_int16 -> Texp_const_int16 (const_fold_as_int16 env vc)
+      | Tprim_uint16 -> Texp_const_uint16 (const_fold_as_uint16 env vc)
       | Tprim_int32 -> Texp_const_int32 (const_fold_as_int32 env vc)
+      | Tprim_uint32 -> Texp_const_uint32 (const_fold_as_uint32 env vc)
       | Tprim_int64 -> Texp_const_int64 (const_fold_as_int64 env vc)
   in
     List.map

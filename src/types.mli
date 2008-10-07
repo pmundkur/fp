@@ -16,7 +16,9 @@ type primitive =
   | Tprim_bit
   | Tprim_byte
   | Tprim_int16
+  | Tprim_uint16
   | Tprim_int32
+  | Tprim_uint32
   | Tprim_int64
 
 type exp =
@@ -25,8 +27,10 @@ type exp =
   | Texp_const_bit of int
   | Texp_const_byte of int
   | Texp_const_int16 of int
+  | Texp_const_uint16 of int
   | Texp_const_int of int
   | Texp_const_int32 of Int32.t
+  | Texp_const_uint32 of Int64.t
   | Texp_const_int64 of Int64.t
   | Texp_apply of Ident.t * exp list
 
