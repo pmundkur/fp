@@ -809,17 +809,17 @@ let handle_typing_exception e =
          Printf.fprintf stderr "%a: invalid classify expression"
            Location.pr_location loc
      | Duplicate_attribute (fid, s, loc) ->
-         Printf.fprintf stderr "%a: duplicate %s attribute for field \"%a\""
-           Location.pr_location loc s Ident.pr_ident_name fid
+         Printf.fprintf stderr "%a: duplicate %s attribute for field \"%s\""
+           Location.pr_location loc s (Ident.pr_ident_name fid)
      | Invalid_attribute (fid, loc) ->
-         Printf.fprintf stderr "%a: invalid attribute for field \"%a\""
-           Location.pr_location loc Ident.pr_ident_name fid
+         Printf.fprintf stderr "%a: invalid attribute for field \"%s\""
+           Location.pr_location loc (Ident.pr_ident_name fid)
      | Conflicting_attributes (fid, at1, at2) ->
-         Printf.fprintf stderr "%a: attribute %s of field \"%a\" conflicts with attribute %s"
-           Location.pr_location (Ident.location_of fid) at1 Ident.pr_ident_name fid at2
+         Printf.fprintf stderr "%a: attribute %s of field \"%s\" conflicts with attribute %s"
+           Location.pr_location (Ident.location_of fid) at1 (Ident.pr_ident_name fid) at2
      | Invalid_variant_type (fid, loc) ->
-         Printf.fprintf stderr "%a: the variant attribute is invalid for the type of field \"%a\""
-           Location.pr_location loc Ident.pr_ident_name fid
+         Printf.fprintf stderr "%a: the variant attribute is invalid for the type of field \"%s\""
+           Location.pr_location loc (Ident.pr_ident_name fid)
      | Invalid_const_type (fid, loc) ->
          Printf.fprintf stderr "%a: an expression cannot be constant folded due to its type"
            Location.pr_location loc
