@@ -749,83 +749,83 @@ and type_format env fmt =
 let handle_typing_exception e =
   (match e with
      | Unknown_identifier ln ->
-         Printf.fprintf stderr "%a: Unknown identifier \"%s\""
-           Location.pr_location (Location.location_of ln) (Location.node_of ln)
+         Printf.fprintf stderr "%s: Unknown identifier \"%s\""
+           (Location.pr_location (Location.location_of ln)) (Location.node_of ln)
      | Invalid_path f ->
-         Printf.fprintf stderr "%a: Invalid path %s"
-           Location.pr_location (Location.location_of f) (Location.node_of f)
+         Printf.fprintf stderr "%s: Invalid path %s"
+           (Location.pr_location (Location.location_of f)) (Location.node_of f)
      | Arg_count_mismatch (fn, rcvd, expct) ->
-         Printf.fprintf stderr "%a: arg count mismatch for function %s, %d received, %d expected"
-           Location.pr_location (Location.location_of fn) (Location.node_of fn) rcvd expct
+         Printf.fprintf stderr "%s: arg count mismatch for function %s, %d received, %d expected"
+           (Location.pr_location (Location.location_of fn)) (Location.node_of fn) rcvd expct
      | Type_mismatch_field_base (ft, bt, loc) ->
-         Printf.fprintf stderr "%a: field type %s is incompatible with %s"
-           Location.pr_location loc (pr_field_type ft) (pr_base_type bt)
+         Printf.fprintf stderr "%s: field type %s is incompatible with %s"
+           (Location.pr_location loc) (pr_field_type ft) (pr_base_type bt)
      | Type_mismatch_field_exp (ft, et, loc) ->
-         Printf.fprintf stderr "%a: field type %s is incompatible as expression of type %s"
-           Location.pr_location loc (pr_field_type ft) (pr_exp_type et)
+         Printf.fprintf stderr "%s: field type %s is incompatible as expression of type %s"
+           (Location.pr_location loc) (pr_field_type ft) (pr_exp_type et)
      | Type_mismatch_exp_exp (rcvd, expct, loc) ->
-         Printf.fprintf stderr "%a: type mismatch, %s received, %s expected"
-           Location.pr_location loc (pr_exp_type rcvd) (pr_exp_type expct)
+         Printf.fprintf stderr "%s: type mismatch, %s received, %s expected"
+           (Location.pr_location loc) (pr_exp_type rcvd) (pr_exp_type expct)
      | Type_coercion_as_base_type (bt, loc) ->
-         Printf.fprintf stderr "%a: type coercion to %s failed"
-           Location.pr_location loc (pr_base_type bt)
+         Printf.fprintf stderr "%s: type coercion to %s failed"
+           (Location.pr_location loc) (pr_base_type bt)
      | Non_const_expression loc ->
-         Printf.fprintf stderr "%a: non-constant expression"
-           Location.pr_location loc
+         Printf.fprintf stderr "%s: non-constant expression"
+           (Location.pr_location loc)
      | Non_const_integral_expression loc ->
-         Printf.fprintf stderr "%a: non-constant integral expression"
-           Location.pr_location loc
+         Printf.fprintf stderr "%s: non-constant integral expression"
+           (Location.pr_location loc)
      | Non_const_foldable_function fn ->
-         Printf.fprintf stderr "%a: function %s cannot be constant folded"
-           Location.pr_location (Location.location_of fn) (Location.node_of fn)
+         Printf.fprintf stderr "%s: function %s cannot be constant folded"
+           (Location.pr_location (Location.location_of fn)) (Location.node_of fn)
      | Invalid_const_expression (prim, loc) ->
-         Printf.fprintf stderr "%a: constant is invalid as %s\n"
-           Location.pr_location loc (pr_primitive prim)
+         Printf.fprintf stderr "%s: constant is invalid as %s\n"
+           (Location.pr_location loc) (pr_primitive prim)
      | Negative_vector_len (len, loc) ->
-         Printf.fprintf stderr "%a: invalid vector len %d\n"
-           Location.pr_location loc len
+         Printf.fprintf stderr "%s: invalid vector len %d\n"
+           (Location.pr_location loc) len
      | Bit_vector_length_limit (len, limit, loc) ->
-         Printf.fprintf stderr "%a: bit vector len %d exceeds current implementation limit of %d\n"
-           Location.pr_location loc len limit
+         Printf.fprintf stderr "%s: bit vector len %d exceeds current implementation limit of %d\n"
+           (Location.pr_location loc) len limit
      | Non_unique_case_name cn ->
-         Printf.fprintf stderr "%a: duplicate case name \"%s\""
-           Location.pr_location (Location.location_of cn) (Location.node_of cn)
+         Printf.fprintf stderr "%s: duplicate case name \"%s\""
+           (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
      | Non_unique_case_default (cn2, cn1) ->
-         Printf.fprintf stderr "%a: duplicate default \"%s\" (first was \"%s\")"
-           Location.pr_location (Location.location_of cn2) (Location.node_of cn2) (Location.node_of cn1)
+         Printf.fprintf stderr "%s: duplicate default \"%s\" (first was \"%s\")"
+           (Location.pr_location (Location.location_of cn2)) (Location.node_of cn2) (Location.node_of cn1)
      | Bad_alignment (cur, reqd, loc) ->
-         Printf.fprintf stderr "%a: bad alignment %d, required alignment is %d"
-           Location.pr_location loc (cur mod 8) reqd
+         Printf.fprintf stderr "%s: bad alignment %d, required alignment is %d"
+           (Location.pr_location loc) (cur mod 8) reqd
      | Invalid_align (a, loc) ->
-         Printf.fprintf stderr "%a: bad alignment %d"
-           Location.pr_location loc a
+         Printf.fprintf stderr "%s: bad alignment %d"
+           (Location.pr_location loc) a
      | Duplicate_field fn ->
-         Printf.fprintf stderr "%a: duplicate field \"%s\""
-           Location.pr_location (Location.location_of fn) (Location.node_of fn)
+         Printf.fprintf stderr "%s: duplicate field \"%s\""
+           (Location.pr_location (Location.location_of fn)) (Location.node_of fn)
      | Unsupported_classify_expr loc ->
-         Printf.fprintf stderr "%a: unsupported classify expression"
-           Location.pr_location loc
+         Printf.fprintf stderr "%s: unsupported classify expression"
+           (Location.pr_location loc)
      | Invalid_classify_expr loc ->
-         Printf.fprintf stderr "%a: invalid classify expression"
-           Location.pr_location loc
+         Printf.fprintf stderr "%s: invalid classify expression"
+           (Location.pr_location loc)
      | Duplicate_attribute (fid, s, loc) ->
-         Printf.fprintf stderr "%a: duplicate %s attribute for field \"%s\""
-           Location.pr_location loc s (Ident.pr_ident_name fid)
+         Printf.fprintf stderr "%s: duplicate %s attribute for field \"%s\""
+           (Location.pr_location loc) s (Ident.pr_ident_name fid)
      | Invalid_attribute (fid, loc) ->
-         Printf.fprintf stderr "%a: invalid attribute for field \"%s\""
-           Location.pr_location loc (Ident.pr_ident_name fid)
+         Printf.fprintf stderr "%s: invalid attribute for field \"%s\""
+           (Location.pr_location loc) (Ident.pr_ident_name fid)
      | Conflicting_attributes (fid, at1, at2) ->
-         Printf.fprintf stderr "%a: attribute %s of field \"%s\" conflicts with attribute %s"
-           Location.pr_location (Ident.location_of fid) at1 (Ident.pr_ident_name fid) at2
+         Printf.fprintf stderr "%s: attribute %s of field \"%s\" conflicts with attribute %s"
+           (Location.pr_location (Ident.location_of fid)) at1 (Ident.pr_ident_name fid) at2
      | Invalid_variant_type (fid, loc) ->
-         Printf.fprintf stderr "%a: the variant attribute is invalid for the type of field \"%s\""
-           Location.pr_location loc (Ident.pr_ident_name fid)
+         Printf.fprintf stderr "%s: the variant attribute is invalid for the type of field \"%s\""
+           (Location.pr_location loc) (Ident.pr_ident_name fid)
      | Invalid_const_type (fid, loc) ->
-         Printf.fprintf stderr "%a: an expression cannot be constant folded due to its type"
-           Location.pr_location loc
+         Printf.fprintf stderr "%s: an expression cannot be constant folded due to its type"
+           (Location.pr_location loc)
      | Duplicate_classify_case cn ->
-         Printf.fprintf stderr "%a: duplicate classify branch name \"%s\""
-           Location.pr_location (Location.location_of cn) (Location.node_of cn)
+         Printf.fprintf stderr "%s: duplicate classify branch name \"%s\""
+           (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
      | e ->
          raise e
   );

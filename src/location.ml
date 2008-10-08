@@ -57,11 +57,11 @@ let pr_loc oc loc =
 let pr_nloc oc ln =
   Printf.fprintf oc "%s(%a)" (node_of ln) pr_loc (location_of ln)
 
-let pr_location oc loc =
+let pr_location loc =
   let file pos = pos.Lexing.pos_fname in
   let line pos = pos.Lexing.pos_lnum in
   let fl = file loc.loc_start in
   let sl = line loc.loc_start in
-      Printf.fprintf oc "File \"%s\", line %d, characters %d-%d"
+      Printf.sprintf "File \"%s\", line %d, characters %d-%d"
         fl sl (loc.loc_start.Lexing.pos_cnum - loc.loc_start.Lexing.pos_bol)
         (loc.loc_end.Lexing.pos_cnum - loc.loc_start.Lexing.pos_bol)

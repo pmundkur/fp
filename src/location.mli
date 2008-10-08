@@ -25,4 +25,4 @@ val span: t -> t -> t
 
 val pr_loc: out_channel -> t -> unit
 val pr_nloc: out_channel -> string located_node -> unit
-val pr_location: out_channel -> t -> unit
+val pr_location: t -> string
