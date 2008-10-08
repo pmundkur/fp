@@ -179,7 +179,7 @@ and pr_case ff (cn, ce, fmt) =
         pr_exp ff r);
   Format.fprintf ff " : %s ->@," (Location.node_of cn);
   pr_format ff fmt;
-  Format.fprintf ff "@]@,@]"
+  Format.fprintf ff "@]@]"
 
 and pr_field_type ff ft =
   match ft.pfield_type_desc with
@@ -201,7 +201,7 @@ and pr_field_type ff ft =
           | [ cs ] -> pr_case ff cs
           | ch :: ct -> pr_case ff ch; Format.fprintf ff "@,"; pcases ct
         in
-          Format.fprintf ff "@[<v 0>@[<v 4>classify (";
+          Format.fprintf ff "@[<v 0>@[<v 2>classify (";
           pr_exp ff e;
           Format.fprintf ff ") {@,";
           pcases cl;
