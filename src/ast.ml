@@ -85,102 +85,144 @@ and path =
   | Pfield of field_name
   | Ppath of field_name * case_name * path
 
-let rec pr_path oc p =
+let rec pr_path ff p =
   match p with
     | Pfield fn ->
-        Printf.fprintf oc "%a" Location.pr_nloc fn
+        Format.fprintf ff "%s" (Location.node_of fn)
     | Ppath (fn, cn, p) ->
-        Printf.fprintf oc "%a[%a]%a"
-          Location.pr_nloc fn
-          Location.pr_nloc cn
-          pr_path p
+        Format.fprintf ff "%s[%s]" (Location.node_of fn) (Location.node_of cn);
+        pr_path ff p
 
-let rec pr_exp oc e =
+let rec pr_exp ff e =
   match e.pexp_desc with
-    | Pexp_unit -> Printf.fprintf oc "unit(%a)" Location.pr_loc e.pexp_loc
-    | Pexp_var p -> Printf.fprintf oc "%a" pr_path p
-    | Pexp_const_int i -> Printf.fprintf oc "%d(%a)" i Location.pr_loc e.pexp_loc
-    | Pexp_const_int32 i -> Printf.fprintf oc "%ld(%a)" i Location.pr_loc e.pexp_loc
-    | Pexp_const_int64 i -> Printf.fprintf oc "%Ld(%a)" i Location.pr_loc e.pexp_loc
+    | Pexp_unit -> Format.fprintf ff "unit"
+    | Pexp_var p -> pr_path ff p
+    | Pexp_const_int i -> Format.fprintf ff "%d" i
+    | Pexp_const_int32 i -> Format.fprintf ff "%ld" i
+    | Pexp_const_int64 i -> Format.fprintf ff "%Ld" i
     | Pexp_apply (fn, el) ->
-        Printf.fprintf oc "%a ( " Location.pr_nloc fn;
-        List.iter (fun e -> pr_exp oc e; Printf.fprintf oc " ") el;
-        Printf.fprintf oc " )"
+        Format.fprintf ff "%s(" (Location.node_of fn);
+        Format.pp_open_hvbox ff 0;
+        let rec pargs = function
+          | [] -> Format.fprintf ff ")"
+          | [ e ] -> pr_exp ff e; Format.fprintf ff ")"
+          | eh :: et -> pr_exp ff eh; Format.fprintf ff ", "; pargs et
+        in
+          pargs el;
+          Format.pp_close_box ff ()
 
-let pr_type_exp oc te =
+let pr_type_exp ff te =
   match te.ptype_exp_desc with
-    | Pbase tn -> Printf.fprintf oc "%a" Location.pr_nloc tn
+    | Pbase tn -> Format.fprintf ff "%s" (Location.node_of tn)
     | Pvector (tn, e) ->
-        Printf.fprintf oc "(%a [ %a ] (%a))"
-          Location.pr_nloc tn
-          pr_exp e
-          Location.pr_loc te.ptype_exp_loc
+        Format.fprintf ff "%s[" (Location.node_of tn);
+        pr_exp ff e;
+        Format.fprintf ff "]"
 
-let pr_variant oc v =
-  let pr_case (e, cn, def) =
-    Printf.fprintf oc "|%a %s %a "
-      pr_exp e
-      (if def then "=>" else "->")
-      Location.pr_nloc cn in
-    begin
-      Printf.fprintf oc "{ ";
-      List.iter (fun c -> pr_case c) v.pvariant_desc;
-      Printf.fprintf oc " }(%a)" Location.pr_loc v.pvariant_loc
-    end
+let pr_variant ff v =
+  let pcase (e, cn, def) =
+    Format.fprintf ff " | ";
+    pr_exp ff e;
+    Format.fprintf ff " %s %s" (if def then "=>" else "->") (Location.node_of cn)
+  in
+    Format.fprintf ff "@[<hov 0>{@[<hov 0>";
+    List.iter (fun c -> pcase c) v.pvariant_desc;
+    Format.fprintf ff "@] }@]"
 
-let pr_field_attrib oc a =
+let pr_field_attrib ff a =
   match a.pfield_attrib_desc with
     | Pattrib_max e ->
-        Printf.fprintf oc "(max(%a) (%a))" pr_exp e Location.pr_loc a.pfield_attrib_loc
+        Format.fprintf ff "max(";
+        pr_exp ff e;
+        Format.fprintf ff ")"
     | Pattrib_min e ->
-        Printf.fprintf oc "(min(%a) (%a))" pr_exp e Location.pr_loc a.pfield_attrib_loc
+        Format.fprintf ff "min(";
+        pr_exp ff e;
+        Format.fprintf ff ")"
     | Pattrib_const e ->
-        Printf.fprintf oc "(const(%a) (%a))" pr_exp e Location.pr_loc a.pfield_attrib_loc
+        Format.fprintf ff "const(";
+        pr_exp ff e;
+        Format.fprintf ff ")"
     | Pattrib_default e ->
-        Printf.fprintf oc "(default(%a) (%a))" pr_exp e Location.pr_loc a.pfield_attrib_loc
+        Format.fprintf ff "default(";
+        pr_exp ff e;
+        Format.fprintf ff ")"
     | Pattrib_value e ->
-        Printf.fprintf oc "(value(%a) (%a))" pr_exp e Location.pr_loc a.pfield_attrib_loc
+        Format.fprintf ff "value(";
+        pr_exp ff e;
+        Format.fprintf ff ")"
     | Pattrib_variant_ref dn ->
-        Printf.fprintf oc "(variant %a (%a))" Location.pr_nloc dn Location.pr_loc a.pfield_attrib_loc
+        Format.fprintf ff "variant %s" (Location.node_of dn)
     | Pattrib_variant_inline v ->
-        Printf.fprintf oc "(variant %a (%a))" pr_variant v Location.pr_loc a.pfield_attrib_loc
+        Format.fprintf ff "variant ";
+        pr_variant ff v
 
-let rec pr_field oc f =
-  match f.pfield_desc with
-    | Pfield_align e ->
-        Printf.fprintf oc "align (%a) ; (%a)" pr_exp e Location.pr_loc f.pfield_loc
+let rec pr_field ff f =
+  Format.pp_open_hbox ff ();
+  (match f.pfield_desc with
+     | Pfield_align e ->
+         Format.fprintf ff "align ";
+         pr_exp ff e
     | Pfield_name (fn, ft) ->
-        Printf.fprintf oc "%a : %a ; (%a)" Location.pr_nloc fn pr_field_type ft Location.pr_loc f.pfield_loc
+        Format.fprintf ff "%s: " (Location.node_of fn);
+        pr_field_type ff ft);
+  Format.pp_close_box ff ()
 
-and pr_field_type oc ft =
+and pr_case ff (cn, ce, fmt) =
+  Format.fprintf ff "@[<v 0>@[<v 4>| ";
+  (match ce.pcase_exp_desc with
+    | Pcase_const c ->
+        pr_exp ff c
+    | Pcase_range (l, r) ->
+        pr_exp ff l;
+        Format.fprintf ff " .. ";
+        pr_exp ff r);
+  Format.fprintf ff " : %s ->@," (Location.node_of cn);
+  pr_format ff fmt;
+  Format.fprintf ff "@]@,@]"
+
+and pr_field_type ff ft =
   match ft.pfield_type_desc with
     | Ptype_simple (te, al) ->
-        Printf.fprintf oc "%a " pr_type_exp te;
-        List.iter (fun a -> Printf.fprintf oc "%a " pr_field_attrib a) al
+        pr_type_exp ff te;
+        List.iter
+          (fun a -> Format.fprintf ff " "; pr_field_attrib ff a)
+          al
     | Ptype_array (e, fmt) ->
-        Printf.fprintf oc "array (%a) { %a }" pr_exp e pr_format fmt
+        Format.fprintf ff "array (";
+        pr_exp ff e;
+        Format.fprintf ff ") ";
+        Format.pp_open_hovbox ff 2;
+        pr_format ff fmt;
+        Format.pp_close_box ff ()
     | Ptype_classify (e, cl) ->
-        Printf.fprintf oc "classify (%a) {\n" pr_exp e;
-        List.iter (fun (cn, ce, fmt) ->
-                     (match ce.pcase_exp_desc with
-                       | Pcase_const c ->
-                           Printf.fprintf oc "| (%a} : %a -> %a "
-                             pr_exp c Location.pr_nloc cn pr_format fmt
-                       | Pcase_range (l, r) ->
-                           Printf.fprintf oc "| (%a) .. (%a) : %a -> {\n %a \n}"
-                             pr_exp l pr_exp r Location.pr_nloc cn pr_format fmt);
-                     Printf.fprintf oc "\n")
-          cl
-    | Ptype_label -> Printf.fprintf oc "label"
+        let rec pcases = function
+          | [] -> ()
+          | [ cs ] -> pr_case ff cs
+          | ch :: ct -> pr_case ff ch; Format.fprintf ff "@,"; pcases ct
+        in
+          Format.fprintf ff "@[<v 0>@[<v 4>classify (";
+          pr_exp ff e;
+          Format.fprintf ff ") {@,";
+          pcases cl;
+          Format.fprintf ff "@]@,}@]"
+    | Ptype_label -> Format.fprintf ff "label"
 
-and pr_format oc fmt =
-  Printf.fprintf oc "{\n";
-  List.iter (fun f -> Printf.fprintf oc "%a\n" pr_field f) fmt.pformat_desc;
-  Printf.fprintf oc "}(%a)\n" Location.pr_loc fmt.pformat_loc
+and pr_format ff fmt =
+  let rec pfields = function
+    | [] -> ()
+    | [ f ] -> pr_field ff f; Format.fprintf ff ";"
+    | fh :: ft -> pr_field ff fh; Format.fprintf ff ";@,"; pfields ft
+  in
+    pfields fmt.pformat_desc
 
-let pr_decl oc decl =
+let pr_decl ff decl =
   match decl.pdecl_desc with
     | Pdecl_variant (dn, v) ->
-        Printf.fprintf oc "def variant %a %a\n" Location.pr_nloc dn pr_variant v
+        Format.fprintf ff "def variant %s " (Location.node_of dn);
+        pr_variant ff v;
+        Format.pp_print_newline ff ()
     | Pdecl_format (dn, fmt) ->
-        Printf.fprintf oc "format %a %a\n" Location.pr_nloc dn pr_format fmt
+        Format.fprintf ff "@[<v 0>@[<v 4>format %s {@," (Location.node_of dn);
+        pr_format ff fmt;
+        Format.fprintf ff "@]@,}@]@\n"

@@ -47,16 +47,6 @@ let span s e =
     { loc_start = e.loc_start;
       loc_end = s.loc_end }
 
-let pr_loc oc loc =
-  let line pos = pos.Lexing.pos_lnum in
-  let col pos = pos.Lexing.pos_cnum - pos.Lexing.pos_bol in
-  Printf.fprintf oc "%d.%d:%d.%d"
-    (line loc.loc_start) (col loc.loc_start)
-    (line loc.loc_end) (col loc.loc_end)
-
-let pr_nloc oc ln =
-  Printf.fprintf oc "%s(%a)" (node_of ln) pr_loc (location_of ln)
-
 let pr_location loc =
   let file pos = pos.Lexing.pos_fname in
   let line pos = pos.Lexing.pos_lnum in

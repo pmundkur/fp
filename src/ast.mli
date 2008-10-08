@@ -85,6 +85,6 @@ and path =
   | Pfield of field_name
   | Ppath of field_name * case_name * path
 
-val pr_path: out_channel -> path -> unit
-val pr_decl: out_channel -> decl -> unit
+val pr_path: Format.formatter -> path -> unit
+val pr_decl: Format.formatter -> decl -> unit
 

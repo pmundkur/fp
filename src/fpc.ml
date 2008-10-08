@@ -57,10 +57,16 @@ let parse_file f ic =
       | Parsing_error (e, l) ->
           handle_parsing_error e l
 
+let pprint pt =
+  let ff = Format.formatter_of_out_channel stdout in
+    List.iter (Ast.pr_decl ff) pt;
+    Format.fprintf ff "\n"
+
 let process_file f =
   try
     let ic = open_in f in
     let pt = parse_file f ic in
+      pprint pt;
       ignore (Typing.type_check (Typing.init_typing_env ()) pt)
   with
     | Sys_error s -> prerr_endline s
