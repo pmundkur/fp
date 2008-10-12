@@ -480,7 +480,11 @@ let kinding env cur_align te =
           with _ -> None in
         let e' =
           match clen_opt with
-            | None -> e'
+            | None ->
+                if is_bit_type then
+                  raise_non_const_exp e.pexp_loc
+                else
+                  e'
             | Some len ->
                 if len <= 0 then
                   raise_negative_vector_len len e.pexp_loc
