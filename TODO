@@ -1,5 +1,75 @@
 TODO:
 
+- multiple uses of a field for classification should be illegal. That is,
+
+  case1: int
+  f : classify (case1) { ... }
+  g : classify (case1) { ... }
+
+  should not be allowed.
+
+- value () attributes need to handle assignments for multiple cases
+  for possibly multiple branches, with support for both nested and
+  serial branching.
+
+  Example A:
+
+  len   : int  value (|f=n1,f.g=m1 -> sizeof(f.g.fi1)
+                      |f=n1,f.g=m2 -> sizeof(f.g.fi2)-1
+                      |f=n2        -> e
+                      | _          -> e')
+
+  case1 : int  value (|f=n1,f.g=m1 -> (e1)
+                      |f=n1,f.g=m2 -> (e2)
+                      |f=n2 -> (e3))
+  f     : classify (case1) {
+          |eo1:n1 -> {
+                        g : classify (case2) {
+                            |ei1:m1 -> fi1 : int[len]
+                            |ei2:m2 -> fi2 : int[len+1]
+                        }
+          |eo2:n2 -> {f2}
+  }
+
+  Example B:
+
+  case1 : int  value(|f=n1 -> ef1 |f=n2 -> ef2)
+  case2 : int  value(|g=m1 -> es1 |g=m2 -> es2)
+  len1  : int  value(|f=n1 -> sizeof(f.g) |g=m2 -> sizeof(g.l))
+  len2  : int  value(|f=n2 -> sizeof(f.h) |g=m1 -> sizeof(g.k))
+
+  f      : classify (case1) {
+           |ef1:n1 -> g : int[len1];
+           |ef2:n2 -> h : int[len2];
+  }
+
+  g      : classify (case2) {
+           |es1:m1 -> k : int[len2];
+           |es2:m2 -> l : int[len1];
+  }
+
+  Algorithm modifications:
+
+  . After the parsing stage is typechecked for a format, construct a
+    complete branching tree for it.
+
+  . When checking the attributes, ensure that the cases specified for
+    a value attribute are contained in the branching tree.  If no
+    cases are specified, it is equivalent to the use of a default
+    ("_") case.  Note that the variables in a value expression will
+    have to be converted to the appropriate paths for each case.
+
+  . The dependency checking will be performed for each leaf of the
+    branching tree.
+
+    Note that many leaves will share the same dependency graph, and so
+    the same graph will be checked multiple times.  This can be
+    optimized later.
+
+    Another thing that can be done later is checking whether the value
+    attribute of a field has a case specification corresponding to
+    each use of the field.
+
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 
 - Ott: Handle nested structs.  We need to specify an appropriate
@@ -73,6 +143,17 @@ TODO:
     the parsing facet of the specification; if we cannot do this, we
     merely warn about possible inconsistencies, and fall back to
     requiring the programmer to explicitly provide the field values.
+
+    Fields for which auto-computation is possible are:
+
+    - fields used for classification branches, provided the branch
+      expressions are constants
+
+    - fields that occur in vector length expressions, provided the
+      length expression is a single variable
+
+    - fields used in array length expressions, provided the array
+      length expression is a single variable
 
     For example, we would like to check is that in cases of
 
