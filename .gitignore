@@ -1,0 +1,26 @@
+# generated source files
+src/lexer.ml
+src/parser.mli
+src/parser.ml
+doc/ott.tex
+
+# other generated files
+.omakedb
+.omakedb.lock
+*OMake*.omc
+*.o
+*.a
+*.cmo
+*.cmi
+*.cmx
+*.cmxa
+*.opt
+*.annot
+*.dvi
+*.pdf
+*.ps
+*.aux
+*.bbl
+*.blg
+*.fls
+*.log
