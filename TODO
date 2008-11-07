@@ -1,13 +1,5 @@
 TODO:
 
-- multiple uses of a field for classification should be illegal. That is,
-
-  case1: int
-  f : classify (case1) { ... }
-  g : classify (case1) { ... }
-
-  should not be allowed.
-
 - value () attributes need to handle assignments for multiple cases
   for possibly multiple branches, with support for both nested and
   serial branching.

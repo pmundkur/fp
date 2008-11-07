@@ -94,12 +94,12 @@ value_exp, ve :: '' ::=                         {{ com Value expressions }}
 
 path, p :: '' ::=                               {{ com Path expressions }}
  | x                        ::  :: path_leaf
- | path [ n ] . x           ::  :: dot_path
+ | path . x                 ::  :: dot_path
 
 E :: '' ::=                                     {{ com Typing environments }}
  |                          ::  :: env_nil
- | path : tau               ::  :: env_cons
- | path : label             ::  :: env_label
+ | x : tau                  ::  :: env_cons
+ | x : label                ::  :: env_label
  | E1 ; E2                  ::  :: env_append
  | E1 \ E2                  ::  :: env_subtract
 
@@ -126,11 +126,11 @@ formula :: formula_ ::=
  | judgement                    ::  :: judgement
  | </ formulaj // j />          ::  :: formula_list
  | E ; x : tau ; E'             ::  :: env
- | path in S                    ::  :: in_S             {{ tex [[x]]\not\in [[S]] }}
- | path not in S                ::  :: not_in_S         {{ tex [[x]]\not\in [[S]] }}
+ | x in S                       ::  :: in_S             {{ tex [[x]]\not\in [[S]] }}
+ | x not in S                   ::  :: not_in_S         {{ tex [[x]]\not\in [[S]] }}
  | x : tau in fields ( tau' )   ::  :: in_fields_tau    {{ tex [[x]] [[:]] [[tau]] \in fields([[tau']]) }}
  | n in </ nj // j />           ::  :: in_keys          {{ tex [[n]] \in { [[n]]_j } }}
- | E ( path ) = label           ::  :: label_in_E
+ | E ( x ) = label              ::  :: label_in_E
  | a                            ::  :: current_alignment
  | a '%' i1 = i2                ::  :: alignment_boundary
  | a < a'                       ::  :: alignment_compare
@@ -146,20 +146,15 @@ terminals :: '' ::=                             {{ com Syntax terminals }}
 defns
 Type_checked_parsing :: '' ::=
 
-% Environment lookup for variables and paths.
+% Environment lookup for variables.
 
 defn
-E ( path ) = tau     ::  :: typing_context :: 'typing_context_' by
+E ( x ) = tau     ::  :: typing_context :: 'typing_context_' by
 
 E1 ; x : tau ; E2
 --------------------------  :: var
 E ( x ) = tau
 
-E ( path ) = </ vj , nj , tauj // j />
-n in </ nj // j />
-x : tau in fields ( tauj )
---------------------------  :: path
-E ( path [ n ] . x ) = tau
 
 % Rules to type length expressions.
 %
@@ -184,16 +179,16 @@ E |- integer_literal : int
 % We handle bit-vectors specially, and the generic case below: they
 % can be converted into integers if their length is a constant and
 % less then a limit.
-E ( path ) = bit [ e ]
+E ( x ) = bit [ e ]
 const_fold ( e ) < 32
 --------------------------  :: var_bit_vector
-E |- path : int
+E |- x : int
 
 % This is the more generic case.
-E ( path ) = tau
+E ( x ) = tau
 T_to_int ( tau )
 --------------------------  :: var
-E |- path : int
+E |- x : int
 
 E |- e1 : int
 E |- e2 : int
@@ -219,21 +214,21 @@ E |- e : int
 --------------------------  :: grouping
 E |- (e) : int
 
-E ( path ) = tau
+E ( x ) = tau
 --------------------------  :: sizeof
-E |- sizeof path  : int
+E |- sizeof x  : int
 
-E ( path ) = tau
+E ( x ) = tau
 --------------------------  :: offset
-E |- offset path  : int
+E |- offset x  : int
 
-E ( path ) = label
+E ( x ) = label
 --------------------------  :: offset_label
-E |- offset path  : int
+E |- offset x  : int
 
-E ( path ) = tau
+E ( x ) = tau
 --------------------------  :: num_set_bits
-E |- num_set_bits path  : int
+E |- num_set_bits x  : int
 
 --------------------------  :: remaining
 E |- remaining ()  : int
