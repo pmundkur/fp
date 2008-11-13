@@ -164,7 +164,7 @@ formula :: formula_ ::=
  | T_from_int ( tau )           ::  :: type_cast_from_int
  | distinct ( </ nj // j /> )   ::  :: distinct_names
  | n in branches ( Map )        ::  :: names_in_map
- | C1 ; C2                      ::  :: class_env
+ | C1 ; path : Struct ; C2      ::  :: class_env
  | path  in dom ( C )           ::  :: path_in_class_env
  | path not in dom ( C )        ::  :: path_not_in_class_env
  | Map [ n ] = Struct           ::  :: branch_selection
