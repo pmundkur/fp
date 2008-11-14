@@ -31,7 +31,7 @@ FP_FILES[] =
     types
 #    typing
 #    gen_check
-#    fpc
+    fpc
 
 FP = fp
 FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))

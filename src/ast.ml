@@ -134,14 +134,19 @@ let pr_type_exp ff te =
         Format.fprintf ff "]"
 
 let pr_variant ff v =
-  let pcase (e, cn, def) =
+  let pcase (e, cn, def) put_break =
     Format.fprintf ff " | ";
     pr_exp ff e;
-    Format.fprintf ff " %s %s" (if def then "=>" else "->") (Location.node_of cn)
+    Format.fprintf ff " %s %s" (if def then "=>" else "->") (Location.node_of cn);
+    if put_break then Format.fprintf ff "@," in
+  let rec pcases = function
+    | [] -> ()
+    | [ c ] -> pcase c false
+    | c :: cs -> pcase c true; pcases cs
   in
-    Format.fprintf ff "@[<hov 0>{@[<hov 0>";
-    List.iter (fun c -> pcase c) v.pvariant_desc;
-    Format.fprintf ff "@] }@]"
+    Format.fprintf ff "@[<v 0>{@[<v 0>";
+    pcases v.pvariant_desc;
+    Format.fprintf ff "@]@,}@]"
 
 let pr_branch_guard ff bg =
   let p, cn = bg.pbranch_guard_desc in
@@ -188,9 +193,10 @@ let pr_field_attrib ff a =
         pr_variant ff v
     | Pattrib_value vcs ->
         Format.fprintf ff "value(";
-        if List.length vcs == 1 then
-          pr_value_case ff (List.hd vcs)
-        else begin
+        if List.length vcs == 1 then begin
+          pr_value_case ff (List.hd vcs);
+          Format.fprintf ff ")"
+        end else begin
           let rec pvalue_cases = function
             | [] -> ()
             | [ vc ] -> pr_value_case ff vc
@@ -221,9 +227,9 @@ and pr_case ff (cn, ce, fmt) =
         pr_exp ff l;
         Format.fprintf ff " .. ";
         pr_exp ff r);
-  Format.fprintf ff " : %s ->@," (Location.node_of cn);
+  Format.fprintf ff " : %s -> {@," (Location.node_of cn);
   pr_format ff fmt;
-  Format.fprintf ff "@]@]"
+  Format.fprintf ff "@]@,}@]"
 
 and pr_field_type ff ft =
   match ft.pfield_type_desc with
@@ -233,12 +239,11 @@ and pr_field_type ff ft =
           (fun a -> Format.fprintf ff " "; pr_field_attrib ff a)
           al
     | Ptype_array (e, fmt) ->
-        Format.fprintf ff "array (";
+        Format.fprintf ff "@[<v 0>@[<v 4>array (";
         pr_exp ff e;
-        Format.fprintf ff ") ";
-        Format.pp_open_hovbox ff 2;
+        Format.fprintf ff ") {@,";
         pr_format ff fmt;
-        Format.pp_close_box ff ()
+        Format.fprintf ff "@]@,}@]"
     | Ptype_classify (e, cl) ->
         let rec pcases = function
           | [] -> ()
