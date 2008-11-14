@@ -29,7 +29,7 @@ FP_FILES[] =
     ident
     env
     types
-#    typing
+    typing
 #    gen_check
     fpc
 

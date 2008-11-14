@@ -66,8 +66,8 @@ let process_file f =
   try
     let ic = open_in f in
     let pt = parse_file f ic in
-      pprint pt
-      (* ignore (Typing.type_check (Typing.init_typing_env ()) pt) *)
+      pprint pt;
+      ignore (Typing.type_check (Typing.init_typing_env ()) pt)
   with
     | Sys_error s -> prerr_endline s
 

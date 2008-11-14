@@ -156,48 +156,16 @@ let get_field_info env fn =
     | None -> raise_unknown_ident fn
     | Some fi -> fi
 
-let rec follow_case_path cn path m =
-  let st =
-    try
-      let _, _, st = StringMap.find (Location.node_of cn) m in
-        st
-    with
-      | Not_found ->
-          raise_unknown_ident cn
-  in
-    follow_struct_path st path
-
-and follow_struct_path st path =
-  let get_field_in_st fn st =
-    try
-      get_field_type (Location.node_of fn) st
-    with
-      | Not_found ->
-          raise_unknown_ident fn
-  in
-    match path with
-      | Pfield fn ->
-          get_field_in_st fn st
-      | Ppath (fn, cn, p) ->
-        let ft = snd (get_field_in_st fn st) in
-          get_path_type fn cn p ft
-
-and get_path_type fn cn p ft =
-  match ft with
-    | Ttype_base _
-    | Ttype_struct _
-    | Ttype_array _
-    | Ttype_label -> raise_invalid_path fn
-    | Ttype_map (_, m) -> follow_case_path cn p m
-
 let lookup_var env path =
   match path with
     | Pfield fn ->
-        get_field_info env fn
-    | Ppath (fn, cn, p) ->
-        get_path_type fn cn p (snd (get_field_info env fn))
+        let fid, finfo = get_field_info env fn in
+          (Tvar_ident fid), finfo
+    | Ppath (fn, p) ->
+        (* TODO *)
+        assert false
 
-(* The type compatibility check functions either return true or throw an exception. *)
+(* Type compatibility check functions. *)
 
 let check_field_type_compatible_with_base_type field_type base_type loc =
   match field_type, base_type with
@@ -378,7 +346,7 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
    . value expressions,
    . expressions that are values of variant cases,
    . expressions in classify cases
-   In both cases, the type of the expression will need to match the
+   In these cases, the type of the expression will need to match the
    type of the field, which will be a base_type. *)
 let type_check_exp_as_base_type env exp as_base_type =
   let rec exp_typer exp =
@@ -615,7 +583,10 @@ let type_attribs env f ft fal =
                Tattrib_default (type_check_exp_as_base_type env e bt)
            | Pattrib_value e, Ttype_base bt ->
                check_and_mark_present "value" value_present fa.pfield_attrib_loc;
-               Tattrib_value (type_check_exp_as_base_type env e bt)
+               (* TODO:
+                  Tattrib_value (type_check_exp_as_base_type env e bt)
+               *)
+               raise_conflicting_attributes f "value" "variant"
            | Pattrib_variant_ref vn, Ttype_base bt ->
                check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                let _, vdef = get_variant_def env vn in

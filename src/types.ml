@@ -21,9 +21,13 @@ type primitive =
   | Tprim_uint32
   | Tprim_int64
 
+type path =
+  | Tvar_ident of Ident.t
+  | Tvar_path of Ident.t * path
+
 type exp =
   | Texp_unit
-  | Texp_var of Ident.t
+  | Texp_var of path
   | Texp_const_bit of int
   | Texp_const_byte of int
   | Texp_const_int16 of int
@@ -50,12 +54,18 @@ type case_exp =
 
 module StringMap = Map.Make (struct type t = string let compare = compare end)
 
+type branch_value = (path * Asttypes.case_name) list * exp
+
+type field_value =
+  | Tvalue_default of exp
+  | Tvalue_branch of branch_value list
+
 type field_attrib =
   | Tattrib_max of exp
   | Tattrib_min of exp
   | Tattrib_const of exp
   | Tattrib_default  of exp
-  | Tattrib_value of exp
+  | Tattrib_value of field_value
   | Tattrib_variant of variant
 
 type field_type =
