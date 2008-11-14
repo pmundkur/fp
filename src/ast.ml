@@ -104,7 +104,7 @@ let rec pr_path ff p =
     | Pfield fn ->
         Format.fprintf ff "%s" (Location.node_of fn)
     | Ppath (fn, p) ->
-        Format.fprintf ff "%s" (Location.node_of fn);
+        Format.fprintf ff "%s." (Location.node_of fn);
         pr_path ff p
 
 let rec pr_exp ff e =
