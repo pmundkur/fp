@@ -22,6 +22,10 @@
     { pfield_type_desc = ft; pfield_type_loc = loc }
   let mk_field_attrib fa loc =
     { pfield_attrib_desc = fa; pfield_attrib_loc = loc }
+  let mk_value_case vc loc =
+    { pvalue_case_desc = vc; pvalue_case_loc = loc }
+  let mk_branch_guard bg loc =
+    { pbranch_guard_desc = bg; pbranch_guard_loc = loc }
   let mk_type_exp te loc =
     { ptype_exp_desc = te; ptype_exp_loc = loc }
   let mk_case_exp ce loc =
@@ -33,14 +37,14 @@
       mk d (Location.symbol_rloc ())
 %}
 
-%token <Location.t> DEF ARRAY ALIGN LABEL FORMAT VARIANT CLASSIFY
+%token <Location.t> DEF ARRAY ALIGN LABEL VALUE FORMAT VARIANT CLASSIFY
 
 %token <Location.t> LCURLY RCURLY LPAREN RPAREN LSQUARE RSQUARE
 %token <Location.t> DOT DOTDOT COMMA SEMI COLON BAR ARROW DEFARROW
 %token <Location.t> EOF
 
 %token <Location.t * string> UCID LCID
-%token <Location.t> PLUS MINUS TIMES DIV
+%token <Location.t> PLUS MINUS TIMES DIV EQUAL
 %left PLUS MINUS
 %left TIMES DIV
 
@@ -176,7 +180,6 @@ field_attrib:
           | "min" -> Pattrib_min e
           | "const" -> Pattrib_const e
           | "default" -> Pattrib_default e
-          | "value" -> Pattrib_value e
           |  n -> raise_parse_error (Unknown_field_attribute n) (loc $1)
       in
         mk_with_rloc mk_field_attrib fa
@@ -185,7 +188,33 @@ field_attrib:
     { mk_with_rloc mk_field_attrib (Pattrib_variant_ref (token_to_located_node $2)) }
 | VARIANT variant
     { mk_with_rloc mk_field_attrib (Pattrib_variant_inline $2) }
+| VALUE LPAREN exp RPAREN
+    { let vc = mk_value_case (Pvalue_default $3) (Location.rhs_loc 3) in
+        mk_with_rloc mk_field_attrib (Pattrib_value [ vc ])
+    }
+| VALUE LPAREN value_cases RPAREN
+    { mk_with_rloc mk_field_attrib (Pattrib_value (List.rev $3)) }
 ;
+
+value_cases:
+| value_cases value_case
+    { $2:: $1 }
+| /* epsilon */
+    { [] }
+
+value_case:
+| BAR branch_guards ARROW exp
+    { mk_with_rloc mk_value_case (Pvalue_branch ((List.rev $2), $4)) }
+
+branch_guards:
+| branch_guards COMMA branch_guard
+    { $3 :: $1 }
+| branch_guard
+    { [ $1 ] }
+
+branch_guard:
+| path EQUAL UCID
+    { mk_with_rloc mk_branch_guard ($1, (token_to_located_node $3)) }
 
 exp:
 | INT
@@ -222,8 +251,8 @@ exp_list:
 path:
 | LCID
     { Pfield (token_to_located_node $1) }
-| LCID LSQUARE UCID RSQUARE DOT path
-    { Ppath ((token_to_located_node $1), (token_to_located_node $3), $6) }
+| LCID DOT path
+    { Ppath ((token_to_located_node $1), $3) }
 ;
 
 type_exp:

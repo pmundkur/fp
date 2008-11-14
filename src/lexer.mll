@@ -14,6 +14,7 @@
     ("array", fun l -> ARRAY l);
     ("align", fun l -> ALIGN l);
     ("label", fun l -> LABEL l);
+    ("value", fun l -> VALUE l);
     ("format", fun l -> FORMAT l);
     ("variant", fun l -> VARIANT l);
     ("classify", fun l -> CLASSIFY l);
@@ -32,6 +33,7 @@
     ("|", fun l -> BAR l);
     ("->", fun l -> ARROW l);
     ("=>", fun l -> DEFARROW l);
+    ("=", fun l -> EQUAL l);
 
     ("+", fun l -> PLUS l);
     ("-", fun l -> MINUS l);
@@ -108,7 +110,7 @@ rule main = parse
       { make_int (locate lexbuf) (lexeme lexbuf) }
   | ident
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
-  | "{" | "}" | "(" | ")" | "[" | "]" | "." | ".." | "," | ";" | ":" | "|" | "->" | "=>" | "+" | "-" | "*" | "/"
+  | "{" | "}" | "(" | ")" | "[" | "]" | "." | ".." | "," | ";" | ":" | "|" | "->" | "=>" | "=" | "+" | "-" | "*" | "/"
       { lookup_id (locate lexbuf) (lexeme lexbuf) }
   | eof
       { EOF (locate lexbuf) }

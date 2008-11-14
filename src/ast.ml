@@ -47,9 +47,23 @@ and field_attrib_desc =
   | Pattrib_min of exp
   | Pattrib_const of exp
   | Pattrib_default  of exp
-  | Pattrib_value of exp
   | Pattrib_variant_ref of decl_name
   | Pattrib_variant_inline of variant
+  | Pattrib_value of value_case list
+
+and value_case =
+    { pvalue_case_desc: value_case_desc;
+      pvalue_case_loc: Location.t }
+
+and value_case_desc =
+  | Pvalue_default of exp
+  | Pvalue_branch of branch_guard list * exp
+
+and branch_guard =
+    { pbranch_guard_desc: branch_guard_desc;
+      pbranch_guard_loc: Location.t }
+
+and branch_guard_desc = path * case_name
 
 and type_exp =
     { ptype_exp_desc: type_exp_desc;
@@ -83,14 +97,14 @@ and exp_desc =
 
 and path =
   | Pfield of field_name
-  | Ppath of field_name * case_name * path
+  | Ppath of field_name * path
 
 let rec pr_path ff p =
   match p with
     | Pfield fn ->
         Format.fprintf ff "%s" (Location.node_of fn)
-    | Ppath (fn, cn, p) ->
-        Format.fprintf ff "%s[%s]" (Location.node_of fn) (Location.node_of cn);
+    | Ppath (fn, p) ->
+        Format.fprintf ff "%s" (Location.node_of fn);
         pr_path ff p
 
 let rec pr_exp ff e =
@@ -129,6 +143,26 @@ let pr_variant ff v =
     List.iter (fun c -> pcase c) v.pvariant_desc;
     Format.fprintf ff "@] }@]"
 
+let pr_branch_guard ff bg =
+  let p, cn = bg.pbranch_guard_desc in
+    pr_path ff p;
+    Format.fprintf ff " = %s" (Location.node_of cn)
+
+let pr_value_case ff vc =
+  let rec pbranch_guards = function
+    | [] -> ()
+    | [ bg ] -> pr_branch_guard ff bg
+    | bg :: bgs -> pr_branch_guard ff bg; Format.fprintf ff ", "; pbranch_guards bgs
+  in
+    match vc.pvalue_case_desc with
+      | Pvalue_default e ->
+          pr_exp ff e
+      | Pvalue_branch (bgs, e) ->
+          Format.fprintf ff "| ";
+          pbranch_guards bgs;
+          Format.fprintf ff " -> ";
+          pr_exp ff e
+
 let pr_field_attrib ff a =
   match a.pfield_attrib_desc with
     | Pattrib_max e ->
@@ -147,15 +181,25 @@ let pr_field_attrib ff a =
         Format.fprintf ff "default(";
         pr_exp ff e;
         Format.fprintf ff ")"
-    | Pattrib_value e ->
-        Format.fprintf ff "value(";
-        pr_exp ff e;
-        Format.fprintf ff ")"
     | Pattrib_variant_ref dn ->
         Format.fprintf ff "variant %s" (Location.node_of dn)
     | Pattrib_variant_inline v ->
         Format.fprintf ff "variant ";
         pr_variant ff v
+    | Pattrib_value vcs ->
+        Format.fprintf ff "value(";
+        if List.length vcs == 1 then
+          pr_value_case ff (List.hd vcs)
+        else begin
+          let rec pvalue_cases = function
+            | [] -> ()
+            | [ vc ] -> pr_value_case ff vc
+            | vc :: vcs -> pr_value_case ff vc; Format.fprintf ff "@,"; pvalue_cases vcs
+          in
+            Format.fprintf ff "@[<v 0>";
+            pvalue_cases vcs;
+            Format.fprintf ff "@])"
+        end
 
 let rec pr_field ff f =
   Format.pp_open_hbox ff ();

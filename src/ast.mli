@@ -47,9 +47,23 @@ and field_attrib_desc =
   | Pattrib_min of exp
   | Pattrib_const of exp
   | Pattrib_default  of exp
-  | Pattrib_value of exp
   | Pattrib_variant_ref of decl_name
   | Pattrib_variant_inline of variant
+  | Pattrib_value of value_case list
+
+and value_case =
+    { pvalue_case_desc: value_case_desc;
+      pvalue_case_loc: Location.t }
+
+and value_case_desc =
+  | Pvalue_default of exp
+  | Pvalue_branch of branch_guard list * exp
+
+and branch_guard =
+    { pbranch_guard_desc: branch_guard_desc;
+      pbranch_guard_loc: Location.t }
+
+and branch_guard_desc = path * case_name
 
 and type_exp =
     { ptype_exp_desc: type_exp_desc;
@@ -83,7 +97,7 @@ and exp_desc =
 
 and path =
   | Pfield of field_name
-  | Ppath of field_name * case_name * path
+  | Ppath of field_name * path
 
 val pr_path: Format.formatter -> path -> unit
 val pr_decl: Format.formatter -> decl -> unit

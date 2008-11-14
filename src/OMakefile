@@ -29,9 +29,9 @@ FP_FILES[] =
     ident
     env
     types
-    typing
-    gen_check
-    fpc
+#    typing
+#    gen_check
+#    fpc
 
 FP = fp
 FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))
