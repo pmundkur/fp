@@ -65,7 +65,7 @@ type field_attrib =
   | Tattrib_min of exp
   | Tattrib_const of exp
   | Tattrib_default  of exp
-  | Tattrib_value of field_value
+  | Tattrib_value of field_value list
   | Tattrib_variant of variant
 
 type field_type =

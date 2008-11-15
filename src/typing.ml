@@ -28,6 +28,8 @@ exception Conflicting_attributes of Ident.t * string * string
 exception Invalid_variant_type of Ident.t * Location.t
 exception Invalid_const_type of Ident.t * Location.t
 exception Duplicate_classify_case of case_name
+exception Duplicate_default_value of Ident.t * Location.t
+exception Default_value_is_not_last_case of Ident.t * Location.t
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -81,6 +83,10 @@ let raise_invalid_const_type id loc =
   raise (Invalid_const_type (id, loc))
 let raise_duplicate_classify_case cn =
   raise (Duplicate_classify_case cn)
+let raise_duplicate_default_value id loc =
+  raise (Duplicate_default_value (id, loc))
+let raise_default_value_is_not_last_case id loc =
+  raise (Default_value_is_not_last_case (id, loc))
 
 let binary op l =
   assert ((List.length l) = 2);
@@ -99,7 +105,7 @@ let functions = [
   ("byte_sizeof", (([Texp_type_base], Texp_type_int), None));
   ("bit_sizeof", (([Texp_type_base], Texp_type_int), None));
   ("length", (([Texp_type_vector], Texp_type_int), None));
-  ("array_size", (([Texp_type_array], Texp_type_int), None));
+  ("array_length", (([Texp_type_array], Texp_type_int), None));
 
   ("offset", (([Texp_type_field], Texp_type_int), None));
   ("num_set_bits", (([Texp_type_field], Texp_type_int), None));
@@ -192,6 +198,8 @@ let check_field_type_compatible_with_exp_type field_type exp_type loc =
 let check_exp_type_equal received expected loc =
   if received <> expected then
     raise_exp_exp_type_mismatch received expected loc
+
+(* Const checking and folding functions. *)
 
 let rec check_exp_const exp =
   match exp.pexp_desc with
@@ -347,7 +355,8 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
    . expressions that are values of variant cases,
    . expressions in classify cases
    In these cases, the type of the expression will need to match the
-   type of the field, which will be a base_type. *)
+   type of the field, which will be a base_type.
+*)
 let type_check_exp_as_base_type env exp as_base_type =
   let rec exp_typer exp =
     match exp.pexp_desc with
@@ -424,9 +433,7 @@ let is_byte_aligned a =
 
    It returns the field_type representation of the base type
    expression.
-
 *)
-
 let kinding env cur_align te =
   match te.ptype_exp_desc with
     | Pbase tn ->
@@ -482,7 +489,6 @@ let is_field_name_used fn fl =
        | Field (id, _) -> Ident.name_of id = Location.node_of fn)
     fl
 
-
 let type_check_variant_attrib env f bt v =
   let pt =
     match bt with
@@ -507,6 +513,32 @@ let type_check_variant_attrib env f bt v =
       v.pvariant_desc
 
 
+(* This implements the value typing rules. They're implemented as a
+   special case of the attribute typing below.
+*)
+let type_value_attrib env f bt vcl =
+  let default_present = ref false in
+  let is_default_case vc =
+    match vc.pvalue_case_desc with
+      | Pvalue_default _ -> true
+      | Pvalue_branch _ -> false in
+  let typer vc =
+    match vc.pvalue_case_desc with
+      | Pvalue_default e ->
+          if !default_present then
+            raise_duplicate_default_value f vc.pvalue_case_loc;
+          Tvalue_default (type_check_exp_as_base_type env e bt)
+      | Pvalue_branch (bgl, e) ->
+          (* TODO *)
+          assert false in
+  let fvl = List.map typer vcl in
+  let last_vc = List.hd (List.rev vcl) in
+    (* Check that if a default was present, it was the
+       last case specified. *)
+    if !default_present && not (is_default_case last_vc) then
+      raise_default_value_is_not_last_case f last_vc.pvalue_case_loc;
+    fvl
+
 (* This is an extension of the typing of value expressions to the
    typing of field attributes, which were left out of the
    specification to keep it simple.  The caller supplies the adjusted
@@ -514,9 +546,8 @@ let type_check_variant_attrib env f bt v =
 
    The implemented rule is a generalization of:
 
-        E |- x : value_exp
+     E |- x : value_exp
 *)
-
 let type_attribs env f ft fal =
   let max_present = ref false in
   let min_present = ref false in
@@ -581,12 +612,9 @@ let type_attribs env f ft fal =
            | Pattrib_default e, Ttype_base bt ->
                check_and_mark_present "default" default_present fa.pfield_attrib_loc;
                Tattrib_default (type_check_exp_as_base_type env e bt)
-           | Pattrib_value e, Ttype_base bt ->
+           | Pattrib_value vcl, Ttype_base bt ->
                check_and_mark_present "value" value_present fa.pfield_attrib_loc;
-               (* TODO:
-                  Tattrib_value (type_check_exp_as_base_type env e bt)
-               *)
-               raise_conflicting_attributes f "value" "variant"
+               Tattrib_value (type_value_attrib env f bt vcl)
            | Pattrib_variant_ref vn, Ttype_base bt ->
                check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                let _, vdef = get_variant_def env vn in
@@ -609,7 +637,6 @@ let type_attribs env f ft fal =
    However, instead of using an explicit name set S, we instead thread
    a list containing information on the fields checked thus far.
 *)
-
 let rec type_field (env, cur_align, fl) f =
   match f.pfield_desc with
     | Pfield_align a ->
@@ -686,12 +713,14 @@ let rec type_field (env, cur_align, fl) f =
    expression attribute (i.e. the "value expression" of the
    specification) are typed in.
 *)
-
 and type_format env fmt =
   let lookup_type fid env =
     match Env.lookup_field_by_id env fid with
       | None -> assert false
       | Some ft -> ft in
+  let check_align align =
+    if not (is_byte_aligned align) then
+      raise_bad_alignment align 8 fmt.pformat_loc in
   let type_fields () =
     List.fold_left type_field (env, 0, []) fmt.pformat_desc in
   let get_value_env ext_env fl =
@@ -716,10 +745,11 @@ and type_format env fmt =
                  (Tfield_name (id, ft, tal)) :: accu)
       [] fl in
   let ext_env, align, fl = type_fields () in
+  let _ = check_align align in
   let venv = get_value_env ext_env fl in
     (get_field_entries venv fl), (Env.extract_field_env venv)
 
-(* type-checker top-level *)
+(* Type-checker top-level *)
 
 let handle_typing_exception e =
   (match e with
@@ -796,11 +826,17 @@ let handle_typing_exception e =
          Printf.fprintf stderr "%s: the variant attribute is invalid for the type of field \"%s\""
            (Location.pr_location loc) (Ident.pr_ident_name fid)
      | Invalid_const_type (fid, loc) ->
-         Printf.fprintf stderr "%s: an expression cannot be constant folded due to its type"
-           (Location.pr_location loc)
+         Printf.fprintf stderr "%s: for field \"%s\", an expression cannot be constant folded due to its type"
+           (Location.pr_location loc) (Ident.pr_ident_name fid)
      | Duplicate_classify_case cn ->
          Printf.fprintf stderr "%s: duplicate classify branch name \"%s\""
            (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
+     | Duplicate_default_value (fid, loc) ->
+         Printf.fprintf stderr "%s: field \"%s\" specifies multiple default values"
+           (Location.pr_location loc) (Ident.pr_ident_name fid)
+     | Default_value_is_not_last_case (fid, loc) ->
+         Printf.fprintf stderr "%s: default value for field \"%s\" is not specified last"
+           (Location.pr_location loc) (Ident.pr_ident_name fid)
      | e ->
          raise e
   );
