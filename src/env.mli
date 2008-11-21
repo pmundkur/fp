@@ -23,4 +23,9 @@ val add_variant_def: Ident.t -> Types.variant_info -> t -> t
 val add_field: Ident.t -> Types.field_info -> t -> t
 val add_format_def: Ident.t -> Types.struct_type -> t -> t
 
+(* Note that path lookup is by Ast.path, while paths are added using Types.path *)
+val lookup_path: t -> Ast.path -> (Types.path * Types.struct_type) option
+val add_path: Types.path -> Asttypes.case_name -> Types.struct_type -> t -> t
+val get_paths: t -> (Types.path * Asttypes.case_name * Types.struct_type) list
+
 val extract_field_env: t -> Types.field_info Ident.env

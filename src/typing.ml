@@ -3,7 +3,7 @@ open Ast
 open Types
 
 exception Unknown_identifier of string Location.located_node
-exception Invalid_path of field_name
+exception Unknown_path of Types.path
 exception Arg_count_mismatch of fun_name * int (* received *) * int (* expected *)
 exception Type_mismatch_field_base of field_type (* received *) * base_type (* expected *) * Location.t
 exception Type_mismatch_field_exp of field_type * exp_type * Location.t
@@ -16,6 +16,7 @@ exception Invalid_const_expression of primitive * Location.t
 exception Negative_vector_len of int * Location.t
 exception Bit_vector_length_limit of int (* len *) * int (* limit *) * Location.t
 exception Non_unique_case_name of case_name
+exception Unknown_case_name of case_name
 exception Non_unique_case_default of case_name (* second *) * case_name (* first *)
 exception Bad_alignment of int (* current alignment *) * int (* required alignment *) * Location.t
 exception Invalid_align of int * Location.t
@@ -30,11 +31,14 @@ exception Invalid_const_type of Ident.t * Location.t
 exception Duplicate_classify_case of case_name
 exception Duplicate_default_value of Ident.t * Location.t
 exception Default_value_is_not_last_case of Ident.t * Location.t
+exception Unspecified_path of Ast.path
+exception Duplicate_path of Ast.path
+exception Path_is_not_struct of Types.path
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
-let raise_invalid_path ln =
-  raise (Invalid_path ln)
+let raise_unknown_path p =
+  raise (Unknown_path p)
 let raise_arg_count_mismatch fn rcvd expected =
   raise (Arg_count_mismatch (fn, rcvd, expected))
 let raise_field_base_type_mismatch ft bt loc =
@@ -59,6 +63,8 @@ let raise_bit_vector_length_limit len limit loc =
   raise (Bit_vector_length_limit (len, limit, loc))
 let raise_non_unique_case_name nm =
   raise (Non_unique_case_name nm)
+let raise_unknown_case_name nm =
+  raise (Unknown_case_name nm)
 let raise_non_unique_case_default second first =
   raise (Non_unique_case_default (second, first))
 let raise_bad_alignment cur_align expected loc =
@@ -87,6 +93,14 @@ let raise_duplicate_default_value id loc =
   raise (Duplicate_default_value (id, loc))
 let raise_default_value_is_not_last_case id loc =
   raise (Default_value_is_not_last_case (id, loc))
+let raise_unspecified_path p =
+  raise (Unspecified_path p)
+let raise_duplicate_path p =
+  raise (Duplicate_path p)
+let raise_path_is_not_struct p =
+  raise (Path_is_not_struct p)
+
+(* Environment initialization *)
 
 let binary op l =
   assert ((List.length l) = 2);
@@ -122,25 +136,24 @@ let base_types = [
   ("int64", (Tprim_int64, 64))
 ]
 
-let is_bit_typename tn =
-  (Location.node_of tn) = "bit"
-
 let populate_functions env =
   List.fold_left
     (fun e (fn, finfo) ->
-       let fid = Ident.make_from_string fn Location.dummy_loc in
+       let fid = Ident.from_string fn Location.dummy_loc in
          Env.add_function fid finfo e)
     env functions
 
 let populate_base_types env =
   List.fold_left
     (fun e (tn, tinfo) ->
-       let tid = Ident.make_from_string tn Location.dummy_loc in
+       let tid = Ident.from_string tn Location.dummy_loc in
          Env.add_type tid tinfo e)
     env base_types
 
 let init_typing_env () =
   populate_functions (populate_base_types (Env.new_env ()))
+
+(* Environment lookup *)
 
 let lookup_function_info env fn =
   match Env.lookup_function_by_name env (Location.node_of fn) with
@@ -162,14 +175,53 @@ let get_field_info env fn =
     | None -> raise_unknown_ident fn
     | Some fi -> fi
 
+(* This looks up an Ast.path in an environment, and returns a tuple of
+   Types.path and the found field_info.
+*)
+let lookup_qualified_var env path =
+  let pre, suf = path_split path in
+    match Env.lookup_path env pre with
+      | None ->
+          raise_unspecified_path pre
+      | Some (p, st) ->
+          match lookup_field_in_struct_env (Location.node_of suf) st with
+            | None ->
+                raise_unknown_ident suf
+            | Some (fid, ft) ->
+                (path_compose p (Tvar_ident fid)), ft
+
+(* This is called when looking up possibly Ast.path qualified fields
+   in expression context.  It returns the Types.path as well as type
+   info.
+*)
 let lookup_var env path =
   match path with
     | Pfield fn ->
         let fid, finfo = get_field_info env fn in
           (Tvar_ident fid), finfo
-    | Ppath (fn, p) ->
-        (* TODO *)
-        assert false
+    | Ppath _ ->
+        (* The path prefix should be looked up in the path
+           environment, and the suffix in the struct pointed to by the
+           prefix. *)
+        lookup_qualified_var env path
+
+
+(* This is called with branch specifications in the context of
+   classification guards of value attributes.
+*)
+let lookup_path env path =
+  match path with
+    | Pfield fn ->
+        (* This path should not be present in the path env, and it
+           should be a field of map type in the field env. *)
+        if Env.lookup_path env path <> None then
+          raise_duplicate_path path;
+        let fid, ft = get_field_info env fn in
+          (Tvar_ident fid), ft
+    | Ppath _ ->
+        (* The path prefix should be present in the path env, and the
+           struct it points to should contain the suffix as a field. *)
+        lookup_qualified_var env path
 
 (* Type compatibility check functions. *)
 
@@ -302,6 +354,10 @@ let const_fold_as_base_type env exp bt id loc =
      match the type of the argument expected by the function
    . length expressions for vector fields
 *)
+
+let is_bit_typename tn =
+  (Location.node_of tn) = "bit"
+
 let rec type_check_exp_as_exp_type env exp as_exp_type =
   let rec exp_typer exp =
     match exp.pexp_desc with
@@ -309,21 +365,21 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
           check_exp_type_equal Texp_type_unit as_exp_type exp.pexp_loc;
           Texp_unit
       | Pexp_var path ->
-          let vid =
+          let p =
             match as_exp_type with
               | Texp_type_int
               | Texp_type_vector
               | Texp_type_base
               | Texp_type_array
               | Texp_type_unit ->
-                  let vid, vt = lookup_var env path in
+                  let p, vt = lookup_var env path in
                     check_field_type_compatible_with_exp_type
                       vt as_exp_type exp.pexp_loc;
-                    vid
+                    p
               | Texp_type_field ->
                   fst (lookup_var env path)
           in
-            Texp_var vid
+            Texp_var p
       | Pexp_const_int i ->
           check_exp_type_equal Texp_type_int as_exp_type exp.pexp_loc;
           Texp_const_int i
@@ -365,10 +421,10 @@ let type_check_exp_as_base_type env exp as_base_type =
             (Ttype_base as_base_type) Texp_type_unit exp.pexp_loc;
           Texp_unit
       | Pexp_var path ->
-          let vid, vt = lookup_var env path in
+          let p, vt = lookup_var env path in
             check_field_type_compatible_with_base_type
               vt as_base_type exp.pexp_loc;
-            Texp_var vid
+            Texp_var p
       | Pexp_const_int i ->
           if not (Types.can_coerce_int i as_base_type) then
             raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
@@ -512,6 +568,24 @@ let type_check_variant_attrib env f bt v =
       (fun (e, cn, d) -> (cfold e), cn, d)
       v.pvariant_desc
 
+let extend_env_with_branch_paths env bgl =
+  let extend_with_branch e bg =
+    let p, cn = bg.pbranch_guard_desc in
+    let p, pt = lookup_path e p in
+      match pt with
+        | Ttype_map (_, map) ->
+            (try
+              let _, _, st = StringMap.find (Location.node_of cn) map in
+                Env.add_path p cn st e
+            with
+              | Not_found ->
+                  raise_unknown_case_name cn)
+        | _ ->
+            raise_path_is_not_struct p
+  in
+    List.fold_left
+      (fun e bg -> extend_with_branch e bg)
+      env bgl
 
 (* This implements the value typing rules. They're implemented as a
    special case of the attribute typing below.
@@ -529,8 +603,9 @@ let type_value_attrib env f bt vcl =
             raise_duplicate_default_value f vc.pvalue_case_loc;
           Tvalue_default (type_check_exp_as_base_type env e bt)
       | Pvalue_branch (bgl, e) ->
-          (* TODO *)
-          assert false in
+          let ext_env = extend_env_with_branch_paths env bgl in
+          let te = type_check_exp_as_base_type ext_env e bt in
+            Tvalue_branch (Env.get_paths ext_env, te) in
   let fvl = List.map typer vcl in
   let last_vc = List.hd (List.rev vcl) in
     (* Check that if a default was present, it was the
@@ -648,7 +723,7 @@ let rec type_field (env, cur_align, fl) f =
     | Pfield_name (fn, ft) ->
         if is_field_name_used fn fl then
           raise_duplicate_field fn;
-        let fi = Ident.make_from_node fn in
+        let fi = Ident.from_node fn in
           match ft.pfield_type_desc with
             | Ptype_simple (te, fal) ->
                 let bt, next_align = kinding env cur_align te in
@@ -684,7 +759,7 @@ let rec type_field (env, cur_align, fl) f =
                 let tcl =
                   List.fold_left
                     (fun a (cn, ce, fmt) ->
-                       let cid = Ident.make_from_node cn in
+                       let cid = Ident.from_node cn in
                        let cnm = Location.node_of cn in
                          if List.mem_assoc cnm a then
                            raise_duplicate_classify_case cn;
@@ -756,9 +831,9 @@ let handle_typing_exception e =
      | Unknown_identifier ln ->
          Printf.fprintf stderr "%s: Unknown identifier \"%s\""
            (Location.pr_location (Location.location_of ln)) (Location.node_of ln)
-     | Invalid_path f ->
+     | Unknown_path p ->
          Printf.fprintf stderr "%s: Invalid path %s"
-           (Location.pr_location (Location.location_of f)) (Location.node_of f)
+           (Location.pr_location (path_location_of p)) (Types.pr_path p)
      | Arg_count_mismatch (fn, rcvd, expct) ->
          Printf.fprintf stderr "%s: arg count mismatch for function %s, %d received, %d expected"
            (Location.pr_location (Location.location_of fn)) (Location.node_of fn) rcvd expct
@@ -794,6 +869,9 @@ let handle_typing_exception e =
            (Location.pr_location loc) len limit
      | Non_unique_case_name cn ->
          Printf.fprintf stderr "%s: duplicate case name \"%s\""
+           (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
+     | Unknown_case_name cn ->
+         Printf.fprintf stderr "%s: unknown case name \"%s\""
            (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
      | Non_unique_case_default (cn2, cn1) ->
          Printf.fprintf stderr "%s: duplicate default \"%s\" (first was \"%s\")"
@@ -837,6 +915,15 @@ let handle_typing_exception e =
      | Default_value_is_not_last_case (fid, loc) ->
          Printf.fprintf stderr "%s: default value for field \"%s\" is not specified last"
            (Location.pr_location loc) (Ident.pr_ident_name fid)
+     | Unspecified_path p ->
+         Printf.fprintf stderr "%s: path \"%s\" was not specified"
+           (Location.pr_location (Ast.path_location_of p)) (Ast.pr_path p)
+     | Duplicate_path p ->
+         Printf.fprintf stderr "%s: \"%s\" is a duplicate path"
+           (Location.pr_location (Ast.path_location_of p)) (Ast.pr_path p)
+     | Path_is_not_struct p ->
+         Printf.fprintf stderr "%s: path \"%s\" does not point to a struct"
+           (Location.pr_location (Types.path_location_of p)) (Types.pr_path p)
      | e ->
          raise e
   );
@@ -849,10 +936,10 @@ let type_check env decls =
       match d.pdecl_desc with
         | Pdecl_variant (vn, vd) ->
             check_variant_def vd.pvariant_desc;
-            Env.add_variant_def (Ident.make_from_node vn) vd e
+            Env.add_variant_def (Ident.from_node vn) vd e
         | Pdecl_format (fn, fmt) ->
             let tfmt = type_format e fmt in
-              Env.add_format_def (Ident.make_from_node fn) tfmt e
+              Env.add_format_def (Ident.from_node fn) tfmt e
     in
       List.fold_left
         (fun e d -> typer e d) env decls

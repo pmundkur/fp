@@ -6,14 +6,14 @@ type t = {
 
 let cur_stamp = ref 0
 
-let make_from_string name loc =
+let from_string name loc =
   incr cur_stamp;
   { name = name;
     stamp = !cur_stamp;
     loc = loc }
 
-let make_from_node n =
-  make_from_string (Location.node_of n) (Location.location_of n)
+let from_node n =
+  from_string (Location.node_of n) (Location.location_of n)
 
 let name_of i = i.name
 

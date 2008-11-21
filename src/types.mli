@@ -54,13 +54,13 @@ type case_exp =
 
 module StringMap: Map.S with type key = string
 
-type branch_value = (path * Asttypes.case_name) list * exp
+type branch_value = (path * Asttypes.case_name * struct_type) list * exp
 
-type field_value =
+and field_value =
   | Tvalue_default of exp
-  | Tvalue_branch of branch_value list
+  | Tvalue_branch of branch_value
 
-type field_attrib =
+and field_attrib =
   | Tattrib_max of exp
   | Tattrib_min of exp
   | Tattrib_const of exp
@@ -68,7 +68,7 @@ type field_attrib =
   | Tattrib_value of field_value list
   | Tattrib_variant of variant
 
-type field_type =
+and field_type =
   | Ttype_base of base_type
   | Ttype_struct of struct_type
   | Ttype_map of exp * map_type
@@ -97,9 +97,16 @@ type format_info = struct_type
 
 type type_info = primitive * int
 
+(* path utilities *)
+
+val path_decompose: path -> string list
+val path_compose: path -> path -> path
+val path_location_of: path -> Location.t
+
 (* type utilities *)
 
 val is_field_name_in_struct: string -> struct_type -> bool
+val lookup_field_in_struct_env: string -> struct_type -> (Ident.t * field_info) option
 val get_field_type: string -> struct_type -> (Ident.t * field_type)
 
 (* type coercions *)
@@ -111,6 +118,7 @@ val can_coerce_int64: Int64.t -> base_type -> bool
 
 (* printing *)
 
+val pr_path: path -> string
 val pr_exp_type: exp_type -> string
 val pr_primitive: primitive -> string
 val pr_base_type: base_type -> string

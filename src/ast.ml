@@ -99,18 +99,42 @@ and path =
   | Pfield of field_name
   | Ppath of field_name * path
 
-let rec pr_path ff p =
-  match p with
+
+let path_decompose path =
+  let rec comps_of cur_comps = function
     | Pfield fn ->
-        Format.fprintf ff "%s" (Location.node_of fn)
+        (Location.node_of fn) :: cur_comps
     | Ppath (fn, p) ->
-        Format.fprintf ff "%s." (Location.node_of fn);
-        pr_path ff p
+        comps_of ((Location.node_of fn) :: cur_comps) p
+  in
+    List.rev (comps_of [] path)
+
+let rec path_split path =
+  match path with
+    | Pfield _ ->
+        (* We should always be called with qualified paths. *)
+        assert false
+    | Ppath (p, (Pfield s)) ->
+        Pfield p, s
+    | Ppath (f, p) ->
+        let pre, suf = path_split p in
+          Ppath (f, pre), suf
+
+let rec path_location_of = function
+  | Pfield fn -> (Location.location_of fn)
+  | Ppath (f, p) -> Location.span (Location.location_of f) (path_location_of p)
+
+
+let rec pr_path = function
+  | Pfield fn ->
+      Printf.sprintf "%s" (Location.node_of fn)
+  | Ppath (fn, p) ->
+      Printf.sprintf "%s.%s" (Location.node_of fn) (pr_path p)
 
 let rec pr_exp ff e =
   match e.pexp_desc with
     | Pexp_unit -> Format.fprintf ff "unit"
-    | Pexp_var p -> pr_path ff p
+    | Pexp_var p -> Format.fprintf ff "%s" (pr_path p)
     | Pexp_const_int i -> Format.fprintf ff "%d" i
     | Pexp_const_int32 i -> Format.fprintf ff "%ld" i
     | Pexp_const_int64 i -> Format.fprintf ff "%Ld" i
@@ -150,8 +174,7 @@ let pr_variant ff v =
 
 let pr_branch_guard ff bg =
   let p, cn = bg.pbranch_guard_desc in
-    pr_path ff p;
-    Format.fprintf ff " = %s" (Location.node_of cn)
+    Format.fprintf ff "%s = %s" (pr_path p) (Location.node_of cn)
 
 let pr_value_case ff vc =
   let rec pbranch_guards = function

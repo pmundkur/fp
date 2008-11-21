@@ -99,6 +99,10 @@ and path =
   | Pfield of field_name
   | Ppath of field_name * path
 
-val pr_path: Format.formatter -> path -> unit
+val path_split: path -> (path (* prefix *) * field_name (* suffix *))
+val path_decompose: path -> string list
+val path_location_of: path -> Location.t
+
+val pr_path: path -> string
 val pr_decl: Format.formatter -> decl -> unit
 

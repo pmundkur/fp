@@ -54,21 +54,21 @@ type case_exp =
 
 module StringMap = Map.Make (struct type t = string let compare = compare end)
 
-type branch_value = (path * Asttypes.case_name) list * exp
+type branch_value = (path * Asttypes.case_name * struct_type) list * exp
 
-type field_value =
+and field_value =
   | Tvalue_default of exp
-  | Tvalue_branch of branch_value list
+  | Tvalue_branch of branch_value
 
-type field_attrib =
+and field_attrib =
   | Tattrib_max of exp
   | Tattrib_min of exp
   | Tattrib_const of exp
-  | Tattrib_default  of exp
+  | Tattrib_default of exp
   | Tattrib_value of field_value list
   | Tattrib_variant of variant
 
-type field_type =
+and field_type =
   | Ttype_base of base_type
   | Ttype_struct of struct_type
   | Ttype_map of exp * map_type
@@ -94,14 +94,49 @@ type format_info = struct_type
 
 type type_info = primitive * int
 
+(* path utilities *)
+
+let path_decompose path =
+  let rec comps_of cur_comps = function
+    | Tvar_ident id ->
+        (Ident.name_of id) :: cur_comps
+    | Tvar_path (id, p) ->
+        comps_of ((Ident.name_of id) :: cur_comps) p
+  in
+    List.rev (comps_of [] path)
+
+let path_compose pre suf =
+  let rec ids_of cur_ids = function
+    | Tvar_ident id -> id :: cur_ids
+    | Tvar_path (id, p) -> ids_of (id :: cur_ids) p in
+  let pre_ids = ids_of [] pre in
+    List.fold_left
+      (fun p id -> Tvar_path (id, p))
+      suf pre_ids
+
+let rec path_location_of = function
+  | Tvar_ident id -> Ident.location_of id
+  | Tvar_path (id, p) -> Location.span (Ident.location_of id) (path_location_of p)
+
 (* type utilities *)
 
 let is_field_name_in_struct fn st =
   List.exists
     (function
-       | Tfield_name (id, _, _) -> String.compare (Ident.name_of id) fn = 0
+       | Tfield_name (id, _, _) -> Ident.name_of id = fn
        | Tfield_align _ -> false)
     (fst st)
+
+let lookup_field_in_struct_env fn st =
+  let rec lookup = function
+    | [] ->
+        None
+    | Tfield_align _ :: tl ->
+        lookup tl
+    | Tfield_name (fid, ft, fal) :: tl ->
+        if Ident.name_of fid = fn then Some (fid, ft)
+        else lookup tl in
+    lookup (fst st)
 
 let get_field_type fn st =
   let rec getter = function
@@ -110,7 +145,7 @@ let get_field_type fn st =
     | Tfield_align _ :: tl ->
         getter tl
     | Tfield_name (id, ft, _) :: tl ->
-        if String.compare (Ident.name_of id) fn = 0 then
+        if (Ident.name_of id) = fn then
           id, ft
         else
           getter tl
@@ -191,6 +226,10 @@ let can_coerce_int64 i as_type =
     | Tbase_vector _ -> false
 
 (* printing *)
+
+let rec pr_path = function
+  | Tvar_ident id -> Printf.sprintf "%s" (Ident.name_of id)
+  | Tvar_path (id, p) -> Printf.sprintf "%s.%s" (Ident.name_of id) (pr_path p)
 
 let pr_exp_type = function
   | Texp_type_int -> "int"

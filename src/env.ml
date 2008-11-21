@@ -1,3 +1,5 @@
+module PathMap = Map.Make (struct type t = string list let compare = compare end)
+
 type t = {
   (* Functions and types are currently predefined only. *)
   functions: Types.function_info Ident.env;
@@ -9,6 +11,10 @@ type t = {
 
   (* Fields need a dynamic stacked environment. *)
   fields: Types.field_info Ident.env;
+
+  (* Map from paths to structs *)
+  path_map: (Types.path * Types.struct_type) PathMap.t;
+  paths: (Types.path * Asttypes.case_name * Types.struct_type) list;
 }
 
 let new_env () =
@@ -17,6 +23,8 @@ let new_env () =
     variants   = Ident.empty_env;
     formats    = Ident.empty_env;
     fields     = Ident.empty_env;
+    path_map   = PathMap.empty;
+    paths      = [];
   }
 
 let all_fields_by_id = ref Ident.empty_env
@@ -78,6 +86,18 @@ let add_format_def fid finfo env =
   { env with
       formats = Ident.add fid finfo env.formats }
 
+
+let lookup_path t p =
+  try Some (PathMap.find (Ast.path_decompose p) t.path_map)
+  with Not_found -> None
+
+let add_path p cn s env =
+  { env with
+      path_map = PathMap.add (Types.path_decompose p) (p, s) env.path_map;
+      paths = (p, cn, s) :: env.paths }
+
+let get_paths env =
+  List.rev env.paths
 
 let extract_field_env env =
   env.fields
