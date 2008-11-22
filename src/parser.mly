@@ -143,11 +143,11 @@ cases:
 ;
 
 case:
-| case_exp ARROW format
+| case_exp ARROW format opt_semi
     { let case_name, case_exp = $1 in
         case_name, case_exp, $3
     }
-| case_exp ARROW field
+| case_exp ARROW field opt_semi
     { let case_name, case_exp = $1 in
         case_name, case_exp, (mk_format [ $3 ]
                                 (Location.rhs_loc 3))

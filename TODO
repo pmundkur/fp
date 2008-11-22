@@ -87,7 +87,27 @@ TODO:
     This ensures that formats satisfying the value attributes of the
     fields in the specification can actually be generated, given
     appropriate inputs.  This primarily involves checking for circular
-    dependencies in the value expressions.
+    dependencies in the value expressions, or redundant value
+    expressions.
+
+    Redundant value expressions result when the user provides value
+    expressions for fields (say, f) that are the focus of classify
+    expressions (say, for field g).  That is, we have,
+
+      f : byte;
+      g : classify (f) {
+          |1:case1 -> ...
+          ...
+          }
+      }
+
+    Such fields (g) have an implicit value expression that computes
+    the value based on the case value of f.  In the example above, f
+    has an implicit branch case value (|g=case1 -> 1).  This could
+    conflict with what the user provides, so we disallow such value
+    expressions, which is simple to check for.
+
+    We now discuss circular dependencies.
 
     The scheme to do this uses a fairly obvious dependency graph
     approach, but is noted here for completeness.  We treat each value
