@@ -354,10 +354,6 @@ let const_fold_as_base_type env exp bt id loc =
      match the type of the argument expected by the function
    . length expressions for vector fields
 *)
-
-let is_bit_typename tn =
-  (Location.node_of tn) = "bit"
-
 let rec type_check_exp_as_exp_type env exp as_exp_type =
   let rec exp_typer exp =
     match exp.pexp_desc with
@@ -490,6 +486,9 @@ let is_byte_aligned a =
    It returns the field_type representation of the base type
    expression.
 *)
+let is_bit_typename tn =
+  (Location.node_of tn) = "bit"
+
 let kinding env cur_align te =
   match te.ptype_exp_desc with
     | Pbase tn ->
@@ -639,8 +638,6 @@ let type_attribs env f ft fal =
     (*
       - (max|min) conflicts with const+variant
       - const conflicts with default+value+variant
-      - default conflicts with variant
-      - value conflicts with variant
     *)
     if !max_present || !min_present then
       if !const_present then
@@ -658,10 +655,6 @@ let type_attribs env f ft fal =
         raise_conflicting_attributes f "const" "variant"
       else
         ()
-    else if !default_present && !variant_present then
-      raise_conflicting_attributes f "default" "variant"
-    else if !value_present && !variant_present then
-      raise_conflicting_attributes f "value" "variant"
     else
       () in
   let get_variant_def env vn =
@@ -750,7 +743,17 @@ let rec type_field (env, cur_align, fl) f =
                    simplify typing, for now. *)
                 let eid, et = match e.pexp_desc with
                   | Pexp_var v ->
-                      lookup_var env v
+                      (match v with
+                         | Pfield fn ->
+                             (* Ideally, we'd check here to ensure
+                                that fn does not have a value
+                                attribute, but fn could either be in
+                                this struct, or in an enclosing one.
+                                In the latter case, we don't have easy
+                                access to its attribute list. *)
+                             lookup_var env v
+                         | Ppath _ ->
+                             raise_invalid_classify_expr e.pexp_loc)
                   | _ ->
                       raise_unsupported_classify_expr e.pexp_loc in
                 let bt = match et with
