@@ -1,5 +1,26 @@
 TODO:
 
+- Add a check to ensure that a field is not the target of
+  classification multiple times, since this complicates generation
+  checking:
+
+  g : classify (f) {
+       0:A -> { }
+      }
+  h : classify (f) {
+       1:B -> { }
+      }
+
+  Then
+
+     generate ('A g) ('B h) ...
+
+  would result in conflicting values for f: 0 and 1.  Otherwise we
+  would need to catch this case via code generation in the body for
+  'generate'.  This in conjunction with ranges for classification
+  branches would complicate generation checking.
+
+
 - value () attributes need to handle assignments for multiple cases
   for possibly multiple branches, with support for both nested and
   serial branching.
@@ -30,14 +51,14 @@ TODO:
   len1  : int  value(|f=n1 -> sizeof(f.g) |g=m2 -> sizeof(g.l))
   len2  : int  value(|f=n2 -> sizeof(f.h) |g=m1 -> sizeof(g.k))
 
-  f      : classify (case1) {
-           |ef1:n1 -> g : int[len1];
-           |ef2:n2 -> h : int[len2];
+  f  : classify (case1) {
+       |ef1:n1 -> g : int[len1];
+       |ef2:n2 -> h : int[len2];
   }
 
-  g      : classify (case2) {
-           |es1:m1 -> k : int[len2];
-           |es2:m2 -> l : int[len1];
+  g  : classify (case2) {
+       |es1:m1 -> k : int[len2];
+       |es2:m2 -> l : int[len1];
   }
 
   Algorithm modifications:
@@ -61,6 +82,68 @@ TODO:
     Another thing that can be done later is checking whether the value
     attribute of a field has a case specification corresponding to
     each use of the field.
+
+  Generation of the classification tree:
+
+    A struct branches out at a classification field.  A struct might
+    have multiple such fields.  Note that a classification field might
+    either occur directly in the struct, or appear nested inside an
+    array field.  The handling of array fields is described separately
+    below.
+
+    Each branch of the classification at a classification field
+    results in a new struct, which in turn might have classification
+    fields.  Thus we can visualize a "field-oriented" classification
+    tree rooted at a field, and multiple such "field" classification
+    trees embedded in a struct.
+
+    For e.g., in B above, the two field-oriented classification trees
+    are:
+
+    f -o-- n1 --> { g }
+       +-- n2 --> { h }
+
+    g -o-- m1 --> { k }
+       +-- m2 --> { l }
+
+    and the struct classification tree is:
+
+    -o-- {f = n1, g = m1} --> { f = { g }, g = { k } }
+     +-- {f = n1, g = m2} --> { f = { g }, g = { l } }
+     +-- {f = n2, g = m1} --> { f = { h }, g = { k } }
+     +-- {f = n2, g = m2} --> { f = { h }, g = { l } }
+
+    {f = ni} can be considered as the name of a node of the field
+    classification tree rooted at f, and {f = ni, g = mj} can be
+    considered as the label of a node in the struct classification
+    tree.
+
+    In general, the leaf names in a field tree will look like
+
+        {f = ni, f.g = nnj, f.g.h = nnnk, ... }
+
+    whereas the leaf names in a struct tree will be concatenation of
+    such paths:
+
+        {f = ni, f.g = nnj, ..., g = mk, g.h = mml, ..., h = pm, ... }
+
+    There's a mutual recursion between the field-oriented and
+    struct-oriented trees.
+
+    Let f[n1], f[n2], g[m1] and g[m2] be sets of leaf struct names for
+    struct trees rooted at those branches of the field tree.  Then the
+    set of struct names for the enclosing struct is given by:
+
+        \union_{ij} \union_{x in f[ni], y in g[mj]}  { f(ni)(x) x g(mj)(y) }
+
+    where f(ni)(x) is the set obtained by path extending the elements
+    in x by "f.", and adding (f = ni) to the set.
+
+
+    Handling array structs:
+
+    TODO: Essentially, the idea is that they can be handled like the
+    root struct.
 
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 
