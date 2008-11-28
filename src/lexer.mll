@@ -47,7 +47,9 @@
   let lookup_id loc str =
     try (Hashtbl.find keyword_table str) loc
     with Not_found ->
-      match String.get str 0 with
+      if str = "_" then
+        UNDERSCORE loc
+      else match String.get str 0 with
         | 'A' .. 'Z' -> UCID (loc, str)
         | 'a' .. 'z' -> LCID (loc, str)
         | _ ->          raise_parse_error (Unknown_operator str) loc
