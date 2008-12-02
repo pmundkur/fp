@@ -94,6 +94,32 @@ type format_info = struct_type
 
 type type_info = primitive * int
 
+(* generate a field identifier map for a struct *)
+let rec ident_map st =
+  let rec do_field_type env = function
+    | Ttype_base _ ->
+        env
+    | Ttype_struct st ->
+        Ident.extend env (ident_map st)
+    | Ttype_map (_, mt) ->
+        StringMap.fold
+          (fun bn (bid, ce, st) env ->
+             Ident.extend env (ident_map st))
+          mt env
+    | Ttype_array (_, st) ->
+        Ident.extend env (ident_map st)
+    | Ttype_label ->
+        env in
+  let rec fold_fe_list env = function
+    | [] ->
+        env
+    | Tfield_name (fid, ft, fal) :: fe_list ->
+        fold_fe_list (do_field_type env ft) fe_list
+    | Tfield_align _ :: fe_list ->
+        fold_fe_list env fe_list
+  in
+    fold_fe_list (snd st) (fst st)
+
 (* path utilities *)
 
 let path_decompose path =

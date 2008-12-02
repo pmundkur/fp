@@ -21,5 +21,7 @@ val assoc_by_name: 'a env -> string -> (t * 'a) option
 
 val assoc_by_id: 'a env -> t -> 'a option
 
+val extend: 'a env -> 'a env -> 'a env
+
 val pr_ident_name: t -> string
 

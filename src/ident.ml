@@ -53,5 +53,8 @@ let assoc_by_id env i =
     (fun i info -> Some info)
     env i
 
+let extend first second =
+  first @ second
+
 let pr_ident_name id =
   id.name

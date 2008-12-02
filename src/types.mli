@@ -97,6 +97,9 @@ type format_info = struct_type
 
 type type_info = primitive * int
 
+(* generate a field identifier map for a struct *)
+val ident_map: struct_type -> field_info Ident.env
+
 (* path utilities *)
 
 val path_decompose: path -> string list
