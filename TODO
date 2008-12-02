@@ -1,5 +1,7 @@
 TODO:
 
+- Need to check for overlaps in classification branches.
+
 - Add a check to ensure that a field is not the target of
   classification multiple times, since this complicates generation
   checking:
@@ -19,6 +21,18 @@ TODO:
   would need to catch this case via code generation in the body for
   'generate'.  This in conjunction with ranges for classification
   branches would complicate generation checking.
+
+- Add a check to ensure that array structs don't have free variables,
+  to avoid having to deal with value extraction from within arrays.
+
+- If a classification target has only pure const branches, then that
+  is equivalent to a value attribute.  If it has one or more range
+  branches, then the target must have a value attribute.  If it
+  already has a value attribute, then it should be consistent.
+
+- The dependency graph should be computed across all branches of the
+  classification tree.
+
 
 
 - value () attributes need to handle assignments for multiple cases
