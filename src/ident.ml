@@ -56,5 +56,11 @@ let assoc_by_id env i =
 let extend first second =
   first @ second
 
+let rec fold f env init =
+  match env with
+    | [] -> init
+    | (i, info) :: tl ->
+        f i info (fold f tl init)
+
 let pr_ident_name id =
   id.name

@@ -110,15 +110,11 @@ let rec ident_map st =
         Ident.extend env (ident_map st)
     | Ttype_label ->
         env in
-  let rec fold_fe_list env = function
-    | [] ->
-        env
-    | Tfield_name (_, ft, _) :: fe_list ->
-        fold_fe_list (do_field_type env ft) fe_list
-    | Tfield_align _ :: fe_list ->
-        fold_fe_list env fe_list
+  let env = snd st
   in
-    fold_fe_list (snd st) (fst st)
+    Ident.fold
+      (fun i ft env -> do_field_type env ft)
+      env env
 
 (* compute free variables in a struct *)
 let free_variables st =
@@ -131,7 +127,7 @@ let free_variables st =
     | Texp_var (Tvar_path _) ->
         (* We should never encounter paths since we are (presumably)
            not processing expressions in value attributes. *)
-        assert false 
+        assert false
     | Texp_const_bit _
     | Texp_const_byte _
     | Texp_const_int16 _
@@ -149,30 +145,27 @@ let free_variables st =
         []
     | Ttype_base (Tbase_vector (_, e)) ->
         free_vars e
-    | Ttype_struct (fe_list, _) ->
-        fold_fe_list [] fe_list
+    | Ttype_struct st ->
+        do_struct st []
     | Ttype_map (e, mt) ->
         let free_vars_ce = function
           | Tcase_const e -> free_vars e
           | Tcase_range (s, e) -> (free_vars s) @ (free_vars e)
         in
           StringMap.fold
-            (fun _ (_, ce, (fe_list, _)) fv ->
-               List.rev_append (fold_fe_list (free_vars_ce ce) fe_list) fv)
+            (fun _ (_, ce, st) fv ->
+               List.rev_append (do_struct st (free_vars_ce ce)) fv)
             mt (free_vars e)
-    | Ttype_array (e, (fe_list, _)) ->
-        fold_fe_list (free_vars e) fe_list
+    | Ttype_array (e, st) ->
+        do_struct st (free_vars e)
     | Ttype_label ->
         []
-  and fold_fe_list fv = function
-    | [] ->
-        fv
-    | Tfield_name (_, ft, _) :: fe_list ->
-        fold_fe_list (List.rev_append (do_field ft) fv) fe_list
-    | Tfield_align _ :: fe_list ->
-        fold_fe_list fv fe_list
+  and do_struct st acc =
+    Ident.fold
+      (fun i ft fv -> List.rev_append (do_field ft) fv)
+      (snd st) acc
   in
-    fold_fe_list [] (fst st)
+    do_struct st []
 
 (* path utilities *)
 
