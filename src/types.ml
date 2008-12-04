@@ -96,7 +96,7 @@ type type_info = primitive * int
 
 (* generate a field identifier map for a struct *)
 let rec ident_map st =
-  let rec do_field_type env = function
+  let rec do_field env = function
     | Ttype_base _ ->
         env
     | Ttype_struct st ->
@@ -113,7 +113,7 @@ let rec ident_map st =
   let env = snd st
   in
     Ident.fold
-      (fun i ft env -> do_field_type env ft)
+      (fun i ft env -> do_field env ft)
       env env
 
 (* compute free variables in a struct *)

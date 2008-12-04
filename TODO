@@ -1,5 +1,7 @@
 TODO:
 
+- Test Types.{ident_map, free_variables}.
+
 - Need to check for overlaps in classification branches.
 
 - Add a check to ensure that a field is not the target of
