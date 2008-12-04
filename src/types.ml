@@ -83,7 +83,7 @@ and field_info = field_type  (* stored in environment *)
 
 and struct_type = (field_entry list) * field_info Ident.env
 
-and map_entry = Ident.t * case_exp * struct_type
+and map_entry = Asttypes.case_name * case_exp * struct_type
 and map_type = map_entry StringMap.t
 
 (* information stored in environment *)

@@ -762,23 +762,22 @@ let rec type_field (env, cur_align, fl) f =
                 let tcl =
                   List.fold_left
                     (fun a (cn, ce, fmt) ->
-                       let cid = Ident.from_node cn in
                        let cnm = Location.node_of cn in
                          if List.mem_assoc cnm a then
                            raise_duplicate_classify_case cn;
                          let te = match ce.pcase_exp_desc with
                            | Pcase_const c ->
-                               Tcase_const (const_fold_as_base_type env c bt cid c.pexp_loc)
+                               Tcase_const (const_fold_as_base_type env c bt fi c.pexp_loc)
                            | Pcase_range (l, r) ->
-                               let tl = const_fold_as_base_type env l bt cid l.pexp_loc in
-                               let tr = const_fold_as_base_type env r bt cid r.pexp_loc in
+                               let tl = const_fold_as_base_type env l bt fi l.pexp_loc in
+                               let tr = const_fold_as_base_type env r bt fi r.pexp_loc in
                                  Tcase_range (tl, tr) in
                          let tfmt = type_format env fmt in
-                           (cnm, (cid, te, tfmt)) :: a)
+                           (cnm, (cn, te, tfmt)) :: a)
                     [] cl in
                 let m = List.fold_left
-                  (fun m (nm, (cid, te, tfmt)) ->
-                     StringMap.add nm (cid, te, tfmt) m)
+                  (fun m (nm, (cn, te, tfmt)) ->
+                     StringMap.add nm (cn, te, tfmt) m)
                   StringMap.empty tcl in
                 let e = Env.add_field fi (Ttype_map (Texp_var eid, m)) env in
                   e, 0, (Field (fi, [])) :: fl
