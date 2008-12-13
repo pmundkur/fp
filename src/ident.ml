@@ -62,5 +62,12 @@ let rec fold f env init =
     | (i, info) :: tl ->
         f i info (fold f tl init)
 
+let rec iter f env =
+  match env with
+    | [] -> ()
+    | (i, info) :: tl ->
+        f i info;
+        iter f tl
+
 let pr_ident_name id =
   id.name

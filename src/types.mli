@@ -104,7 +104,8 @@ val ident_map: struct_type -> field_info Ident.env
 val free_variables: struct_type -> Ident.t list
 
 (* path utilities *)
-
+val path_head_ident: path -> Ident.t
+val path_tail_ident: path -> Ident.t
 val path_decompose: path -> string list
 val path_compose: path -> path -> path
 val path_location_of: path -> Location.t

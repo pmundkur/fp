@@ -25,5 +25,7 @@ val extend: 'a env -> 'a env -> 'a env
 
 val fold: (t -> 'a -> 'b -> 'b) -> 'a env -> 'b -> 'b
 
+val iter: (t -> 'a -> unit) -> 'a env -> unit
+
 val pr_ident_name: t -> string
 

@@ -169,6 +169,14 @@ let free_variables st =
 
 (* path utilities *)
 
+let path_head_ident = function
+  | Tvar_ident id
+  | Tvar_path (id, _) -> id
+
+let rec path_tail_ident = function
+  | Tvar_ident id -> id
+  | Tvar_path (_, p) -> path_tail_ident p
+
 let path_decompose path =
   let rec comps_of cur_comps = function
     | Tvar_ident id ->
