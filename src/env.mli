@@ -16,6 +16,7 @@ val lookup_function_by_id: t -> Ident.t -> Types.function_info option
 val lookup_type_by_id: t -> Ident.t -> Types.type_info option
 
 val global_lookup_field_by_id: t -> Ident.t -> Types.field_info option
+val get_formats: t -> Types.format_info Ident.env
 
 val add_type: Ident.t -> Types.type_info -> t -> t
 val add_function: Ident.t -> Types.function_info -> t -> t

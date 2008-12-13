@@ -64,6 +64,8 @@ let lookup_type_by_id t i =
 let global_lookup_field_by_id t i =
   Ident.assoc_by_id !all_fields_by_id i
 
+let get_formats t =
+  t.formats
 
 let add_type tid tinfo env =
   { env with
