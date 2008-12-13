@@ -4,6 +4,54 @@ TODO:
 
 - Need to check for overlaps in classification branches.
 
+  The algorithm for this can be essentially derived from the one
+  specified in Luc Maranget's "Warnings" paper.  The way we adapt it
+  for our purposes is consider each classified struct as a variant
+  datatype with a tuple argument.  The root struct can be considered
+  as an anonymous tuple.  An example explains:
+
+  struct {
+     a : int
+     b : int value ()
+     c : classify (b) {
+           0:A -> {
+             f : int
+             g : classify (f) {
+                    0:F -> {
+                    }
+                    1:G -> {
+                    }
+                 }
+             h : byte
+           }
+           1:B -> {
+             m : int
+             n : classify (m) {
+                    0:M -> {
+                    }
+                    1:M -> {
+                    }
+                 }
+             o : int
+           }
+         }
+     d : int
+     k : classify (d) {
+           0: D -> {
+           }
+           1: E -> {
+           }
+         }
+  }
+
+  this is equivalent to the following variant datatypes for pattern matching purposes
+
+  root struct = (c * k)
+  and c = A of g | B of n
+  and k = D | E
+  and g = F | G
+  and n = M | N
+
 - Add a check to ensure that a field is not the target of
   classification multiple times, since this complicates generation
   checking:
@@ -32,10 +80,38 @@ TODO:
   branches, then the target must have a value attribute.  If it
   already has a value attribute, then it should be consistent.
 
+  That is,
+
+  f : int
+  g : classify (f) {
+    0:A -> { ... }
+    1:B -> { ... }
+    ...
+  }
+
+  is equivalent to
+
+  f : int value (|g=A -> 0
+                 |g=B -> 1)
+  g : classify (f) { ... }
+
+  and if the user already specified a value attribute for f, it should
+  match the above deduced one.
+
 - The dependency graph should be computed across all branches of the
   classification tree.
 
+- Struct naming:
 
+  A struct will have one or more names only if it has one or more
+  direct or indirect (i.e. nested) classify fields.
+
+  The names of a struct do not depend on the struct's environment;
+  they are in a sense internal to the struct.
+
+  The external name of the struct is defined when the struct appears
+  in a classification branch, and derives its external name from the
+  name of the branch node (which is external to the struct).
 
 - value () attributes need to handle assignments for multiple cases
   for possibly multiple branches, with support for both nested and
