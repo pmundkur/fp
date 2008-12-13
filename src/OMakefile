@@ -30,7 +30,7 @@ FP_FILES[] =
     env
     types
     typing
-#    gen_check
+    classify
     fpc
 
 FP = fp
