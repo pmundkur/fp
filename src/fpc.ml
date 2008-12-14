@@ -68,7 +68,7 @@ let process_file f =
     let pt = parse_file f ic in
     (* let _ = pprint pt in *)
     let typed_env = Typing.type_check (Typing.init_typing_env ()) pt in
-      Classify.check_multiple_use (Env.get_formats typed_env)
+      ignore typed_env
   with
     | Sys_error s -> prerr_endline s
 

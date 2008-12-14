@@ -34,6 +34,7 @@ exception Default_value_is_not_last_case of Ident.t * Location.t
 exception Unspecified_path of Ast.path
 exception Duplicate_path of Ast.path
 exception Path_is_not_struct of Types.path
+exception Classify_multiple_use of Ident.t * (* current use *) Location.t * (* previous use *) Location.t
 
 let raise_unknown_ident ln =
   raise (Unknown_identifier ln)
@@ -99,6 +100,8 @@ let raise_duplicate_path p =
   raise (Duplicate_path p)
 let raise_path_is_not_struct p =
   raise (Path_is_not_struct p)
+let raise_classify_multiple_use id cur_use prev_use =
+  raise (Classify_multiple_use (id, cur_use, prev_use))
 
 (* Environment initialization *)
 
@@ -756,6 +759,15 @@ let rec type_field (env, cur_align, fl) f =
                              raise_invalid_classify_expr e.pexp_loc)
                   | _ ->
                       raise_unsupported_classify_expr e.pexp_loc in
+                (* Add the classified field to the environment to
+                   check for multiple use. *)
+                let env =
+                  let fid = path_tail_ident eid in
+                    match Env.find_classify_use env fid with
+                      | Some loc ->
+                          raise_classify_multiple_use fid e.pexp_loc loc
+                      | None ->
+                          Env.add_classify_use fid e.pexp_loc env in
                 let bt = match et with
                   | Ttype_base bt -> bt
                   | _ -> raise_invalid_classify_expr e.pexp_loc in
@@ -926,6 +938,9 @@ let handle_typing_exception e =
      | Path_is_not_struct p ->
          Printf.fprintf stderr "%s: path \"%s\" does not point to a struct"
            (Location.pr_location (Types.path_location_of p)) (Types.pr_path p)
+     | Classify_multiple_use (fid, cur_use, prev_use) ->
+         Printf.fprintf stderr "%s: field \"%s\" is used mutiple times for classification, previous use was at %s"
+           (Location.pr_location cur_use) (Ident.pr_ident_name fid) (Location.pr_line_info prev_use)
      | e ->
          raise e
   );
