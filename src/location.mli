@@ -22,5 +22,6 @@ val rhs_loc: int -> t
 
 val span: t -> t -> t
 
-
+val pr_line_info: t -> string
 val pr_location: t -> string
+

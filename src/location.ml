@@ -47,11 +47,12 @@ let span s e =
     { loc_start = e.loc_start;
       loc_end = s.loc_end }
 
+let pr_line_info loc =
+  Printf.sprintf "line %d, characters %d-%d"
+    loc.loc_start.Lexing.pos_lnum
+    (loc.loc_start.Lexing.pos_cnum - loc.loc_start.Lexing.pos_bol)
+    (loc.loc_end.Lexing.pos_cnum - loc.loc_start.Lexing.pos_bol)
+
 let pr_location loc =
-  let file pos = pos.Lexing.pos_fname in
-  let line pos = pos.Lexing.pos_lnum in
-  let fl = file loc.loc_start in
-  let sl = line loc.loc_start in
-      Printf.sprintf "File \"%s\", line %d, characters %d-%d"
-        fl sl (loc.loc_start.Lexing.pos_cnum - loc.loc_start.Lexing.pos_bol)
-        (loc.loc_end.Lexing.pos_cnum - loc.loc_start.Lexing.pos_bol)
+    Printf.sprintf "File \"%s\", %s"
+      loc.loc_start.Lexing.pos_fname (pr_line_info loc)
