@@ -54,7 +54,16 @@ type case_exp =
 
 module StringMap: Map.S with type key = string
 
-type branch_value = (path * Asttypes.case_name * struct_type) list * exp
+type branch_pattern =
+  | Pt_constructor of Ident.t * Asttypes.case_name * struct_pattern
+
+and struct_pattern =
+  | Pt_struct of branch_pattern list
+
+type branch_value =
+    { branch_path_info : (path * Asttypes.case_name * struct_type) list;
+      branch_pattern : (* branch_pattern *) unit;
+      branch_value : exp }
 
 and field_value =
   | Tvalue_default of exp

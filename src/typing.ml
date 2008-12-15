@@ -607,7 +607,10 @@ let type_value_attrib env f bt vcl =
       | Pvalue_branch (bgl, e) ->
           let ext_env = extend_env_with_branch_paths env bgl in
           let te = type_check_exp_as_base_type ext_env e bt in
-            Tvalue_branch (Env.get_paths ext_env, te) in
+          let b = { branch_path_info = Env.get_paths ext_env;
+                    branch_pattern = ();
+                    branch_value = te } in
+            Tvalue_branch b in
   let fvl = List.map typer vcl in
   let last_vc = List.hd (List.rev vcl) in
     (* Check that if a default was present, it was the
