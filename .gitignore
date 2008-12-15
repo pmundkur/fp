@@ -24,3 +24,5 @@ doc/ott.tex
 *.blg
 *.fls
 *.log
+*~
+
