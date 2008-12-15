@@ -836,7 +836,8 @@ and type_format env fmt =
   let ext_env, align, fl = type_fields () in
   let _ = check_align align in
   let venv = get_value_env ext_env fl in
-    (get_field_entries venv fl), (Env.extract_field_env venv)
+    { struct_entries = get_field_entries venv fl;
+      struct_env = Env.extract_field_env venv }
 
 (* Type-checker top-level *)
 

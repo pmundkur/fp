@@ -17,30 +17,24 @@ TODO:
            0:A -> {
              f : int
              g : classify (f) {
-                    0:F -> {
-                    }
-                    1:G -> {
-                    }
+                    0:F -> { }
+                    1:G -> { }
                  }
              h : byte
            }
            1:B -> {
              m : int
              n : classify (m) {
-                    0:M -> {
-                    }
-                    1:M -> {
-                    }
+                    0:M -> { }
+                    1:M -> { }
                  }
              o : int
            }
          }
      d : int
      k : classify (d) {
-           0: D -> {
-           }
-           1: E -> {
-           }
+           0: D -> { }
+           1: E -> { }
          }
   }
 

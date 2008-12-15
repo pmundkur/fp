@@ -30,14 +30,22 @@ let empty_env = []
 let add id info env =
   (id, info) :: env
 
+let exists f env =
+  let rec ex = function
+    | [] ->
+        false
+    | (i, info) :: tl ->
+        if f i info then true else ex tl
+  in
+    ex env
+
 let assoc_match match_fn ret_fn env n =
-  let rec assc l =
-    match l with
-      | [] ->
-          None
-      | (i, info) :: tl ->
-          if match_fn i n then ret_fn i info
-          else assc tl
+  let rec assc = function
+    | [] ->
+        None
+    | (i, info) :: tl ->
+        if match_fn i n then ret_fn i info
+        else assc tl
   in
     assc env
 

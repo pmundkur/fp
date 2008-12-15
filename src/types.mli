@@ -84,7 +84,9 @@ and field_info = field_type
 (* the struct type embeds the environment in which the field
    identifiers are defined.
 *)
-and struct_type = (field_entry list) * field_info Ident.env
+and struct_type =
+    { struct_entries : field_entry list;
+      struct_env : field_info Ident.env }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 and map_type = map_entry StringMap.t

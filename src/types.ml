@@ -81,7 +81,9 @@ and field_entry =
 
 and field_info = field_type  (* stored in environment *)
 
-and struct_type = (field_entry list) * field_info Ident.env
+and struct_type =
+    { struct_entries : field_entry list;
+      struct_env : field_info Ident.env }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 and map_type = map_entry StringMap.t
@@ -110,7 +112,7 @@ let rec ident_map st =
         Ident.extend env (ident_map st)
     | Ttype_label ->
         env in
-  let env = snd st
+  let env = st.struct_env
   in
     Ident.fold
       (fun i ft env -> do_field env ft)
@@ -118,7 +120,7 @@ let rec ident_map st =
 
 (* compute free variables in a struct *)
 let free_variables st =
-  let bv = snd st in
+  let bv = st.struct_env in
   let is_bound id = Ident.assoc_by_id bv id <> None in
   let rec free_vars = function
     | Texp_unit -> []
@@ -163,7 +165,7 @@ let free_variables st =
   and do_struct st acc =
     Ident.fold
       (fun i ft fv -> List.rev_append (do_field ft) fv)
-      (snd st) acc
+      st.struct_env acc
   in
     do_struct st []
 
@@ -202,36 +204,17 @@ let rec path_location_of = function
 (* type utilities *)
 
 let is_field_name_in_struct fn st =
-  List.exists
-    (function
-       | Tfield_name (id, _, _) -> Ident.name_of id = fn
-       | Tfield_align _ -> false)
-    (fst st)
+  Ident.exists (fun id _ -> Ident.name_of id = fn) st.struct_env
 
 let lookup_field_in_struct_env fn st =
-  let rec lookup = function
-    | [] ->
-        None
-    | Tfield_align _ :: tl ->
-        lookup tl
-    | Tfield_name (fid, ft, fal) :: tl ->
-        if Ident.name_of fid = fn then Some (fid, ft)
-        else lookup tl in
-    lookup (fst st)
+  Ident.assoc_by_name st.struct_env fn
 
 let get_field_type fn st =
-  let rec getter = function
-    | [] ->
+  match lookup_field_in_struct_env fn st with
+    | None ->
         raise Not_found
-    | Tfield_align _ :: tl ->
-        getter tl
-    | Tfield_name (id, ft, _) :: tl ->
-        if (Ident.name_of id) = fn then
-          id, ft
-        else
-          getter tl
-  in
-    getter (fst st)
+    | Some (fid, ft) ->
+        fid, ft
 
 (* type coercions *)
 

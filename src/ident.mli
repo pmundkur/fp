@@ -17,6 +17,8 @@ val empty_env: 'a env
 
 val add: t -> 'a -> 'a env -> 'a env
 
+val exists: (t -> 'a -> bool) -> 'a env -> bool
+
 val assoc_by_name: 'a env -> string -> (t * 'a) option
 
 val assoc_by_id: 'a env -> t -> 'a option
