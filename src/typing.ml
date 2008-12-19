@@ -589,10 +589,46 @@ let extend_env_with_branch_paths env bgl =
       (fun e bg -> extend_with_branch e bg)
       env bgl
 
+(* Convert paths info into branch patterns for warnings and
+   code-generation.
+*)
+
+let rec st_pattern cases cfields =
+  let cases_with_path_prefix fid =
+    List.filter (fun (p, _, _) -> path_head_ident p = fid) cases
+  in
+    Pt_struct (List.map
+                 (fun cid -> br_pattern cid (cases_with_path_prefix cid))
+                 cfields)
+
+and br_pattern cid cases =
+  (* The asserts here rely on typechecking to ensure well-formed case
+     paths.  The "Unspecified_path" check ensure that the leading path
+     in the case has a single component, and the remaining paths have
+     at least one component.  The "Duplicate_path" check ensures there
+     are no duplicate paths.
+  *)
+  let strip_path cs =
+    List.map
+      (fun (p, cn, st) ->
+         match p with
+           | Tvar_ident _ -> assert false
+           | Tvar_path (_, s) -> s, cn, st)
+      cs
+  in
+    match cases with
+      | [] ->
+          Pt_any
+      | (Tvar_ident fid, cn, st) :: tl ->
+          assert (cid = fid);
+          Pt_constructor (fid, cn, st_pattern (strip_path tl) st.classify_fields)
+      | (Tvar_path _, _, _) :: _ ->
+          assert false
+
 (* This implements the value typing rules. They're implemented as a
    special case of the attribute typing below.
 *)
-let type_value_attrib env f bt vcl =
+let type_value_attrib env f bt vcl classify_fields =
   let default_present = ref false in
   let is_default_case vc =
     match vc.pvalue_case_desc with
@@ -607,9 +643,10 @@ let type_value_attrib env f bt vcl =
       | Pvalue_branch (bgl, e) ->
           let ext_env = extend_env_with_branch_paths env bgl in
           let te = type_check_exp_as_base_type ext_env e bt in
-          let b = { branch_path_info = Env.get_paths ext_env;
-                    branch_pattern = ();
-                    branch_value = te } in
+          let cases_info = Env.get_paths ext_env in
+          let b = { case_info = cases_info;
+                    pattern = st_pattern cases_info classify_fields;
+                    value = te } in
             Tvalue_branch b in
   let fvl = List.map typer vcl in
   let last_vc = List.hd (List.rev vcl) in
@@ -627,8 +664,11 @@ let type_value_attrib env f bt vcl =
    The implemented rule is a generalization of:
 
      E |- x : value_exp
+
+   The classify_fields argument is only used for generating struct
+   patterns from branch cases for field value attributes.
 *)
-let type_attribs env f ft fal =
+let type_attribs env f ft fal classify_fields =
   let max_present = ref false in
   let min_present = ref false in
   let const_present = ref false in
@@ -688,7 +728,7 @@ let type_attribs env f ft fal =
                Tattrib_default (type_check_exp_as_base_type env e bt)
            | Pattrib_value vcl, Ttype_base bt ->
                check_and_mark_present "value" value_present fa.pfield_attrib_loc;
-               Tattrib_value (type_value_attrib env f bt vcl)
+               Tattrib_value (type_value_attrib env f bt vcl classify_fields)
            | Pattrib_variant_ref vn, Ttype_base bt ->
                check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                let _, vdef = get_variant_def env vn in
@@ -825,22 +865,37 @@ and type_format env fmt =
                Env.add_field id (lookup_type id ext_env) e)
       (init_typing_env ())
       (List.rev fl) in
-  let get_field_entries venv fl =
+  let get_classify_fields venv fl =
     List.fold_left
-      (fun accu f ->
+      (fun cfields f ->
+         match f with
+           | Align _ ->
+               cfields
+           | Field (id, _) ->
+               match lookup_type id venv with
+                 | Ttype_map _ -> id :: cfields
+                 | _ -> cfields)
+      [] fl in
+  let get_field_entries venv fl classify_fields =
+    List.fold_left
+      (fun entries f ->
          match f with
            | Align i ->
-               (Tfield_align i) :: accu
+               (Tfield_align i) :: entries
            | Field (id, al) ->
                let ft = lookup_type id venv in
-               let tal = type_attribs venv id ft al in
-                 (Tfield_name (id, ft, tal)) :: accu)
+               let tal = type_attribs venv id ft al classify_fields
+               in
+                 (Tfield_name (id, ft, tal)) :: entries)
       [] fl in
   let ext_env, align, fl = type_fields () in
   let _ = check_align align in
   let venv = get_value_env ext_env fl in
-    { struct_entries = get_field_entries venv fl;
-      struct_env = Env.extract_field_env venv }
+  let cfields = get_classify_fields venv fl in
+  let entries = get_field_entries venv fl cfields in
+    { entries = entries;
+      env = Env.extract_field_env venv;
+      classify_fields = cfields }
 
 (* Type-checker top-level *)
 

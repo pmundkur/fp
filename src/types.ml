@@ -56,14 +56,15 @@ module StringMap = Map.Make (struct type t = string let compare = compare end)
 
 type branch_pattern =
   | Pt_constructor of Ident.t * Asttypes.case_name * struct_pattern
+  | Pt_any
 
 and struct_pattern =
   | Pt_struct of branch_pattern list
 
 type branch_value =
-    { branch_path_info : (path * Asttypes.case_name * struct_type) list;
-      branch_pattern : (* branch_pattern *) unit;
-      branch_value : exp }
+    { case_info : (path * Asttypes.case_name * struct_type) list;
+      mutable pattern : struct_pattern;
+      value : exp }
 
 and field_value =
   | Tvalue_default of exp
@@ -91,8 +92,9 @@ and field_entry =
 and field_info = field_type  (* stored in environment *)
 
 and struct_type =
-    { struct_entries : field_entry list;
-      struct_env : field_info Ident.env }
+    { entries : field_entry list;
+      env : field_info Ident.env;
+      classify_fields : Ident.t list }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 and map_type = map_entry StringMap.t
@@ -121,7 +123,7 @@ let rec ident_map st =
         Ident.extend env (ident_map st)
     | Ttype_label ->
         env in
-  let env = st.struct_env
+  let env = st.env
   in
     Ident.fold
       (fun i ft env -> do_field env ft)
@@ -129,7 +131,7 @@ let rec ident_map st =
 
 (* compute free variables in a struct *)
 let free_variables st =
-  let bv = st.struct_env in
+  let bv = st.env in
   let is_bound id = Ident.assoc_by_id bv id <> None in
   let rec free_vars = function
     | Texp_unit -> []
@@ -174,7 +176,7 @@ let free_variables st =
   and do_struct st acc =
     Ident.fold
       (fun i ft fv -> List.rev_append (do_field ft) fv)
-      st.struct_env acc
+      st.env acc
   in
     do_struct st []
 
@@ -213,10 +215,10 @@ let rec path_location_of = function
 (* type utilities *)
 
 let is_field_name_in_struct fn st =
-  Ident.exists (fun id _ -> Ident.name_of id = fn) st.struct_env
+  Ident.exists (fun id _ -> Ident.name_of id = fn) st.env
 
 let lookup_field_in_struct_env fn st =
-  Ident.assoc_by_name st.struct_env fn
+  Ident.assoc_by_name st.env fn
 
 let get_field_type fn st =
   match lookup_field_in_struct_env fn st with

@@ -56,14 +56,15 @@ module StringMap: Map.S with type key = string
 
 type branch_pattern =
   | Pt_constructor of Ident.t * Asttypes.case_name * struct_pattern
+  | Pt_any
 
 and struct_pattern =
   | Pt_struct of branch_pattern list
 
 type branch_value =
-    { branch_path_info : (path * Asttypes.case_name * struct_type) list;
-      branch_pattern : (* branch_pattern *) unit;
-      branch_value : exp }
+    { case_info : (path * Asttypes.case_name * struct_type) list;
+      mutable pattern : struct_pattern;
+      value : exp }
 
 and field_value =
   | Tvalue_default of exp
@@ -94,8 +95,9 @@ and field_info = field_type
    identifiers are defined.
 *)
 and struct_type =
-    { struct_entries : field_entry list;
-      struct_env : field_info Ident.env }
+    { entries : field_entry list;
+      env : field_info Ident.env;
+      classify_fields: Ident.t list }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 and map_type = map_entry StringMap.t
