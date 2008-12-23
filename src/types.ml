@@ -204,9 +204,7 @@ let path_compose pre suf =
     | Tvar_ident id -> id :: cur_ids
     | Tvar_path (id, p) -> ids_of (id :: cur_ids) p in
   let pre_ids = ids_of [] pre in
-    List.fold_left
-      (fun p id -> Tvar_path (id, p))
-      suf pre_ids
+    List.fold_left (fun p id -> Tvar_path (id, p)) suf pre_ids
 
 let rec path_location_of = function
   | Tvar_ident id -> Ident.location_of id

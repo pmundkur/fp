@@ -264,9 +264,7 @@ let rec check_exp_const exp =
     | Pexp_const_int32 _
     | Pexp_const_int64 _ -> true
     | Pexp_apply (fname, arglist) ->
-        List.fold_left
-          (fun r a -> r && check_exp_const a)
-          true arglist
+        List.fold_left (fun r a -> r && check_exp_const a) true arglist
 
 let rec const_fold_as_int64 env exp =
   match exp.pexp_desc with
@@ -396,8 +394,7 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
             else
               let targlist =
                 List.map2
-                  (fun ae at ->
-                     type_check_exp_as_exp_type env ae at)
+                  (fun ae at -> type_check_exp_as_exp_type env ae at)
                   arglist fat
               in
                 check_exp_type_equal frt as_exp_type exp.pexp_loc;
@@ -443,10 +440,9 @@ let type_check_exp_as_base_type env exp as_base_type =
               raise_arg_count_mismatch fname rcvd expected
             else
               let targlist =
-                (List.map2
-                   (fun ae at ->
-                      type_check_exp_as_exp_type env ae at)
-                   arglist fat)
+                List.map2
+                  (fun ae at -> type_check_exp_as_exp_type env ae at)
+                  arglist fat
               in
                 check_field_type_compatible_with_exp_type
                   (Ttype_base as_base_type) frt exp.pexp_loc;
@@ -566,9 +562,7 @@ let type_check_variant_attrib env f bt v =
       | Tprim_uint32 -> Texp_const_uint32 (const_fold_as_uint32 env vc)
       | Tprim_int64 -> Texp_const_int64 (const_fold_as_int64 env vc)
   in
-    List.map
-      (fun (e, cn, d) -> (cfold e), cn, d)
-      v.pvariant_desc
+    List.map (fun (e, cn, d) -> (cfold e), cn, d) v.pvariant_desc
 
 let extend_env_with_branch_paths env bgl =
   let extend_with_branch e bg =
@@ -585,9 +579,7 @@ let extend_env_with_branch_paths env bgl =
         | _ ->
             raise_path_is_not_struct p
   in
-    List.fold_left
-      (fun e bg -> extend_with_branch e bg)
-      env bgl
+    List.fold_left (fun e bg -> extend_with_branch e bg) env bgl
 
 (* Convert paths info into branch patterns for warnings and
    code-generation.
@@ -830,10 +822,10 @@ let rec type_field (env, cur_align, fl) f =
                          let tfmt = type_format env fmt in
                            (cnm, (cn, te, tfmt)) :: a)
                     [] cl in
-                let m = List.fold_left
-                  (fun m (nm, (cn, te, tfmt)) ->
-                     StringMap.add nm (cn, te, tfmt) m)
-                  StringMap.empty tcl in
+                let m =
+                  List.fold_left
+                    (fun m (nm, (cn, te, tfmt)) -> StringMap.add nm (cn, te, tfmt) m)
+                    StringMap.empty tcl in
                 let e = Env.add_field fi (Ttype_map (Texp_var eid, m)) env in
                   e, 0, (Field (fi, [])) :: fl
 
@@ -1017,7 +1009,6 @@ let type_check env decls =
             let tfmt = type_format e fmt in
               Env.add_format_def (Ident.from_node fn) tfmt e
     in
-      List.fold_left
-        (fun e d -> typer e d) env decls
+      List.fold_left (fun e d -> typer e d) env decls
   with
     | e -> handle_typing_exception e

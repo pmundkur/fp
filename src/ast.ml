@@ -258,9 +258,7 @@ and pr_field_type ff ft =
   match ft.pfield_type_desc with
     | Ptype_simple (te, al) ->
         pr_type_exp ff te;
-        List.iter
-          (fun a -> Format.fprintf ff " "; pr_field_attrib ff a)
-          al
+        List.iter (fun a -> Format.fprintf ff " "; pr_field_attrib ff a) al
     | Ptype_array (e, fmt) ->
         Format.fprintf ff "@[<v 0>@[<v 4>array (";
         pr_exp ff e;
