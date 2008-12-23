@@ -54,17 +54,24 @@ type case_exp =
 
 module StringMap: Map.S with type key = string
 
-type branch_pattern =
-  | Pt_constructor of Ident.t * Asttypes.case_name * struct_pattern
+type branch =
+    { pattern: pattern;
+      branch_info: branch_info }
+
+and pattern =
+  | Pt_constructor of Asttypes.case_name * struct_pattern
   | Pt_any
 
-and struct_pattern =
-  | Pt_struct of branch_pattern list
+and branch_info =
+    { field: Ident.t;
+      field_map: map_type }
 
-type branch_value =
-    { case_info : (path * Asttypes.case_name * struct_type) list;
-      mutable pattern : struct_pattern;
-      value : exp }
+and struct_pattern =
+  | Pt_struct of branch list
+
+and branch_value =
+    { struct_pattern: struct_pattern;
+      value: exp }
 
 and field_value =
   | Tvalue_default of exp
@@ -95,9 +102,9 @@ and field_info = field_type
    identifiers are defined.
 *)
 and struct_type =
-    { entries : field_entry list;
-      env : field_info Ident.env;
-      classify_fields: Ident.t list }
+    { entries: field_entry list;
+      env: field_info Ident.env;
+      classify_fields: (Ident.t * map_type) list }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 and map_type = map_entry StringMap.t

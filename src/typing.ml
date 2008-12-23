@@ -590,37 +590,49 @@ let rec st_pattern cases cfields =
     List.filter (fun (p, _, _) -> path_head_ident p = fid) cases
   in
     Pt_struct (List.map
-                 (fun cid -> br_pattern cid (cases_with_path_prefix cid))
+                 (fun (cid, mt) -> br_pattern cid mt (cases_with_path_prefix cid))
                  cfields)
 
-and br_pattern cid cases =
+and br_pattern cid mt cases =
   (* The asserts here rely on typechecking to ensure well-formed case
      paths.  The "Unspecified_path" check ensure that the leading path
      in the case has a single component, and the remaining paths have
      at least one component.  The "Duplicate_path" check ensures there
      are no duplicate paths.
   *)
+  let branch_info = { field = cid;
+                      field_map = mt } in
   let strip_path cs =
     List.map
       (fun (p, cn, st) ->
          match p with
-           | Tvar_ident _ -> assert false
-           | Tvar_path (_, s) -> s, cn, st)
+           | Tvar_ident _ ->
+               (* The remaining paths in the cases list should refer
+                  to nested fields. *)
+               assert false
+           | Tvar_path (_, s) ->
+               s, cn, st)
       cs
   in
     match cases with
       | [] ->
-          Pt_any
+          { pattern = Pt_any;
+            branch_info = branch_info }
       | (Tvar_ident fid, cn, st) :: tl ->
+          (* The filter in the st_pattern caller should ensure this. *)
           assert (cid = fid);
-          Pt_constructor (fid, cn, st_pattern (strip_path tl) st.classify_fields)
+          { pattern = Pt_constructor (cn, st_pattern (strip_path tl) st.classify_fields);
+            branch_info = branch_info }
       | (Tvar_path _, _, _) :: _ ->
+          (* The leading case should refer to a local field ident, not
+             a nested one.  Otherwise, typechecking should have
+             failed! *)
           assert false
 
 (* This implements the value typing rules. They're implemented as a
    special case of the attribute typing below.
 *)
-let type_value_attrib env f bt vcl classify_fields =
+let type_check_value_attrib env f bt vcl classify_fields =
   let default_present = ref false in
   let is_default_case vc =
     match vc.pvalue_case_desc with
@@ -636,8 +648,7 @@ let type_value_attrib env f bt vcl classify_fields =
           let ext_env = extend_env_with_branch_paths env bgl in
           let te = type_check_exp_as_base_type ext_env e bt in
           let cases_info = Env.get_paths ext_env in
-          let b = { case_info = cases_info;
-                    pattern = st_pattern cases_info classify_fields;
+          let b = { struct_pattern = st_pattern cases_info classify_fields;
                     value = te } in
             Tvalue_branch b in
   let fvl = List.map typer vcl in
@@ -720,7 +731,7 @@ let type_attribs env f ft fal classify_fields =
                Tattrib_default (type_check_exp_as_base_type env e bt)
            | Pattrib_value vcl, Ttype_base bt ->
                check_and_mark_present "value" value_present fa.pfield_attrib_loc;
-               Tattrib_value (type_value_attrib env f bt vcl classify_fields)
+               Tattrib_value (type_check_value_attrib env f bt vcl classify_fields)
            | Pattrib_variant_ref vn, Ttype_base bt ->
                check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                let _, vdef = get_variant_def env vn in
@@ -865,7 +876,7 @@ and type_format env fmt =
                cfields
            | Field (id, _) ->
                match lookup_type id venv with
-                 | Ttype_map _ -> id :: cfields
+                 | Ttype_map (_, mt) -> (id, mt) :: cfields
                  | _ -> cfields)
       [] fl in
   let get_field_entries venv fl classify_fields =
