@@ -639,22 +639,26 @@ let type_check_value_attrib env f bt vcl classify_fields =
       | Pvalue_default _ -> true
       | Pvalue_branch _ -> false in
   let typer vc =
-    match vc.pvalue_case_desc with
-      | Pvalue_default e ->
-          if !default_present then
-            raise_duplicate_default_value f vc.pvalue_case_loc;
-          Tvalue_default (type_check_exp_as_base_type env e bt)
-      | Pvalue_branch (bgl, e) ->
-          let ext_env = extend_env_with_branch_paths env bgl in
-          let te = type_check_exp_as_base_type ext_env e bt in
-          let cases_info = Env.get_paths ext_env in
-          let b = { struct_pattern = st_pattern cases_info classify_fields;
-                    value = te } in
-            Tvalue_branch b in
+    let fvd =
+      match vc.pvalue_case_desc with
+        | Pvalue_default e ->
+            if !default_present then
+              raise_duplicate_default_value f vc.pvalue_case_loc;
+            Tvalue_default (type_check_exp_as_base_type env e bt)
+        | Pvalue_branch (bgl, e) ->
+            let ext_env = extend_env_with_branch_paths env bgl in
+            let te = type_check_exp_as_base_type ext_env e bt in
+            let cases_info = Env.get_paths ext_env in
+            let b = { struct_pattern = st_pattern cases_info classify_fields;
+                      value = te } in
+              Tvalue_branch b in
+      { field_value_desc = fvd;
+        field_value_loc = vc.pvalue_case_loc } in
   let fvl = List.map typer vcl in
   let last_vc = List.hd (List.rev vcl) in
-    (* Check that if a default was present, it was the
-       last case specified. *)
+    (* Check that if a default was present, it was the last case
+       specified.  This condition is crucially relied on the
+       classification branch pattern checker.  *)
     if !default_present && not (is_default_case last_vc) then
       raise_default_value_is_not_last_case f last_vc.pvalue_case_loc;
     fvl

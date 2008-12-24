@@ -8,7 +8,7 @@
 
 open Types
 
-let make_default_pvec branch_info case_name =
+let make_default_vector branch_info case_name =
   let (_, _, st) =
     try
       StringMap.find case_name branch_info.field_map
@@ -31,7 +31,7 @@ let rec specialize_vector branch_info case_name = function
       else
         None
   | { pattern = Pt_any } :: ptail ->
-      Some ((make_default_pvec branch_info case_name) @ ptail)
+      Some ((make_default_vector branch_info case_name) @ ptail)
 
 and specialize_matrix branch_info case_name matrix =
   List.fold_left
@@ -69,6 +69,9 @@ let is_complete_signature signature branch_info =
     (fun s _ acc -> acc && StringSet.mem s signature)
     branch_info.field_map true
 
+(* This is the core usefulness routine, and implements the U_rec
+   function of the paper.
+*)
 let rec is_useful_pattern matrix pattern =
   match matrix with
     | [] ->
@@ -103,7 +106,7 @@ let rec is_useful_pattern matrix pattern =
                     StringSet.fold
                       (fun s acc ->
                          (specialize_matrix bi s matrix,
-                          (make_default_pvec bi s) @ ptail)
+                          (make_default_vector bi s) @ ptail)
                          :: acc)
                       signature []
                   in
@@ -114,3 +117,52 @@ let rec is_useful_pattern matrix pattern =
                   is_useful_pattern (default_matrix matrix) ptail
           | [] ->
               assert false
+
+
+
+
+(* This is the driver for the pattern usefulness checker.  It takes a
+   field_value list as input, and checks whether the specified pattern
+   matching has any redundancies and/or is complete.
+*)
+
+let make_default_from_matrix m =
+  let rec from_vector = function
+    | [] ->
+        []
+    | { branch_info = bi } :: ptail ->
+        { pattern = Pt_any; branch_info = bi } :: (from_vector ptail)
+  in
+    match m with
+      | [] -> []
+      | p :: ps -> from_vector p
+
+exception Redundant_branch_pattern of Location.t
+let raise_redundant_branch_pattern loc =
+  raise (Redundant_branch_pattern loc)
+
+let check_field_value_list fvl =
+  let final_matrix =
+    List.fold_left
+      (fun m fv ->
+         (* Note that the pattern computed for the default field_value
+            is an empty pattern when the pattern matrix m is empty.
+            This will trigger a bunch of asserts if the default is
+            followed by any subsequent field values.  But the
+            typechecking phase ensures that the default is the last in
+            the sequence. *)
+         let pattern =
+           match fv.field_value_desc with
+             | Tvalue_default _ ->
+                 make_default_from_matrix m
+             | Tvalue_branch { struct_pattern = Pt_struct pattern } ->
+                 pattern
+         in
+           if is_useful_pattern m pattern then
+             List.rev (pattern :: (List.rev m))
+           else
+             raise_redundant_branch_pattern fv.field_value_loc)
+      [] fvl
+  in
+    (* TODO: check final_matrix for redundancies *)
+    final_matrix

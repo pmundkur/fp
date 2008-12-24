@@ -74,6 +74,10 @@ and branch_value =
       value: exp }
 
 and field_value =
+    { field_value_desc: field_value_desc;
+      field_value_loc: Location.t }
+
+and field_value_desc =
   | Tvalue_default of exp
   | Tvalue_branch of branch_value
 
