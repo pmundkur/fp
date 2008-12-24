@@ -8,19 +8,22 @@
 
 open Types
 
-let make_default_vector branch_info case_name =
+let make_default_vector st =
+  let maker bi =
+    { pattern = Pt_any;
+      branch_info = bi }
+  in
+    List.map maker st.classify_fields
+
+let make_default_from_branch branch_info case_name =
   let (_, _, st) =
     try
       StringMap.find case_name branch_info.field_map
     with
       | Not_found ->
-          assert false in
-  let maker (cid, mt) =
-    { pattern = Pt_any;
-      branch_info = { field = cid;
-                      field_map = mt } }
+          assert false
   in
-    List.map maker st.classify_fields
+    make_default_vector st
 
 let rec specialize_vector branch_info case_name = function
   | [] ->
@@ -31,7 +34,7 @@ let rec specialize_vector branch_info case_name = function
       else
         None
   | { pattern = Pt_any } :: ptail ->
-      Some ((make_default_vector branch_info case_name) @ ptail)
+      Some ((make_default_from_branch branch_info case_name) @ ptail)
 
 and specialize_matrix branch_info case_name matrix =
   List.fold_left
@@ -106,7 +109,7 @@ let rec is_useful_pattern matrix pattern =
                     StringSet.fold
                       (fun s acc ->
                          (specialize_matrix bi s matrix,
-                          (make_default_vector bi s) @ ptail)
+                          (make_default_from_branch bi s) @ ptail)
                          :: acc)
                       signature []
                   in
@@ -119,29 +122,24 @@ let rec is_useful_pattern matrix pattern =
               assert false
 
 
-
+let get_unmatched_pattern matrix st =
+  (* TODO: check final_matrix for redundancies *)
+  None
 
 (* This is the driver for the pattern usefulness checker.  It takes a
    field_value list as input, and checks whether the specified pattern
    matching has any redundancies and/or is complete.
 *)
 
-let make_default_from_matrix m =
-  let rec from_vector = function
-    | [] ->
-        []
-    | { branch_info = bi } :: ptail ->
-        { pattern = Pt_any; branch_info = bi } :: (from_vector ptail)
-  in
-    match m with
-      | [] -> []
-      | p :: ps -> from_vector p
-
 exception Redundant_branch_pattern of Location.t
+exception Unmatched_branch_pattern of Ident.t * struct_pattern
+
 let raise_redundant_branch_pattern loc =
   raise (Redundant_branch_pattern loc)
+let raise_unmatched_branch_pattern id stp =
+  raise (Unmatched_branch_pattern (id, stp))
 
-let check_field_value_list fvl =
+let check_field_value_list fid fvl st =
   let final_matrix =
     List.fold_left
       (fun m fv ->
@@ -154,7 +152,7 @@ let check_field_value_list fvl =
          let pattern =
            match fv.field_value_desc with
              | Tvalue_default _ ->
-                 make_default_from_matrix m
+                 make_default_vector st
              | Tvalue_branch { struct_pattern = Pt_struct pattern } ->
                  pattern
          in
@@ -164,5 +162,10 @@ let check_field_value_list fvl =
              raise_redundant_branch_pattern fv.field_value_loc)
       [] fvl
   in
-    (* TODO: check final_matrix for redundancies *)
-    final_matrix
+    match get_unmatched_pattern final_matrix st with
+      | None ->
+          ()
+      | Some p ->
+          raise_unmatched_branch_pattern fid p
+
+

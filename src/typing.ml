@@ -590,18 +590,17 @@ let rec st_pattern cases cfields =
     List.filter (fun (p, _, _) -> path_head_ident p = fid) cases
   in
     Pt_struct (List.map
-                 (fun (cid, mt) -> br_pattern cid mt (cases_with_path_prefix cid))
+                 (fun bi ->
+                    br_pattern bi (cases_with_path_prefix bi.field))
                  cfields)
 
-and br_pattern cid mt cases =
+and br_pattern bi cases =
   (* The asserts here rely on typechecking to ensure well-formed case
      paths.  The "Unspecified_path" check ensure that the leading path
      in the case has a single component, and the remaining paths have
      at least one component.  The "Duplicate_path" check ensures there
      are no duplicate paths.
   *)
-  let branch_info = { field = cid;
-                      field_map = mt } in
   let strip_path cs =
     List.map
       (fun (p, cn, st) ->
@@ -617,12 +616,12 @@ and br_pattern cid mt cases =
     match cases with
       | [] ->
           { pattern = Pt_any;
-            branch_info = branch_info }
+            branch_info = bi }
       | (Tvar_ident fid, cn, st) :: tl ->
           (* The filter in the st_pattern caller should ensure this. *)
-          assert (cid = fid);
+          assert (bi.field = fid);
           { pattern = Pt_constructor (cn, st_pattern (strip_path tl) st.classify_fields);
-            branch_info = branch_info }
+            branch_info = bi }
       | (Tvar_path _, _, _) :: _ ->
           (* The leading case should refer to a local field ident, not
              a nested one.  Otherwise, typechecking should have
@@ -880,7 +879,7 @@ and type_format env fmt =
                cfields
            | Field (id, _) ->
                match lookup_type id venv with
-                 | Ttype_map (_, mt) -> (id, mt) :: cfields
+                 | Ttype_map (_, mt) -> { field = id; field_map = mt } :: cfields
                  | _ -> cfields)
       [] fl in
   let get_field_entries venv fl classify_fields =

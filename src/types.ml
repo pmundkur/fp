@@ -105,7 +105,7 @@ and field_info = field_type  (* stored in environment *)
 and struct_type =
     { entries: field_entry list;
       env: field_info Ident.env;
-      classify_fields: (Ident.t * map_type) list }
+      classify_fields: branch_info list }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 and map_type = map_entry StringMap.t
