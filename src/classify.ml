@@ -241,3 +241,33 @@ let check_field_value_list fid fvl st =
           ()
       | Some p ->
           raise_unmatched_branch_pattern fid (Pt_struct p)
+
+let rec check_struct st =
+  let rec do_field st = function
+    | Tfield_name (fid, ft, fal) ->
+        (match ft with
+          | Ttype_base _ ->
+              do_attribs fid fal st
+          | Ttype_struct st ->
+              check_struct st
+          | Ttype_map (_, mt) ->
+              StringMap.iter (fun _ (_, _, st) -> check_struct st) mt
+          | Ttype_array (_, st) ->
+              check_struct st
+          | Ttype_label ->
+              ())
+    | Tfield_align _ ->
+        ()
+  and do_attribs fid fal st =
+    List.iter
+      (function
+         | Tattrib_max _ | Tattrib_min _ | Tattrib_const _ | Tattrib_default _ | Tattrib_variant _ ->
+             ()
+         | Tattrib_value fvl ->
+             check_field_value_list fid fvl st)
+      fal
+  in
+    List.iter (do_field st) st.entries
+
+let check_formats fmts =
+  Ident.iter (fun _ st -> check_struct st) fmts
