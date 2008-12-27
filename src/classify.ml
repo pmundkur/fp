@@ -8,22 +8,38 @@
 
 open Types
 
-let make_default_vector st =
-  let maker bi =
-    { pattern = Pt_any;
-      branch_info = bi }
+let list_take n list =
+  if n < 0 then raise (Invalid_argument "take");
+  let rec take acc n = function
+    | [] ->
+        if n > 0 then raise (Failure "take") else List.rev acc, []
+    | hd :: tl as l ->
+        if n = 0 then List.rev acc, l else take (hd :: acc) (n - 1) tl
   in
-    List.map maker st.classify_fields
+    take [] n list
 
-let make_default_from_branch branch_info case_name =
-  let (_, _, st) =
+let get_case_branch_info branch_info case_name =
+  let (cn, _, st) =
     try
       StringMap.find case_name branch_info.field_map
     with
       | Not_found ->
           assert false
   in
-    make_default_vector st
+    cn, st.classify_fields
+
+let make_default binfo =
+  { pattern = Pt_any;
+    branch_info = binfo }
+
+let make_default_vector binfos =
+  List.map make_default binfos
+
+let make_default_from_branch branch_info case_name =
+  make_default_vector (snd (get_case_branch_info branch_info case_name))
+
+let specialize_branch_info branch_info case_name =
+  snd (get_case_branch_info branch_info case_name)
 
 let rec specialize_vector branch_info case_name = function
   | [] ->
@@ -44,6 +60,12 @@ and specialize_matrix branch_info case_name matrix =
          | Some v -> v :: acc)
     [] (List.rev matrix)
 
+let unspecialize_vector branch_info case_name pvec =
+  let cn, cbi = get_case_branch_info branch_info case_name in
+  let plist, ptail = list_take (List.length cbi) pvec in
+    { pattern = Pt_constructor (cn, (Pt_struct plist));
+      branch_info = branch_info } :: ptail
+
 let default_matrix matrix =
   List.fold_left
     (fun acc -> function
@@ -53,8 +75,6 @@ let default_matrix matrix =
 
 module StringSet = Set.Make (struct type t = string let compare = compare end)
 
-(* This gets the constructor signature of the first column of the
-   matrix. *)
 let column_signature matrix =
   let do_row set = function
     | { pattern = Pt_constructor (cn, _) } :: ptail ->
@@ -64,13 +84,26 @@ let column_signature matrix =
   in
     List.fold_left do_row StringSet.empty matrix
 
-let is_complete_signature signature branch_info =
+exception Found of Asttypes.case_name * branch_info list
+let get_a_missing_constructor signature branch_info =
   StringSet.iter
     (fun s -> assert (StringMap.mem s branch_info.field_map))
     signature;
-  StringMap.fold
-    (fun s _ acc -> acc && StringSet.mem s signature)
-    branch_info.field_map true
+  try
+    StringMap.iter
+      (fun s (cn, _, st) ->
+         if StringSet.mem s signature
+         then ()
+         else raise (Found (cn, st.classify_fields)))
+      branch_info.field_map;
+    None
+  with
+    | Found (cn, binfos) -> Some (cn, binfos)
+
+let is_complete_signature signature branch_info =
+  match get_a_missing_constructor signature branch_info with
+    | None -> true
+    | Some _ -> false
 
 (* This is the core usefulness routine, and implements the U_rec
    function of the paper.
@@ -90,9 +123,7 @@ let rec is_useful_pattern matrix pattern =
         assert (List.length pattern = 0);
         false
     | p :: ps ->
-        List.iter
-          (fun p -> assert (List.length p = List.length pattern))
-          matrix;
+        List.iter (fun p -> assert (List.length p = List.length pattern)) matrix;
         match pattern with
           | { pattern = Pt_constructor (cn, (Pt_struct plist));
               branch_info = bi }
@@ -122,13 +153,56 @@ let rec is_useful_pattern matrix pattern =
               assert false
 
 
-let get_unmatched_pattern matrix st =
-  (* TODO: check final_matrix for redundancies *)
-  None
+(* This is the core exhaustiveness checking routine, and implements
+   the I algorithm of the paper.
+*)
+exception Found of string * branch list
+let rec get_unmatched_pattern matrix binfos =
+  match matrix with
+    | [] ->
+        Some (make_default_vector binfos)
+    | [] :: ps ->
+        List.iter (fun p -> assert (List.length p = 0)) ps;
+        assert (List.length binfos = 0);
+        None
+    | p :: ps ->
+        List.iter (fun p' -> assert (List.length p' = List.length p)) ps;
+        assert (List.length binfos = List.length p);
+        let signature = column_signature matrix in
+        let bi, tl_bis = List.hd binfos, List.tl binfos in
+        let sp_matrix s = specialize_matrix bi s matrix in
+        let sp_bi s = (specialize_branch_info bi s) @ tl_bis in
+          if is_complete_signature signature bi then
+            begin
+              try
+                StringSet.iter
+                  (fun s ->
+                     match get_unmatched_pattern (sp_matrix s) (sp_bi s) with
+                       | Some p ->  raise (Found (s, p))
+                       | None -> ())
+                  signature;
+                None
+              with
+                | Found (s, p) -> Some (unspecialize_vector bi s p)
+            end
+          else
+            match get_unmatched_pattern (default_matrix matrix) tl_bis with
+              | None ->
+                  None
+              | Some p ->
+                  let pattern =
+                    match get_a_missing_constructor signature bi with
+                      | None ->
+                          Pt_any
+                      | Some (cn, bis) ->
+                          Pt_constructor (cn, Pt_struct (make_default_vector bis))
+                  in
+                    Some ({ pattern = pattern; branch_info = bi } :: p)
+
 
 (* This is the driver for the pattern usefulness checker.  It takes a
    field_value list as input, and checks whether the specified pattern
-   matching has any redundancies and/or is complete.
+   matching has any redundancies and is complete.
 *)
 
 exception Redundant_branch_pattern of Location.t
@@ -152,7 +226,7 @@ let check_field_value_list fid fvl st =
          let pattern =
            match fv.field_value_desc with
              | Tvalue_default _ ->
-                 make_default_vector st
+                 make_default_vector st.classify_fields
              | Tvalue_branch { struct_pattern = Pt_struct pattern } ->
                  pattern
          in
@@ -162,10 +236,8 @@ let check_field_value_list fid fvl st =
              raise_redundant_branch_pattern fv.field_value_loc)
       [] fvl
   in
-    match get_unmatched_pattern final_matrix st with
+    match get_unmatched_pattern final_matrix st.classify_fields with
       | None ->
           ()
       | Some p ->
-          raise_unmatched_branch_pattern fid p
-
-
+          raise_unmatched_branch_pattern fid (Pt_struct p)
