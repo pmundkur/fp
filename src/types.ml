@@ -343,3 +343,22 @@ let pr_field_type = function
   | Ttype_array _ -> "array"
   | Ttype_label -> "label"
 
+let pr_struct_pattern sp =
+  let rec collect_branch_paths (cur_path, branch_guards) br =
+    match br.pattern with
+      | Pt_constructor (cn, sp) ->
+          let p = br.branch_info.field :: cur_path in
+          let bgs = (p, Location.node_of cn) :: branch_guards in
+            collect_struct_paths (p, bgs) sp
+      | Pt_any ->
+          let p = br.branch_info.field :: cur_path in
+            (p, "_") :: branch_guards
+  and collect_struct_paths (cur_path, branch_guards) (Pt_struct brs) =
+    List.fold_left
+      (fun bgs br -> collect_branch_paths (cur_path, bgs) br)
+      branch_guards brs in
+  let pr_bg (path, cn) =
+    let p = String.concat "." (List.map Ident.name_of (List.rev path)) in
+      Printf.sprintf "%s = %s" p cn in
+  let bgs = List.rev (collect_struct_paths ([], []) sp) in
+    String.concat ", " (List.map pr_bg bgs)

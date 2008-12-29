@@ -154,3 +154,4 @@ val pr_exp_type: exp_type -> string
 val pr_primitive: primitive -> string
 val pr_base_type: base_type -> string
 val pr_field_type: field_type -> string
+val pr_struct_pattern: struct_pattern -> string

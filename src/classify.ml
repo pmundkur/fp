@@ -269,5 +269,24 @@ let rec check_struct st =
   in
     List.iter (do_field st) st.entries
 
+let handle_classify_exception e =
+  (match e with
+     | Redundant_branch_pattern loc ->
+         Printf.fprintf stderr "%s: redundant branch guard"
+           (Location.pr_location loc)
+     | Unmatched_branch_pattern (id, sp) ->
+         Printf.fprintf stderr "%s: non-exhaustive value guards for field %s (example: %s)"
+           (Location.pr_location (Ident.location_of id)) (Ident.pr_ident_name id) (pr_struct_pattern sp)
+     | e ->
+         raise e
+  );
+  Printf.fprintf stderr "\n";
+  exit 1
+
 let check_formats fmts =
-  Ident.iter (fun _ st -> check_struct st) fmts
+  try
+    Ident.iter (fun _ st -> check_struct st) fmts
+  with
+    | e -> handle_classify_exception e
+
+
