@@ -2,240 +2,11 @@ TODO:
 
 - Test Types.{ident_map, free_variables}.
 
-- Need to check for overlaps in classification branches.
-
-  The algorithm for this can be essentially derived from the one
-  specified in Luc Maranget's "Warnings" paper.  The way we adapt it
-  for our purposes is consider each classified struct as a variant
-  datatype with a tuple argument.  The root struct can be considered
-  as an anonymous tuple.  An example explains:
-
-  struct {
-     a : int
-     b : int value ()
-     c : classify (b) {
-           0:A -> {
-             f : int
-             g : classify (f) {
-                    0:F -> { }
-                    1:G -> { }
-                 }
-             h : byte
-           }
-           1:B -> {
-             m : int
-             n : classify (m) {
-                    0:M -> { }
-                    1:M -> { }
-                 }
-             o : int
-           }
-         }
-     d : int
-     k : classify (d) {
-           0: D -> { }
-           1: E -> { }
-         }
-  }
-
-  this is equivalent to the following variant datatypes for pattern matching purposes
-
-  root struct = (c * k)
-  and c = A of g | B of n
-  and k = D | E
-  and g = F | G
-  and n = M | N
-
-- Add a check to ensure that a field is not the target of
-  classification multiple times, since this complicates generation
-  checking:
-
-  g : classify (f) {
-       0:A -> { }
-      }
-  h : classify (f) {
-       1:B -> { }
-      }
-
-  Then
-
-     generate ('A g) ('B h) ...
-
-  would result in conflicting values for f: 0 and 1.  Otherwise we
-  would need to catch this case via code generation in the body for
-  'generate'.  This in conjunction with ranges for classification
-  branches would complicate generation checking.
-
 - Add a check to ensure that array structs don't have free variables,
   to avoid having to deal with value extraction from within arrays.
-
-- If a classification target has only pure const branches, then that
-  is equivalent to a value attribute.  If it has one or more range
-  branches, then the target must have a value attribute.  If it
-  already has a value attribute, then it should be consistent.
-
-  That is,
-
-  f : int
-  g : classify (f) {
-    0:A -> { ... }
-    1:B -> { ... }
-    ...
-  }
-
-  is equivalent to
-
-  f : int value (|g=A -> 0
-                 |g=B -> 1)
-  g : classify (f) { ... }
-
-  and if the user already specified a value attribute for f, it should
-  match the above deduced one.
-
-- The dependency graph should be computed across all branches of the
-  classification tree.
-
-- Struct naming:
-
-  A struct will have one or more names only if it has one or more
-  direct or indirect (i.e. nested) classify fields.
-
-  The names of a struct do not depend on the struct's environment;
-  they are in a sense internal to the struct.
-
-  The external name of the struct is defined when the struct appears
-  in a classification branch, and derives its external name from the
-  name of the branch node (which is external to the struct).
-
-- value () attributes need to handle assignments for multiple cases
-  for possibly multiple branches, with support for both nested and
-  serial branching.
-
-  Example A:
-
-  len   : int  value (|f=n1,f.g=m1 -> sizeof(f.g.fi1)
-                      |f=n1,f.g=m2 -> sizeof(f.g.fi2)-1
-                      |f=n2        -> e
-                      | _          -> e')
-
-  case1 : int  value (|f=n1,f.g=m1 -> (e1)
-                      |f=n1,f.g=m2 -> (e2)
-                      |f=n2 -> (e3))
-  f     : classify (case1) {
-          |eo1:n1 -> {
-                        g : classify (case2) {
-                            |ei1:m1 -> fi1 : int[len]
-                            |ei2:m2 -> fi2 : int[len+1]
-                        }
-          |eo2:n2 -> {f2}
-  }
-
-  Example B:
-
-  case1 : int  value(|f=n1 -> ef1 |f=n2 -> ef2)
-  case2 : int  value(|g=m1 -> es1 |g=m2 -> es2)
-  len1  : int  value(|f=n1 -> sizeof(f.g) |g=m2 -> sizeof(g.l))
-  len2  : int  value(|f=n2 -> sizeof(f.h) |g=m1 -> sizeof(g.k))
-
-  f  : classify (case1) {
-       |ef1:n1 -> g : int[len1];
-       |ef2:n2 -> h : int[len2];
-  }
-
-  g  : classify (case2) {
-       |es1:m1 -> k : int[len2];
-       |es2:m2 -> l : int[len1];
-  }
-
-  Algorithm modifications:
-
-  . After the parsing stage is typechecked for a format, construct a
-    complete branching tree for it.
-
-  . When checking the attributes, ensure that the cases specified for
-    a value attribute are contained in the branching tree.  If no
-    cases are specified, it is equivalent to the use of a default
-    ("_") case.  Note that the variables in a value expression will
-    have to be converted to the appropriate paths for each case.
-
-  . The dependency checking will be performed for each leaf of the
-    branching tree.
-
-    Note that many leaves will share the same dependency graph, and so
-    the same graph will be checked multiple times.  This can be
-    optimized later.
-
-    Another thing that can be done later is checking whether the value
-    attribute of a field has a case specification corresponding to
-    each use of the field.
-
-  Generation of the classification tree:
-
-    A struct branches out at a classification field.  A struct might
-    have multiple such fields.  Note that a classification field might
-    either occur directly in the struct, or appear nested inside an
-    array field.  The handling of array fields is described separately
-    below.
-
-    Each branch of the classification at a classification field
-    results in a new struct, which in turn might have classification
-    fields.  Thus we can visualize a "field-oriented" classification
-    tree rooted at a field, and multiple such "field" classification
-    trees embedded in a struct.
-
-    For e.g., in B above, the two field-oriented classification trees
-    are:
-
-    f -o-- n1 --> { g }
-       +-- n2 --> { h }
-
-    g -o-- m1 --> { k }
-       +-- m2 --> { l }
-
-    and the struct classification tree is:
-
-    -o-- {f = n1, g = m1} --> { f = { g }, g = { k } }
-     +-- {f = n1, g = m2} --> { f = { g }, g = { l } }
-     +-- {f = n2, g = m1} --> { f = { h }, g = { k } }
-     +-- {f = n2, g = m2} --> { f = { h }, g = { l } }
-
-    {f = ni} can be considered as the name of a node of the field
-    classification tree rooted at f, and {f = ni, g = mj} can be
-    considered as the label of a node in the struct classification
-    tree.
-
-    In general, the leaf names in a field tree will look like
-
-        {f = ni, f.g = nnj, f.g.h = nnnk, ... }
-
-    whereas the leaf names in a struct tree will be concatenation of
-    such paths:
-
-        {f = ni, f.g = nnj, ..., g = mk, g.h = mml, ..., h = pm, ... }
-
-    There's a mutual recursion between the field-oriented and
-    struct-oriented trees.
-
-    Let f[n1], f[n2], g[m1] and g[m2] be sets of leaf struct names for
-    struct trees rooted at those branches of the field tree.  Then the
-    set of struct names for the enclosing struct is given by:
-
-        \union_{ij} \union_{x in f[ni], y in g[mj]}  { f(ni)(x) x g(mj)(y) }
-
-    where f(ni)(x) is the set obtained by path extending the elements
-    in x by "f.", and adding (f = ni) to the set.
-
-
-    Handling array structs:
-
-    TODO: Essentially, the idea is that they can be handled like the
-    root struct.
+  This is a generation-only check.
 
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
-
-- Ott: Handle nested structs.  We need to specify an appropriate
-  environment namespace mechanism to handle variable lookups for
-  nested structs.
 
 - Ott:  type checking the format generation.
 
@@ -266,6 +37,7 @@ TODO:
       f : byte;
       g : classify (f) {
           |1:case1 -> ...
+          |2..5:case2 -> ...
           ...
           }
       }
@@ -273,8 +45,14 @@ TODO:
     Such fields (g) have an implicit value expression that computes
     the value based on the case value of f.  In the example above, f
     has an implicit branch case value (|g=case1 -> 1).  This could
-    conflict with what the user provides, so we disallow such value
-    expressions, which is simple to check for.
+    conflict with what the user provides, so we need to check such
+    value expressions, which is simple to check for.  In case the
+    branch is a range (e.g. case2 above), then the field must specify
+    a value attribute (since we cannot compute a unique value for f in
+    this case, the user needs to specify one).  If a value attribute
+    is specified, it should be consistent (i.e. the values should
+    match in the const cases, and be within range in the non-const
+    cases.)
 
     We now discuss circular dependencies.
 
@@ -381,44 +159,6 @@ TODO:
   principle, and having enclosed formats referring to enclosing
   formats is a layering violation.
 
-- Typechecking output:
-
-  This will be essentially a cooked version of the ast:
-
-  . Variable names will be resolved into identifiers, so that lexical
-    scoping is resolved.  Note that variables in expressions are
-    always references, not definitions.  These references should be
-    represented in a manner that makes it easy to determine the free
-    variables at arbitrary scope (e.g. using an integer to indicate
-    the nesting levels between the variable definition and its
-    reference)
-
-  . Expressions will be constant folded.
-
-  . Expressions in variant definitions will be entered into the
-    environment in their AST form, since they cannot be checked or
-    constant folded without knowing their required type.  This is only
-    known when they are associated with a field; so the variant
-    definition is extracted from the environment when processing such
-    a field, and is then type checked and constant-folded in the
-    context of the field that uses it.
-
-    Expressions in every other context (within a format definition)
-    can have a type deduced for it; these contexts are (i) as
-    arguments to a function, (ii) as values of value attributes, and
-    (iii) as values of inline variant definitions.
-
-  . Each module will be annotated with the set of identifiers denoting
-    free variables appearing in (possibly nested) value expressions
-    within its body.
-
-- Environment design for the typechecker:
-
-  . This should be designed to as closely mimic the semantics as
-    efficiently as possible; which implies that it should be a stack
-    of mappings, where each mapping can be represented as a list, and
-    each list entry is a cons of an identifier and its env info.
-
 Notes:
 
 - A bytestream view is implemented as an abstract datatype in its own
@@ -444,4 +184,148 @@ Notes:
   of the buffer by throwing an appropriate exception.  This way, the
   user can retry with a bigger buffer.
 
-- We use a Map kind for case fields.
+- We use a Map kind for classification fields.
+
+- Typechecking output:
+
+  This is essentially a cooked version of the ast:
+
+  . Variable names are resolved into identifiers, so that lexical
+    scoping is resolved.  Note that variables in expressions are
+    always references, not definitions.
+
+  . Expressions are be constant folded.
+
+  . Expressions in variant definitions are be entered into the
+    environment in their AST form, since they cannot be checked or
+    constant folded without knowing their required type.  The type is
+    only known when they are associated with a field; so the variant
+    definition is extracted from the environment when processing such
+    a field, and is then type checked and constant-folded in the
+    context of the field that uses it.
+
+    Expressions in every other context (within a format definition)
+    have a type deduced for it; these contexts are (i) as arguments to
+    a function, (ii) as values in value attributes, and (iii) as
+    values of inline variant definitions.
+
+
+- value () attributes can  handle assignments for multiple cases
+  for possibly multiple branches, with support for both nested and
+  serial branching.
+
+  Example A:
+
+  len   : int  value (|f=n1,f.g=m1 -> sizeof(f.g.fi1)
+                      |f=n1,f.g=m2 -> sizeof(f.g.fi2)-1
+                      |f=n2        -> e
+                      | _          -> e')
+
+  case1 : int  value (|f=n1,f.g=m1 -> (e1)
+                      |f=n1,f.g=m2 -> (e2)
+                      |f=n2 -> (e3))
+  f     : classify (case1) {
+          |eo1:n1 -> {
+                        g : classify (case2) {
+                            |ei1:m1 -> fi1 : int[len]
+                            |ei2:m2 -> fi2 : int[len+1]
+                        }
+          |eo2:n2 -> {f2}
+  }
+
+  Example B:
+
+  case1 : int  value(|f=n1 -> ef1 |f=n2 -> ef2)
+  case2 : int  value(|g=m1 -> es1 |g=m2 -> es2)
+  len1  : int  value(|f=n1 -> sizeof(f.g) |g=m2 -> sizeof(g.l))
+  len2  : int  value(|f=n2 -> sizeof(f.h) |g=m1 -> sizeof(g.k))
+
+  f  : classify (case1) {
+       |ef1:n1 -> g : int[len1];
+       |ef2:n2 -> h : int[len2];
+  }
+
+  g  : classify (case2) {
+       |es1:m1 -> k : int[len2];
+       |es2:m2 -> l : int[len1];
+  }
+
+
+  . When checking the attributes, we ensure that the cases specified
+    for a value attribute are contained in the branching tree.  If no
+    cases are specified, it is equivalent to the use of a default
+    ("_") case.
+
+  . We also check to ensure that the case specification is complete
+    (i.e. all branches are covered), and do not contain unmatched
+    cases.
+
+- We check for overlaps in classification branches.  This is a
+  generation-only check.
+
+  The algorithm for this is essentially derived from the one specified
+  in Luc Maranget's "Warnings" paper.  The way we adapt it for our
+  purposes is to consider each classified struct as a variant datatype
+  with a tuple argument.  The root struct can be considered as an
+  anonymous tuple.  An example explains:
+
+  struct {
+     a : int
+     b : int value ()
+     c : classify (b) {
+           0:A -> {
+             f : int
+             g : classify (f) {
+                    0:F -> { }
+                    1:G -> { }
+                 }
+             h : byte
+           }
+           1:B -> {
+             m : int
+             n : classify (m) {
+                    0:M -> { }
+                    1:M -> { }
+                 }
+             o : int
+           }
+         }
+     d : int
+     k : classify (d) {
+           0: D -> { }
+           1: E -> { }
+         }
+  }
+
+  This is equivalent to the following variant datatypes for pattern
+  matching purposes:
+
+  root struct = (c * k)
+  and c = A of g | B of n
+  and k = D | E
+  and g = F | G
+  and n = M | N
+
+- We add a generation-only check to ensure that a field is not the
+  target of classification multiple times, since this complicates
+  generation checking:
+
+  g : classify (f) {
+       0:A -> { }
+      }
+  h : classify (f) {
+       1:B -> { }
+      }
+
+  Then
+
+     generate ('A g) ('B h) ...
+
+  would result in conflicting values for f: 0 and 1.  Otherwise we
+  would need to catch this case via code generation in the body for
+  'generate'.  This in conjunction with ranges for classification
+  branches would complicate generation checking.
+
+  This check can be removed later.
+
+
