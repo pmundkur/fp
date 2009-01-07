@@ -19,9 +19,9 @@ let list_take n list =
     take [] n list
 
 let get_case_branch_info branch_info case_name =
-  let (cn, _, st) =
+  let cn, _, st =
     try
-      StringMap.find case_name branch_info.field_map
+      StringMap.find case_name branch_info.field_map.map_type_desc
     with
       | Not_found ->
           assert false
@@ -87,7 +87,7 @@ let column_signature matrix =
 exception Found of Asttypes.case_name * branch_info list
 let get_a_missing_constructor signature branch_info =
   StringSet.iter
-    (fun s -> assert (StringMap.mem s branch_info.field_map))
+    (fun s -> assert (StringMap.mem s branch_info.field_map.map_type_desc))
     signature;
   try
     StringMap.iter
@@ -95,7 +95,7 @@ let get_a_missing_constructor signature branch_info =
          if StringSet.mem s signature
          then ()
          else raise (Found (cn, st.classify_fields)))
-      branch_info.field_map;
+      branch_info.field_map.map_type_desc;
     None
   with
     | Found (cn, binfos) -> Some (cn, binfos)
@@ -243,28 +243,33 @@ let check_field_value_list fid fvl st =
           raise_unmatched_branch_pattern fid (Pt_struct p)
 
 let rec check_struct st =
-  let rec do_field st = function
-    | Tfield_name (fid, ft, fal) ->
-        (match ft with
-          | Ttype_base _ ->
-              do_attribs fid fal st
-          | Ttype_struct st ->
-              check_struct st
-          | Ttype_map (_, mt) ->
-              StringMap.iter (fun _ (_, _, st) -> check_struct st) mt
-          | Ttype_array (_, st) ->
-              check_struct st
-          | Ttype_label ->
-              ())
-    | Tfield_align _ ->
-        ()
+  let rec do_field st fe =
+    match fe.field_entry_desc with
+      | Tfield_name (fid, ft, fal) ->
+          (match ft with
+             | Ttype_base _ ->
+                 do_attribs fid fal st
+             | Ttype_struct st ->
+                 check_struct st
+             | Ttype_map (_, mt) ->
+                 StringMap.iter
+                   (fun _ (_, _, st) -> check_struct st)
+                   mt.map_type_desc
+             | Ttype_array (_, st) ->
+                 check_struct st
+             | Ttype_label ->
+                 ())
+      | Tfield_align _ ->
+          ()
   and do_attribs fid fal st =
     List.iter
-      (function
-         | Tattrib_max _ | Tattrib_min _ | Tattrib_const _ | Tattrib_default _ | Tattrib_variant _ ->
-             ()
-         | Tattrib_value fvl ->
-             check_field_value_list fid fvl st)
+      (fun fa ->
+         match fa.field_attrib_desc with
+           | Tattrib_max _ | Tattrib_min _
+           | Tattrib_const _ | Tattrib_default _ | Tattrib_variant _ ->
+               ()
+           | Tattrib_value fvl ->
+               check_field_value_list fid fvl st)
       fal
   in
     List.iter (do_field st) st.entries

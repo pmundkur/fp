@@ -26,6 +26,10 @@ type path =
   | Tvar_path of Ident.t * path
 
 type exp =
+    { exp_desc: exp_desc;
+      exp_loc: Location.t }
+
+and exp_desc =
   | Texp_unit
   | Texp_var of path
   | Texp_const_bit of int
@@ -44,9 +48,17 @@ type base_type =
 
 val max_bit_vector_length: int
 
-type variant = (exp * Asttypes.case_name * Asttypes.default) list
+type variant =
+    { variant_desc: variant_desc;
+      variant_loc: Location.t }
+
+and variant_desc = (exp * Asttypes.case_name * Asttypes.default) list
 
 type case_exp =
+    { case_exp_desc: case_exp_desc;
+      case_exp_loc: Location.t }
+
+and case_exp_desc =
   | Tcase_const of exp
   | Tcase_range of exp * exp
 
@@ -82,6 +94,10 @@ and field_value_desc =
   | Tvalue_branch of branch_value
 
 and field_attrib =
+    { field_attrib_desc: field_attrib_desc;
+      field_attrib_loc: Location.t }
+
+and field_attrib_desc =
   | Tattrib_max of exp
   | Tattrib_min of exp
   | Tattrib_const of exp
@@ -97,6 +113,10 @@ and field_type =
   | Ttype_label
 
 and field_entry =
+    { field_entry_desc: field_entry_desc;
+      field_entry_loc: Location.t }
+
+and field_entry_desc =
   | Tfield_name of Ident.t * field_type * field_attrib list
   | Tfield_align of int
 
@@ -108,10 +128,16 @@ and field_info = field_type
 and struct_type =
     { entries: field_entry list;
       env: field_info Ident.env;
-      classify_fields: branch_info list }
+      classify_fields: branch_info list;
+      struct_type_loc: Location.t }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
-and map_type = map_entry StringMap.t
+
+and map_type =
+    { map_type_desc: map_type_desc;
+      map_type_loc: Location.t }
+
+and map_type_desc = map_entry StringMap.t
 
 (* information stored in environment *)
 
