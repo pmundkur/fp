@@ -274,7 +274,7 @@ let rec check_struct st =
   in
     List.iter (do_field st) st.entries
 
-let handle_classify_exception e =
+let handle_pattern_exception e =
   (match e with
      | Redundant_branch_pattern loc ->
          Printf.fprintf stderr "%s: redundant branch guard"
@@ -292,6 +292,6 @@ let check_formats fmts =
   try
     Ident.iter (fun _ st -> check_struct st) fmts
   with
-    | e -> handle_classify_exception e
+    | e -> handle_pattern_exception e
 
 

@@ -30,7 +30,7 @@ FP_FILES[] =
     env
     types
     typing
-    classify
+    patternmatch
     fpc
 
 FP = fp
