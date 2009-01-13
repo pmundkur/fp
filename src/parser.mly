@@ -208,6 +208,8 @@ value_case:
     { mk_with_rloc mk_value_case (Pvalue_branch ((List.rev $2), $4)) }
 | BAR UNDERSCORE ARROW exp
     { mk_with_rloc mk_value_case (Pvalue_default $4) }
+| BAR UNDERSCORE ARROW UNDERSCORE
+    { mk_with_rloc mk_value_case Pvalue_auto }
 
 branch_guards:
 | branch_guards COMMA branch_guard

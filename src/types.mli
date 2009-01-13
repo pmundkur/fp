@@ -90,6 +90,7 @@ and field_value =
       field_value_loc: Location.t }
 
 and field_value_desc =
+  | Tvalue_auto
   | Tvalue_default of exp
   | Tvalue_branch of branch_value
 
@@ -108,7 +109,7 @@ and field_attrib_desc =
 and field_type =
   | Ttype_base of base_type
   | Ttype_struct of struct_type
-  | Ttype_map of exp * map_type
+  | Ttype_map of Ident.t * map_type
   | Ttype_array of exp * struct_type
   | Ttype_label
 
@@ -129,6 +130,7 @@ and struct_type =
     { entries: field_entry list;
       env: field_info Ident.env;
       classify_fields: branch_info list;
+      branch_fields: Ident.t list;
       struct_type_loc: Location.t }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type

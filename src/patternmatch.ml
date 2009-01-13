@@ -1,12 +1,17 @@
-(* The algorithms implemented below are adapted from "Warnings for
-   pattern matching", by Luc Maranget, in "Journal of Functional
-   Programming", vol 17, issue 3, May 2007.
+open Types
 
+(* This section of this file checks that the branches specified in
+   value attributes are exhaustive and not redundant.  We do this by
+   viewing branch specifications as patterns.
+
+   Each branch of the value attribute is viewed as a struct pattern.
    A struct pattern is a list of branch patterns, as is a pattern
    vector.  A pattern matrix is composed of rows of pattern vectors.
-*)
 
-open Types
+   The algorithms implemented below are taken from "Warnings for
+   pattern matching", by Luc Maranget, in "Journal of Functional
+   Programming", vol 17, issue 3, May 2007.
+*)
 
 let list_take n list =
   if n < 0 then raise (Invalid_argument "take");
@@ -225,6 +230,7 @@ let check_field_value_list fid fvl st =
             the sequence. *)
          let pattern =
            match fv.field_value_desc with
+             | Tvalue_auto
              | Tvalue_default _ ->
                  make_default_vector st.classify_fields
              | Tvalue_branch { struct_pattern = Pt_struct pattern } ->
@@ -293,5 +299,3 @@ let check_formats fmts =
     Ident.iter (fun _ st -> check_struct st) fmts
   with
     | e -> handle_pattern_exception e
-
-

@@ -56,6 +56,7 @@ and value_case =
       pvalue_case_loc: Location.t }
 
 and value_case_desc =
+  | Pvalue_auto
   | Pvalue_default of exp
   | Pvalue_branch of branch_guard list * exp
 
@@ -183,6 +184,8 @@ let pr_value_case ff vc =
     | bg :: bgs -> pr_branch_guard ff bg; Format.fprintf ff ", "; pbranch_guards bgs
   in
     match vc.pvalue_case_desc with
+      | Pvalue_auto ->
+          Format.fprintf ff "| _ -> _"
       | Pvalue_default e ->
           pr_exp ff e
       | Pvalue_branch (bgs, e) ->

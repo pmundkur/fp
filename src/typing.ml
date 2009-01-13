@@ -30,6 +30,7 @@ exception Invalid_variant_type of Ident.t * Location.t
 exception Invalid_const_type of Ident.t * Location.t
 exception Duplicate_classify_case of case_name
 exception Duplicate_default_value of Ident.t * Location.t
+exception Invalid_auto_value of Ident.t * Location.t
 exception Default_value_is_not_last_case of Ident.t * Location.t
 exception Unspecified_path of Ast.path
 exception Duplicate_path of Ast.path
@@ -92,6 +93,8 @@ let raise_duplicate_classify_case cn =
   raise (Duplicate_classify_case cn)
 let raise_duplicate_default_value id loc =
   raise (Duplicate_default_value (id, loc))
+let raise_invalid_auto_value id loc =
+  raise (Invalid_auto_value (id, loc))
 let raise_default_value_is_not_last_case id loc =
   raise (Default_value_is_not_last_case (id, loc))
 let raise_unspecified_path p =
@@ -646,15 +649,21 @@ and br_pattern bi cases =
 (* This implements the value typing rules. They're implemented as a
    special case of the attribute typing below.
 *)
-let type_check_value_attrib env f bt vcl classify_fields =
+let type_check_value_attrib env f bt vcl classify_fields branch_fields =
   let default_present = ref false in
   let is_default_case vc =
     match vc.pvalue_case_desc with
+      | Pvalue_auto -> true
       | Pvalue_default _ -> true
       | Pvalue_branch _ -> false in
   let typer vc =
     let fvd =
       match vc.pvalue_case_desc with
+        | Pvalue_auto ->
+            if List.mem f branch_fields then
+              Tvalue_auto
+            else
+              raise_invalid_auto_value f vc.pvalue_case_loc
         | Pvalue_default e ->
             if !default_present then
               raise_duplicate_default_value f vc.pvalue_case_loc;
@@ -689,7 +698,7 @@ let type_check_value_attrib env f bt vcl classify_fields =
    The classify_fields argument is only used for generating struct
    patterns from branch cases for field value attributes.
 *)
-let type_attribs env f ft fal classify_fields =
+let type_attribs env f ft fal classify_fields branch_fields =
   let max_present = ref false in
   let min_present = ref false in
   let const_present = ref false in
@@ -750,7 +759,7 @@ let type_attribs env f ft fal classify_fields =
                  Tattrib_default (type_check_exp_as_base_type env e bt)
              | Pattrib_value vcl, Ttype_base bt ->
                  check_and_mark_present "value" value_present fa.pfield_attrib_loc;
-                 Tattrib_value (type_check_value_attrib env f bt vcl classify_fields)
+                 Tattrib_value (type_check_value_attrib env f bt vcl classify_fields branch_fields)
              | Pattrib_variant_ref vn, Ttype_base bt ->
                  check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                  let _, vdef = get_variant_def env vn in
@@ -829,13 +838,13 @@ let rec type_field (env, cur_align, fl) f =
                       raise_unsupported_classify_expr e.pexp_loc in
                 (* Add the classified field to the environment to
                    check for multiple use. *)
+                let eid = path_tail_ident eid in
                 let env =
-                  let fid = path_tail_ident eid in
-                    match Env.find_classify_use env fid with
+                    match Env.find_classify_use env eid with
                       | Some loc ->
-                          raise_classify_multiple_use fid e.pexp_loc loc
+                          raise_classify_multiple_use eid e.pexp_loc loc
                       | None ->
-                          Env.add_classify_use fid e.pexp_loc env in
+                          Env.add_classify_use eid e.pexp_loc env in
                 let bt = match et with
                   | Ttype_base bt -> bt
                   | _ -> raise_invalid_classify_expr e.pexp_loc in
@@ -863,9 +872,7 @@ let rec type_field (env, cur_align, fl) f =
                     StringMap.empty tcl in
                 let m = { map_type_desc = m;
                           map_type_loc = ft.pfield_type_loc } in
-                let mexp = { exp_desc = Texp_var eid;
-                             exp_loc = e.pexp_loc } in
-                let e = Env.add_field fi (Ttype_map (mexp, m)) env in
+                let e = Env.add_field fi (Ttype_map (eid, m)) env in
                   e, 0, (Field (f.pfield_loc, fi, [])) :: fl
 
 (* This function gets used in the typing of fields that have
@@ -898,16 +905,16 @@ and type_format env fmt =
       (List.rev fl) in
   let get_classify_fields venv fl =
     List.fold_left
-      (fun cfields f ->
+      (fun ((cfields, bfields) as fields) f ->
          match f with
            | Align _ ->
-               cfields
+               fields
            | Field (_, id, _) ->
                match lookup_type id venv with
-                 | Ttype_map (_, mt) -> { field = id; field_map = mt } :: cfields
-                 | _ -> cfields)
-      [] fl in
-  let get_field_entries venv fl classify_fields =
+                 | Ttype_map (bid, mt) -> ({ field = id; field_map = mt } :: cfields, bid :: bfields)
+                 | _ -> fields)
+      ([], []) fl in
+  let get_field_entries venv fl classify_fields branch_fields =
     List.fold_left
       (fun entries f ->
          let loc, ent =
@@ -916,7 +923,7 @@ and type_format env fmt =
                  loc, Tfield_align i
              | Field (loc, id, al) ->
                  let ft = lookup_type id venv in
-                 let tal = type_attribs venv id ft al classify_fields
+                 let tal = type_attribs venv id ft al classify_fields branch_fields
                  in
                    loc, Tfield_name (id, ft, tal)
          in
@@ -925,11 +932,12 @@ and type_format env fmt =
   let ext_env, align, fl = type_fields () in
   let _ = check_align align in
   let venv = get_value_env ext_env fl in
-  let cfields = get_classify_fields venv fl in
-  let entries = get_field_entries venv fl cfields in
+  let cfields, bfields = get_classify_fields venv fl in
+  let entries = get_field_entries venv fl cfields bfields in
     { entries = entries;
       env = Env.extract_field_env venv;
       classify_fields = cfields;
+      branch_fields = bfields;
       struct_type_loc = fmt.pformat_loc }
 
 (* Type-checker top-level *)
@@ -1019,6 +1027,9 @@ let handle_typing_exception e =
            (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
      | Duplicate_default_value (fid, loc) ->
          Printf.fprintf stderr "%s: field \"%s\" specifies multiple default values"
+           (Location.pr_location loc) (Ident.pr_ident_name fid)
+     | Invalid_auto_value (fid, loc) ->
+         Printf.fprintf stderr "%s: field \"%s\" is not a branch field, and cannot specify an auto value"
            (Location.pr_location loc) (Ident.pr_ident_name fid)
      | Default_value_is_not_last_case (fid, loc) ->
          Printf.fprintf stderr "%s: default value for field \"%s\" is not specified last"

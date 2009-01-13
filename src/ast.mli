@@ -56,6 +56,7 @@ and value_case =
       pvalue_case_loc: Location.t }
 
 and value_case_desc =
+  | Pvalue_auto
   | Pvalue_default of exp
   | Pvalue_branch of branch_guard list * exp
 
