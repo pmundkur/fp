@@ -1,5 +1,28 @@
 TODO:
 
+- Allow format references as field types.  This is too useful to leave
+  out.  We could require formats to be byte aligned.
+
+- A nice thing to provide good support for is optional fields.  Though
+  they can be manually translated as follows:
+
+    type_option : int;
+    type : classify (type_option) {
+        0:No_type -> {}
+        1:Type -> {
+            type : variant phone_type;
+        }
+    }
+
+  it would be nice to abbreviate this at the spec level and at the
+  code generation level.
+
+
+- With variant definitions, it should be possible to specify the
+  default at the time of the use of the variant definition.
+  Currently, the default is only specified at the time of the
+  declaration, which is restrictive.
+
 - Test Types.{ident_map, free_variables}.
 
 - Add a check to ensure that array structs don't have free variables,
