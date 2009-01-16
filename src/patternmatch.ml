@@ -299,3 +299,21 @@ let check_formats fmts =
     Ident.iter (fun _ st -> check_struct st) fmts
   with
     | e -> handle_pattern_exception e
+
+(* This section of the file checks if fields used for classification
+   branching have appropriate value attributes.
+
+   - If there are one or more range expressions in the branch
+     expressions, and the field has a value attribute, then there must
+     be value specifications for the range branch cases, and the
+     values must be within the range specified.  It is a warning if
+     the field does not have a value attribute.
+
+   - If there are no range expressions, then the field should not have
+     any value attribute.
+
+   In the case where the field is a variant, the branch
+   expressions should match the variant's values, and any value
+   specification for a range should lie within the range.
+*)
+
