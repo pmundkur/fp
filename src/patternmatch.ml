@@ -249,23 +249,19 @@ let check_field_value_list fid fvl st =
           raise_unmatched_branch_pattern fid (Pt_struct p)
 
 let rec check_struct st =
-  let rec do_field st fe =
-    match fe.field_entry_desc with
-      | Tfield_name (fid, (ft, fal)) ->
-          (match ft with
-             | Ttype_base _ ->
-                 do_attribs fid fal st
-             | Ttype_struct st ->
-                 check_struct st
-             | Ttype_map (_, mt) ->
-                 StringMap.iter
-                   (fun _ (_, _, st) -> check_struct st)
-                   mt.map_type_desc
-             | Ttype_array (_, st) ->
-                 check_struct st
-             | Ttype_label ->
-                 ())
-      | Tfield_align _ ->
+  let rec do_field st fid (ft, fal) =
+    match ft with
+      | Ttype_base _ ->
+          do_attribs fid fal st
+      | Ttype_struct st ->
+          check_struct st
+      | Ttype_map (_, mt) ->
+          StringMap.iter
+            (fun _ (_, _, st) -> check_struct st)
+            mt.map_type_desc
+      | Ttype_array (_, st) ->
+          check_struct st
+      | Ttype_label ->
           ()
   and do_attribs fid fal st =
     List.iter
@@ -278,7 +274,7 @@ let rec check_struct st =
                check_field_value_list fid fvl st)
       fal
   in
-    List.iter (do_field st) st.entries
+    Ident.iter (do_field st) st.fields
 
 let handle_pattern_exception e =
   (match e with
