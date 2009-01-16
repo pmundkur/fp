@@ -117,18 +117,19 @@ and field_entry =
     { field_entry_desc: field_entry_desc;
       field_entry_loc: Location.t }
 
+and field_info = field_type * field_attrib list
+
 and field_entry_desc =
-  | Tfield_name of Ident.t * field_type * field_attrib list
+  | Tfield_name of Ident.t * field_info
   | Tfield_align of int
 
-and field_info = field_type
 
 (* the struct type embeds the environment in which the field
    identifiers are defined.
 *)
 and struct_type =
     { entries: field_entry list;
-      env: field_info Ident.env;
+      fields: field_info Ident.env;
       classify_fields: branch_info list;
       branch_fields: Ident.t list;
       struct_type_loc: Location.t }

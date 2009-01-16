@@ -251,7 +251,7 @@ let check_field_value_list fid fvl st =
 let rec check_struct st =
   let rec do_field st fe =
     match fe.field_entry_desc with
-      | Tfield_name (fid, ft, fal) ->
+      | Tfield_name (fid, (ft, fal)) ->
           (match ft with
              | Ttype_base _ ->
                  do_attribs fid fal st

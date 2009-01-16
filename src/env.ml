@@ -10,7 +10,7 @@ type t = {
   formats: Types.format_info Ident.env;
 
   (* Fields need a dynamic stacked environment. *)
-  fields: Types.field_info Ident.env;
+  fields: Types.field_type Ident.env;
 
   (* Map from paths to structs *)
   path_map: (Types.path * Types.struct_type) PathMap.t;

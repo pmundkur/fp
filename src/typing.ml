@@ -176,10 +176,10 @@ let lookup_typename env tn =
     | None -> raise_unknown_ident tn
     | Some tni -> tni
 
-let get_field_info env fn =
+let get_field_type env fn =
   match Env.lookup_field_by_name env (Location.node_of fn) with
     | None -> raise_unknown_ident fn
-    | Some fi -> fi
+    | Some ft -> ft
 
 (* This looks up an Ast.path in an environment, and returns a tuple of
    Types.path and the found field_info.
@@ -193,7 +193,7 @@ let lookup_qualified_var env path =
           match lookup_field_in_struct_env (Location.node_of suf) st with
             | None ->
                 raise_unknown_ident suf
-            | Some (fid, ft) ->
+            | Some (fid, (ft, _)) ->
                 (path_compose p (Tvar_ident fid)), ft
 
 (* This is called when looking up possibly Ast.path qualified fields
@@ -203,8 +203,8 @@ let lookup_qualified_var env path =
 let lookup_var env path =
   match path with
     | Pfield fn ->
-        let fid, finfo = get_field_info env fn in
-          (Tvar_ident fid), finfo
+        let fid, ft = get_field_type env fn in
+          (Tvar_ident fid), ft
     | Ppath _ ->
         (* The path prefix should be looked up in the path
            environment, and the suffix in the struct pointed to by the
@@ -222,7 +222,7 @@ let lookup_path env path =
            should be a field of map type in the field env. *)
         if Env.lookup_path env path <> None then
           raise_duplicate_path path;
-        let fid, ft = get_field_info env fn in
+        let fid, ft = get_field_type env fn in
           (Tvar_ident fid), ft
     | Ppath _ ->
         (* The path prefix should be present in the path env, and the
@@ -916,26 +916,26 @@ and type_format env fmt =
       ([], []) fl in
   let get_field_entries venv fl classify_fields branch_fields =
     List.fold_left
-      (fun entries f ->
-         let loc, ent =
+      (fun (entries, fields) f ->
+         let loc, ent, fields' =
            match f with
              | Align (loc, i) ->
-                 loc, Tfield_align i
+                 loc, Tfield_align i, fields
              | Field (loc, id, al) ->
                  let ft = lookup_type id venv in
                  let tal = type_attribs venv id ft al classify_fields branch_fields
                  in
-                   loc, Tfield_name (id, ft, tal)
+                   loc, Tfield_name (id, (ft, tal)), (Ident.add id (ft, tal) fields)
          in
-           { field_entry_desc = ent; field_entry_loc = loc } :: entries)
-      [] fl in
+           { field_entry_desc = ent; field_entry_loc = loc } :: entries, fields')
+      ([], Ident.empty_env) fl in
   let ext_env, align, fl = type_fields () in
   let _ = check_align align in
   let venv = get_value_env ext_env fl in
   let cfields, bfields = get_classify_fields venv fl in
-  let entries = get_field_entries venv fl cfields bfields in
+  let entries, fields = get_field_entries venv fl cfields bfields in
     { entries = entries;
-      env = Env.extract_field_env venv;
+      fields = fields;
       classify_fields = cfields;
       branch_fields = bfields;
       struct_type_loc = fmt.pformat_loc }

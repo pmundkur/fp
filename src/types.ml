@@ -117,15 +117,15 @@ and field_entry =
     { field_entry_desc: field_entry_desc;
       field_entry_loc: Location.t }
 
-and field_entry_desc =
-  | Tfield_name of Ident.t * field_type * field_attrib list
-  | Tfield_align of int
+and field_info = field_type * field_attrib list
 
-and field_info = field_type  (* stored in environment *)
+and field_entry_desc =
+  | Tfield_name of Ident.t * field_info
+  | Tfield_align of int
 
 and struct_type =
     { entries: field_entry list;
-      env: field_info Ident.env;
+      fields: field_info Ident.env;
       classify_fields: branch_info list;
       branch_fields: Ident.t list;
       struct_type_loc: Location.t }
@@ -162,15 +162,15 @@ let rec ident_map st =
         Ident.extend env (ident_map st)
     | Ttype_label ->
         env in
-  let env = st.env
+  let env = st.fields
   in
     Ident.fold
-      (fun i ft env -> do_field env ft)
+      (fun i (ft, _) env -> do_field env ft)
       env env
 
 (* compute free variables in a struct *)
 let free_variables st =
-  let bv = st.env in
+  let bv = st.fields in
   let is_bound id = Ident.assoc_by_id bv id <> None in
   let free_var id = if is_bound id then [] else [ id ] in
   let rec free_vars = function
@@ -215,8 +215,8 @@ let free_variables st =
         []
   and do_struct st acc =
     Ident.fold
-      (fun i ft fv -> List.rev_append (do_field ft) fv)
-      st.env acc
+      (fun i (ft, _) fv -> List.rev_append (do_field ft) fv)
+      st.fields acc
   in
     do_struct st []
 
@@ -253,16 +253,16 @@ let rec path_location_of = function
 (* type utilities *)
 
 let is_field_name_in_struct fn st =
-  Ident.exists (fun id _ -> Ident.name_of id = fn) st.env
+  Ident.exists (fun id _ -> Ident.name_of id = fn) st.fields
 
 let lookup_field_in_struct_env fn st =
-  Ident.assoc_by_name st.env fn
+  Ident.assoc_by_name st.fields fn
 
 let get_field_type fn st =
   match lookup_field_in_struct_env fn st with
     | None ->
         raise Not_found
-    | Some (fid, ft) ->
+    | Some (fid, (ft, _)) ->
         fid, ft
 
 (* type coercions *)
