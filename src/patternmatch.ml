@@ -286,8 +286,10 @@ let handle_pattern_exception e =
          Printf.fprintf stderr "%s: redundant branch guard"
            (Location.pr_location loc)
      | Unmatched_branch_pattern (id, sp) ->
-         Printf.fprintf stderr "%s: non-exhaustive value guards for field %s (example: %s)"
-           (Location.pr_location (Ident.location_of id)) (Ident.pr_ident_name id) (pr_struct_pattern sp)
+         Printf.fprintf stderr
+           "%s: non-exhaustive value guards for field %s (example: %s)"
+           (Location.pr_location (Ident.location_of id))
+           (Ident.pr_ident_name id) (pr_struct_pattern sp)
      | e ->
          raise e
   );
