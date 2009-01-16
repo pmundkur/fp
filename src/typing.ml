@@ -825,12 +825,6 @@ let rec type_field (env, cur_align, fl) f =
                   | Pexp_var v ->
                       (match v with
                          | Pfield fn ->
-                             (* Ideally, we'd check here to ensure
-                                that fn does not have a value
-                                attribute, but fn could either be in
-                                this struct, or in an enclosing one.
-                                In the latter case, we don't have easy
-                                access to its attribute list. *)
                              lookup_var env v
                          | Ppath _ ->
                              raise_invalid_classify_expr e.pexp_loc)
@@ -941,7 +935,6 @@ and type_format env fmt =
     { entries = entries;
       fields = fields;
       classify_fields = cfields;
-      branch_fields = bfields;
       struct_type_loc = fmt.pformat_loc }
 
 (* Type-checker top-level *)

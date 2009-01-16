@@ -128,7 +128,6 @@ and struct_type =
     { entries: field_entry list;
       fields: field_info Ident.env;
       classify_fields: branch_info list;
-      branch_fields: Ident.t list;
       struct_type_loc: Location.t }
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
