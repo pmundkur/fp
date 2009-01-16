@@ -26,7 +26,7 @@ let list_take n list =
 let get_case_branch_info branch_info case_name =
   let cn, _, st =
     try
-      StringMap.find case_name branch_info.field_map.map_type_desc
+      StringMap.find case_name branch_info.branch_map.map_type_desc
     with
       | Not_found ->
           assert false
@@ -92,7 +92,7 @@ let column_signature matrix =
 exception Found of Asttypes.case_name * branch_info list
 let get_a_missing_constructor signature branch_info =
   StringSet.iter
-    (fun s -> assert (StringMap.mem s branch_info.field_map.map_type_desc))
+    (fun s -> assert (StringMap.mem s branch_info.branch_map.map_type_desc))
     signature;
   try
     StringMap.iter
@@ -100,7 +100,7 @@ let get_a_missing_constructor signature branch_info =
          if StringSet.mem s signature
          then ()
          else raise (Found (cn, st.classify_fields)))
-      branch_info.field_map.map_type_desc;
+      branch_info.branch_map.map_type_desc;
     None
   with
     | Found (cn, binfos) -> Some (cn, binfos)
@@ -248,19 +248,19 @@ let check_field_value_list fid fvl st =
       | Some p ->
           raise_unmatched_branch_pattern fid (Pt_struct p)
 
-let rec check_struct st =
+let rec check_struct_patterns st =
   let rec do_field st fid (ft, fal) =
     match ft with
       | Ttype_base _ ->
           do_attribs fid fal st
       | Ttype_struct st ->
-          check_struct st
+          check_struct_patterns st
       | Ttype_map (_, mt) ->
           StringMap.iter
-            (fun _ (_, _, st) -> check_struct st)
+            (fun _ (_, _, st) -> check_struct_patterns st)
             mt.map_type_desc
       | Ttype_array (_, st) ->
-          check_struct st
+          check_struct_patterns st
       | Ttype_label ->
           ()
   and do_attribs fid fal st =
@@ -294,7 +294,7 @@ let handle_pattern_exception e =
 
 let check_formats fmts =
   try
-    Ident.iter (fun _ st -> check_struct st) fmts
+    Ident.iter (fun _ st -> check_struct_patterns st) fmts
   with
     | e -> handle_pattern_exception e
 

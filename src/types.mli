@@ -75,8 +75,9 @@ and pattern =
   | Pt_any
 
 and branch_info =
-    { field: Ident.t;
-      field_map: map_type }
+    { classify_field: Ident.t;
+      branch_field: Ident.t;
+      branch_map: map_type }
 
 and struct_pattern =
   | Pt_struct of branch list

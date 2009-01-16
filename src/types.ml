@@ -75,8 +75,9 @@ and pattern =
   | Pt_any
 
 and branch_info =
-    { field: Ident.t;
-      field_map: map_type }
+    { classify_field: Ident.t;
+      branch_field: Ident.t;
+      branch_map: map_type }
 
 and struct_pattern =
   | Pt_struct of branch list
@@ -382,11 +383,11 @@ let pr_struct_pattern sp =
   let rec collect_branch_paths (cur_path, branch_guards) br =
     match br.pattern with
       | Pt_constructor (cn, sp) ->
-          let p = br.branch_info.field :: cur_path in
+          let p = br.branch_info.classify_field :: cur_path in
           let bgs = (p, Location.node_of cn) :: branch_guards in
             collect_struct_paths (p, bgs) sp
       | Pt_any ->
-          let p = br.branch_info.field :: cur_path in
+          let p = br.branch_info.classify_field :: cur_path in
             (p, "_") :: branch_guards
   and collect_struct_paths (cur_path, branch_guards) (Pt_struct brs) =
     List.fold_left

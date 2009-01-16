@@ -609,7 +609,7 @@ let rec st_pattern cases cfields =
   in
     Pt_struct (List.map
                  (fun bi ->
-                    br_pattern bi (cases_with_path_prefix bi.field))
+                    br_pattern bi (cases_with_path_prefix bi.classify_field))
                  cfields)
 
 and br_pattern bi cases =
@@ -637,7 +637,7 @@ and br_pattern bi cases =
             branch_info = bi }
       | (Tvar_ident fid, cn, st) :: tl ->
           (* The filter in the st_pattern caller should ensure this. *)
-          assert (bi.field = fid);
+          assert (bi.classify_field = fid);
           { pattern = Pt_constructor (cn, st_pattern (strip_path tl) st.classify_fields);
             branch_info = bi }
       | (Tvar_path _, _, _) :: _ ->
@@ -911,7 +911,11 @@ and type_format env fmt =
                fields
            | Field (_, id, _) ->
                match lookup_type id venv with
-                 | Ttype_map (bid, mt) -> ({ field = id; field_map = mt } :: cfields, bid :: bfields)
+                 | Ttype_map (bid, mt) ->
+                     { classify_field = id;
+                       branch_field = bid;
+                       branch_map = mt } :: cfields,
+                     bid :: bfields
                  | _ -> fields)
       ([], []) fl in
   let get_field_entries venv fl classify_fields branch_fields =
