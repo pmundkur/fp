@@ -170,13 +170,12 @@ let rec ident_map st =
 
 (* compute free variables in a struct *)
 let free_variables st =
-  let bv = st.fields in
-  let is_bound id = Ident.assoc_by_id bv id <> None in
-  let free_var id = if is_bound id then [] else [ id ] in
-  let rec free_vars = function
+  let is_bound id in_scope = Ident.assoc_by_id in_scope id <> None in
+  let free_var id in_scope = if is_bound id in_scope then [] else [ id ] in
+  let rec free_vars in_scope = function
     | Texp_unit -> []
     | Texp_var (Tvar_ident id) ->
-        free_var id
+        free_var id in_scope
     | Texp_var (Tvar_path _) ->
         (* We should never encounter paths since we are (presumably)
            not processing expressions in value attributes. *)
@@ -191,34 +190,41 @@ let free_variables st =
     | Texp_const_int64 _ -> []
     | Texp_apply (_, e_list) ->
         List.fold_left
-          (fun acc e -> List.rev_append (free_vars e.exp_desc) acc)
+          (fun acc e -> List.rev_append (free_vars in_scope e.exp_desc) acc)
           [] e_list
-  and do_field = function
+  and do_field in_scope = function
     | Ttype_base (Tbase_primitive _) ->
         []
     | Ttype_base (Tbase_vector (_, e)) ->
-        free_vars e.exp_desc
+        free_vars in_scope e.exp_desc
     | Ttype_struct st ->
-        do_struct st []
+        let ext_scope = Ident.extend in_scope st.fields in
+          do_struct st ext_scope []
     | Ttype_map (bid, mt) ->
-        let free_vars_ce = function
-          | Tcase_const e -> free_vars e.exp_desc
-          | Tcase_range (s, e) -> (free_vars s.exp_desc) @ (free_vars e.exp_desc)
+        let free_vars_ce in_scope = function
+          | Tcase_const e ->
+              free_vars in_scope e.exp_desc
+          | Tcase_range (s, e) ->
+              (free_vars in_scope s.exp_desc) @ (free_vars in_scope e.exp_desc)
         in
           StringMap.fold
             (fun _ (_, ce, st) fv ->
-               List.rev_append (do_struct st (free_vars_ce ce.case_exp_desc)) fv)
-            mt.map_type_desc (free_var bid)
+               let acc = free_vars_ce in_scope ce.case_exp_desc in
+               let ext_scope = Ident.extend in_scope st.fields in
+                 List.rev_append (do_struct st ext_scope acc) fv)
+            mt.map_type_desc (free_var bid in_scope)
     | Ttype_array (e, st) ->
-        do_struct st (free_vars e.exp_desc)
+        let acc = free_vars in_scope e.exp_desc in
+        let ext_scope = Ident.extend in_scope st.fields in
+          do_struct st ext_scope acc
     | Ttype_label ->
         []
-  and do_struct st acc =
+  and do_struct st in_scope acc =
     Ident.fold
-      (fun i (ft, _) fv -> List.rev_append (do_field ft) fv)
+      (fun i (ft, _) fv -> List.rev_append (do_field in_scope ft) fv)
       st.fields acc
   in
-    do_struct st []
+    do_struct st st.fields []
 
 (* path utilities *)
 
