@@ -271,12 +271,29 @@ let get_field_type fn st =
     | Some (fid, (ft, _)) ->
         fid, ft
 
-(* type coercions *)
+(* range checks *)
 
 let within_bit_range i vlen =
   assert (0 < vlen && vlen <= max_bit_vector_length);
   let mask = (0x1 lsl vlen) - 1 in
     (i land mask) = i
+
+let exp_within_range ~start:st ~finish:fi exp =
+  match st.exp_desc, fi.exp_desc, exp.exp_desc with
+    | Texp_const_bit s, Texp_const_bit f, Texp_const_bit e
+    | Texp_const_byte s, Texp_const_byte f, Texp_const_byte e
+    | Texp_const_int16 s, Texp_const_int16 f, Texp_const_int16 e
+    | Texp_const_int s, Texp_const_int f, Texp_const_int e ->
+        compare s e <= 0 && compare e f <= 0
+    | Texp_const_int32 s, Texp_const_int32 f, Texp_const_int32 e ->
+        Int32.compare s e <= 0 && Int32.compare e f <= 0
+    | Texp_const_uint32 s, Texp_const_uint32 f, Texp_const_uint32 e
+    | Texp_const_int64 s, Texp_const_int64 f, Texp_const_int64 e ->
+        Int64.compare s e <= 0 && Int64.compare e f <= 0
+    | _ ->
+        false
+
+(* type coercions *)
 
 let can_coerce_int i as_type =
   match as_type with

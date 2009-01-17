@@ -169,9 +169,13 @@ val is_field_name_in_struct: string -> struct_type -> bool
 val lookup_field_in_struct_env: string -> struct_type -> (Ident.t * field_info) option
 val get_field_type: string -> struct_type -> (Ident.t * field_type)
 
-(* type coercions *)
+(* range checks *)
 
 val within_bit_range: int -> int -> bool
+val exp_within_range: start:exp -> finish:exp -> exp -> bool
+
+(* type coercions *)
+
 val can_coerce_int: int -> base_type -> bool
 val can_coerce_int32: Int32.t -> base_type -> bool
 val can_coerce_int64: Int64.t -> base_type -> bool
