@@ -29,7 +29,7 @@ let get_case_branch_info branch_info case_name =
       StringMap.find case_name branch_info.branch_map.map_type_desc
     with
       | Not_found ->
-          assert false
+          raise (Failure ("get_case_branch_info: " ^ case_name))
   in
     cn, st.classify_fields
 
@@ -50,10 +50,9 @@ let rec specialize_vector branch_info case_name = function
   | [] ->
       Some []
   | { pattern = Pt_constructor (cn, (Pt_struct plist)) } :: ptail ->
-      if case_name = Location.node_of cn then
-        Some (plist @ ptail)
-      else
-        None
+      if case_name = Location.node_of cn
+      then Some (plist @ ptail)
+      else None
   | { pattern = Pt_any } :: ptail ->
       Some ((make_default_from_branch branch_info case_name) @ ptail)
 
@@ -155,7 +154,7 @@ let rec is_useful_pattern matrix pattern =
                 else
                   is_useful_pattern (default_matrix matrix) ptail
           | [] ->
-              assert false
+              raise (Failure "mismatched pattern/matrix sizes")
 
 
 (* This is the core exhaustiveness checking routine, and implements
@@ -236,10 +235,9 @@ let check_field_value_list fid fvl st =
              | Tvalue_branch { struct_pattern = Pt_struct pattern } ->
                  pattern
          in
-           if is_useful_pattern m pattern then
-             List.rev (pattern :: (List.rev m))
-           else
-             raise_redundant_branch_pattern fv.field_value_loc)
+           if is_useful_pattern m pattern
+           then List.rev (pattern :: (List.rev m))
+           else raise_redundant_branch_pattern fv.field_value_loc)
       [] fvl
   in
     match get_unmatched_pattern final_matrix st.classify_fields with
@@ -276,27 +274,6 @@ let rec check_struct_patterns st =
   in
     Ident.iter (do_field st) st.fields
 
-let handle_pattern_exception e =
-  (match e with
-     | Redundant_branch_pattern loc ->
-         Printf.fprintf stderr "%s: redundant branch guard"
-           (Location.pr_location loc)
-     | Unmatched_branch_pattern (id, sp) ->
-         Printf.fprintf stderr
-           "%s: non-exhaustive value guards for field %s (example: %s)"
-           (Location.pr_location (Ident.location_of id))
-           (Ident.pr_ident_name id) (pr_struct_pattern sp)
-     | e ->
-         raise e
-  );
-  Printf.fprintf stderr "\n";
-  exit 1
-
-let check_formats fmts =
-  try
-    Ident.iter (fun _ st -> check_struct_patterns st) fmts
-  with
-    | e -> handle_pattern_exception e
 
 (* This section of the file checks if fields used for classification
    branching have appropriate value attributes.
@@ -315,3 +292,244 @@ let check_formats fmts =
    specification for a range should lie within the range.
 *)
 
+exception Found of field_value list * Location.t
+let get_value_attrib fal =
+  let matcher a = match a.field_attrib_desc with
+    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
+    | Tattrib_default _ | Tattrib_variant _ ->
+        ()
+    | Tattrib_value vl ->
+        raise (Found (vl, a.field_attrib_loc))
+  in
+    try
+      List.iter matcher fal;
+      None
+    with
+      | Found (vl, loc) -> Some (vl, loc)
+
+exception Found of Asttypes.case_name * case_exp
+let find_range_case mt =
+  try
+    StringMap.iter
+      (fun _ (cn, ce, _) ->
+         match ce.case_exp_desc with
+           | Tcase_const _ -> ()
+           | Tcase_range _ -> raise (Found (cn, ce)))
+      mt.map_type_desc;
+    None
+  with
+    | Found (cn, ce) -> Some (cn, ce)
+
+let branch_match cid cn br =
+  br.branch_info.classify_field = cid
+  && (match br.pattern with
+        | Pt_constructor (bcn, _) ->
+            Location.node_of bcn = Location.node_of cn
+        | Pt_any ->
+            true)
+
+let rec get_matching_values cid cn vl =
+  match vl with
+    | [] ->
+        []
+    | v :: vl ->
+        (match v.field_value_desc with
+           | Tvalue_auto | Tvalue_default _ ->
+               v :: (get_matching_values cid cn vl)
+           | Tvalue_branch { struct_pattern = Pt_struct bl } ->
+               if (List.exists
+                     (fun b -> branch_match cid cn b)
+                     bl)
+               then v :: (get_matching_values cid cn vl)
+               else get_matching_values cid cn vl)
+
+exception Field_needs_value_for_range of Ident.t * Asttypes.case_name * case_exp
+exception Field_value_mismatch of Ident.t * field_value * Asttypes.case_name * case_exp
+exception Field_value_out_of_range of Ident.t * field_value * Asttypes.case_name * case_exp
+exception Overspecified_case of Ident.t * Asttypes.case_name * Location.t
+exception Unnecessary_field_value of Ident.t * Location.t
+
+let raise_field_needs_value_for_range bid cn ce =
+  raise (Field_needs_value_for_range (bid, cn, ce))
+let raise_field_value_mismatch bid v cn ce =
+  raise (Field_value_mismatch (bid, v, cn, ce))
+let raise_field_value_out_of_range bid v cn ce =
+  raise (Field_value_out_of_range (bid, v, cn, ce))
+let raise_overspecified_case bid cn loc =
+  raise (Overspecified_case (bid, cn, loc))
+let raise_unnecessary_field_value bid loc =
+  raise (Unnecessary_field_value (bid, loc))
+
+(* This is the main routine that ensures that a classify case has an
+   appropriate value specification for the corresponding branch field.
+*)
+
+let check_case (cid, cn, ce) (bid, vl) =
+  let mv = get_matching_values cid cn vl in
+  let num_mv = List.length mv in
+  let mbr =
+    List.filter
+      (fun v -> match v.field_value_desc with
+         | Tvalue_auto | Tvalue_default _ -> false
+         | Tvalue_branch _ -> true)
+      mv in
+  let num_mbr = List.length mbr in
+  let check_overspecified_br v =
+    match v.field_value_desc with
+      | Tvalue_auto | Tvalue_default _ ->
+          ()
+      | Tvalue_branch { struct_pattern = (Pt_struct bl) } ->
+          List.iter
+            (fun b ->
+               assert (b.branch_info.branch_field = bid);
+               if (b.branch_info.classify_field <> cid)
+                 && (b.pattern <> Pt_any)
+               then raise_overspecified_case bid cn v.field_value_loc)
+            bl in
+  let rec checker vl =
+    match ce.case_exp_desc, vl with
+      | Tcase_const _, [] ->
+          ()
+      | Tcase_range _, [] ->
+          raise_field_needs_value_for_range bid cn ce
+      | Tcase_const c, v :: vl ->
+          (match v.field_value_desc with
+             | Tvalue_auto ->
+                 checker vl
+             | Tvalue_default e ->
+                 (* Note: the (num_mv = 1) condition assumes that the
+                    pattern exhaustiveness has been checked prior to
+                    this.  If so, the condition implies that the
+                    default is the only match for this branch case. *)
+                 if num_mv = 1 && c <> e
+                 then raise_field_value_mismatch bid v cn ce
+                 else checker vl
+             | Tvalue_branch bv ->
+                 if c <> bv.value
+                 then raise_field_value_mismatch bid v cn ce
+                 else checker vl)
+      | Tcase_range (st, fi), v :: vl ->
+          (match v.field_value_desc with
+             | Tvalue_auto ->
+                 checker vl
+             | Tvalue_default e ->
+                 (* See above note on (num_mv = 1). *)
+                 if num_mv = 1 && not (exp_within_range ~start:st ~finish:fi e)
+                 then raise_field_value_out_of_range bid v cn ce
+                 else checker vl
+             | Tvalue_branch bv ->
+                 if not (exp_within_range ~start:st ~finish:fi bv.value)
+                 then raise_field_value_out_of_range bid v cn ce
+                 else checker vl)
+  in
+    if num_mbr > 1 then
+      raise_overspecified_case bid cn (List.nth mbr 2).field_value_loc;
+    List.iter check_overspecified_br mbr;
+    checker mv
+
+let check_value_list field_env (bid, vl) (cid, mt) =
+  StringMap.iter
+    (fun _ (cn, ce, st) -> check_case (cid, cn, ce) (bid, vl))
+    mt.map_type_desc
+
+let check_branch_values field_env bi =
+  let va =
+    match Ident.assoc_by_id field_env bi.branch_field with
+      | None ->
+          raise (Failure ("check_branch_values: field "
+                          ^ (Ident.name_of bi.branch_field)
+                          ^ " not found"))
+      | Some (ft, fal) ->
+          get_value_attrib fal in
+  let rc_opt = find_range_case bi.branch_map
+  in
+    match va, rc_opt with
+      | None, None ->
+          ()
+      | None, Some (cn, ce) ->
+          raise_field_needs_value_for_range bi.branch_field cn ce
+      | Some (vl, vloc), None ->
+          raise_unnecessary_field_value bi.branch_field vloc
+      | Some (vl, _), _ ->
+          check_value_list field_env
+            (bi.branch_field, vl)
+            (bi.classify_field, bi.branch_map)
+
+let check_struct_branch_field_values st =
+  let rec checker field_env st =
+    (* Check the top level branch fields. *)
+    List.iter (check_branch_values field_env) st.classify_fields;
+    (* Now check nested structs. *)
+    Ident.iter
+      (fun fid (ft, fal) ->
+         match ft with
+           | Ttype_base _ | Ttype_label ->
+               ()
+           | Ttype_map _ ->
+               (* This is done via st.classify_fields above, so we
+                  skip it here. *)
+               ()
+           | Ttype_struct st
+           | Ttype_array (_, st) ->
+               checker (Ident.extend field_env st.fields) st)
+      st.fields
+  in
+    checker st.fields st
+
+
+(* This is the main external interface of the checker.  We're given a
+   list of formats, on which we call the above two checkers, and print
+   any errors that result.
+*)
+
+let handle_pattern_exception e =
+  (match e with
+     | Redundant_branch_pattern loc ->
+         Printf.fprintf stderr "%s: redundant branch guard"
+           (Location.pr_location loc)
+     | Unmatched_branch_pattern (id, sp) ->
+         Printf.fprintf stderr
+           "%s: non-exhaustive value guards for field %s (example: %s)"
+           (Location.pr_location (Ident.location_of id))
+           (Ident.pr_ident_name id) (pr_struct_pattern sp)
+     | Field_needs_value_for_range (bid, cn, ce) ->
+         Printf.fprintf stderr
+           "%s: field %s needs a value specification due to its use in a range in case %s at %s"
+           (Location.pr_location (Ident.location_of bid))
+           (Ident.pr_ident_name bid)
+           (Location.node_of cn) (Location.pr_location ce.case_exp_loc)
+     | Field_value_mismatch (bid, fv, cn, ce) ->
+         Printf.fprintf stderr
+           "%s: the value specified for field %s does not match its use in case %s at %s"
+           (Location.pr_location fv.field_value_loc)
+           (Ident.pr_ident_name bid)
+           (Location.node_of cn) (Location.pr_location ce.case_exp_loc)
+     | Field_value_out_of_range (bid, fv, cn, ce) ->
+         Printf.fprintf stderr
+           "%s: the value specified for field %s is out of the range specified for case %s at %s"
+           (Location.pr_location fv.field_value_loc)
+           (Ident.pr_ident_name bid)
+           (Location.node_of cn) (Location.pr_location ce.case_exp_loc)
+     | Overspecified_case (bid, cn, loc) ->
+         Printf.fprintf stderr
+           "%s: field %s is overspecified for case %s"
+           (Location.pr_location loc)
+           (Ident.pr_ident_name bid) (Location.node_of cn)
+     | Unnecessary_field_value (bid, loc) ->
+         Printf.fprintf stderr
+           "%s: field %s has an auto-computed value"
+           (Location.pr_location loc) (Ident.pr_ident_name bid)
+     | e ->
+         raise e
+  );
+  Printf.fprintf stderr "\n";
+  exit 1
+
+let check_formats fmts =
+  try
+    Ident.iter (fun _ st ->
+                  check_struct_patterns st;
+                  check_struct_branch_field_values st;
+               ) fmts
+  with
+    | e -> handle_pattern_exception e
