@@ -32,5 +32,5 @@ val get_paths: t -> (Types.path * Asttypes.case_name * Types.struct_type) list
 val extract_field_env: t -> Types.field_type Ident.env
 
 (* used to implement the multiple use check for classification *)
-val add_classify_use: Ident.t -> Location.t -> t -> t
-val find_classify_use: t -> Ident.t -> Location.t option
+val add_branch_field: Ident.t -> Location.t -> t -> t
+val find_branch_field: t -> Ident.t -> Location.t option

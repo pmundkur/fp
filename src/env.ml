@@ -16,8 +16,8 @@ type t = {
   path_map: (Types.path * Types.struct_type) PathMap.t;
   paths: (Types.path * Asttypes.case_name * Types.struct_type) list;
 
-  (* List of fields used for classification *)
-  classified_fields: (Ident.t * Location.t) list;
+  (* List of branch fields used for classification *)
+  branch_fields: (Ident.t * Location.t) list;
 }
 
 let new_env () =
@@ -28,7 +28,7 @@ let new_env () =
     fields            = Ident.empty_env;
     path_map          = PathMap.empty;
     paths             = [];
-    classified_fields = [];
+    branch_fields     = [];
   }
 
 let all_fields_by_id = ref Ident.empty_env
@@ -108,10 +108,10 @@ let get_paths env =
 let extract_field_env env =
   env.fields
 
-let add_classify_use fid loc env =
+let add_branch_field fid loc env =
   { env with
-      classified_fields = (fid, loc) :: env.classified_fields }
+      branch_fields = (fid, loc) :: env.branch_fields }
 
-let find_classify_use t fid =
-  try Some (List.assoc fid t.classified_fields)
+let find_branch_field t fid =
+  try Some (List.assoc fid t.branch_fields)
   with Not_found -> None

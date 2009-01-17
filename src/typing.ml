@@ -844,11 +844,11 @@ let rec type_field (env, cur_align, fl) f =
                    check for multiple use. *)
                 let eid = path_tail_ident eid in
                 let env =
-                    match Env.find_classify_use env eid with
+                    match Env.find_branch_field env eid with
                       | Some loc ->
                           raise_classify_multiple_use eid e.pexp_loc loc
                       | None ->
-                          Env.add_classify_use eid e.pexp_loc env in
+                          Env.add_branch_field eid e.pexp_loc env in
                 let bt = match et with
                   | Ttype_base bt -> bt
                   | _ -> raise_invalid_classify_expr e.pexp_loc in
