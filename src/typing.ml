@@ -284,6 +284,7 @@ let rec const_fold_as_int64 env exp =
             | Some f -> f iargs
 
 let const_fold_as_bit env exp =
+  (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
     if i <> 0 && i <> 1 then
       raise_invalid_const_expression Tprim_bit exp.pexp_loc
@@ -291,6 +292,7 @@ let const_fold_as_bit env exp =
       i
 
 let const_fold_as_byte env exp =
+  (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
     if i < 0 || i > 0xff then
       raise_invalid_const_expression Tprim_byte exp.pexp_loc
@@ -298,6 +300,7 @@ let const_fold_as_byte env exp =
       i
 
 let const_fold_as_int16 env exp =
+  (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
     if i < -32768 || i > 32767  then
       raise_invalid_const_expression Tprim_int16 exp.pexp_loc
@@ -305,6 +308,7 @@ let const_fold_as_int16 env exp =
       i
 
 let const_fold_as_uint16 env exp =
+  (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
     if i < 0 || i > 0xffff  then
       raise_invalid_const_expression Tprim_uint16 exp.pexp_loc
