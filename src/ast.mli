@@ -37,6 +37,7 @@ and field_type_desc =
   | Ptype_array of exp * format
   | Ptype_classify of exp * classify_case list
   | Ptype_label
+  | Ptype_format of format_name
 
 and field_attrib =
     { pfield_attrib_desc: field_attrib_desc;

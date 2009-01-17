@@ -37,6 +37,7 @@ and field_type_desc =
   | Ptype_array of exp * format
   | Ptype_classify of exp * classify_case list
   | Ptype_label
+  | Ptype_format of format_name
 
 and field_attrib =
     { pfield_attrib_desc: field_attrib_desc;
@@ -280,6 +281,7 @@ and pr_field_type ff ft =
           pcases cl;
           Format.fprintf ff "@]@,}@]"
     | Ptype_label -> Format.fprintf ff "label"
+    | Ptype_format f -> Format.fprintf ff "format %s" (Location.node_of f)
 
 and pr_format ff fmt =
   let rec pfields = function

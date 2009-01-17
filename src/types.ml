@@ -113,6 +113,7 @@ and field_type =
   | Ttype_map of Ident.t * map_type
   | Ttype_array of exp * struct_type
   | Ttype_label
+  | Ttype_format of Asttypes.format_name
 
 and field_entry =
     { field_entry_desc: field_entry_desc;
@@ -160,7 +161,8 @@ let rec ident_map st =
           mt.map_type_desc env
     | Ttype_array (_, st) ->
         Ident.extend env (ident_map st)
-    | Ttype_label ->
+    | Ttype_label
+    | Ttype_format _ ->
         env in
   let env = st.fields
   in
@@ -217,7 +219,8 @@ let free_variables st =
         let acc = free_vars in_scope e.exp_desc in
         let ext_scope = Ident.extend in_scope st.fields in
           do_struct st ext_scope acc
-    | Ttype_label ->
+    | Ttype_label
+    | Ttype_format _ ->
         []
   and do_struct st in_scope acc =
     Ident.fold
@@ -394,6 +397,7 @@ let pr_field_type = function
   | Ttype_map _ -> "map"
   | Ttype_array _ -> "array"
   | Ttype_label -> "label"
+  | Ttype_format f -> Printf.sprintf "format %s" (Location.node_of f)
 
 let pr_struct_pattern sp =
   let rec collect_branch_paths (cur_path, branch_guards) br =

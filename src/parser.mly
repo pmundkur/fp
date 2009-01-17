@@ -37,7 +37,7 @@
       mk d (Location.symbol_rloc ())
 %}
 
-%token <Location.t> DEF ARRAY ALIGN LABEL VALUE FORMAT VARIANT CLASSIFY
+%token <Location.t> ARRAY ALIGN LABEL VALUE FORMAT VARIANT CLASSIFY
 
 %token <Location.t> LCURLY RCURLY LPAREN RPAREN LSQUARE RSQUARE
 %token <Location.t> DOT DOTDOT COMMA SEMI COLON BAR ARROW DEFARROW
@@ -72,8 +72,8 @@ decls:
 ;
 
 decl:
-| DEF VARIANT LCID variant
-    { mk_with_rloc mk_decl (Pdecl_variant ((token_to_located_node $3), $4)) }
+| VARIANT LCID variant
+    { mk_with_rloc mk_decl (Pdecl_variant ((token_to_located_node $2), $3)) }
 | FORMAT LCID format
     { mk_with_rloc mk_decl (Pdecl_format ((token_to_located_node $2), $3)) }
 ;
@@ -134,6 +134,8 @@ field_type:
     { mk_with_rloc mk_field_type (Ptype_simple ($1, (List.rev $2))) }
 | LABEL
     { mk_with_rloc mk_field_type (Ptype_label) }
+| FORMAT LCID
+    { mk_with_rloc mk_field_type (Ptype_format (token_to_located_node $2)) }
 ;
 
 cases:

@@ -113,6 +113,7 @@ and field_type =
   | Ttype_map of Ident.t * map_type
   | Ttype_array of exp * struct_type
   | Ttype_label
+  | Ttype_format of Asttypes.format_name
 
 and field_entry =
     { field_entry_desc: field_entry_desc;

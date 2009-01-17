@@ -3,9 +3,6 @@ TODO:
 - Need to check if branch fields are variants, and that the branch
   values match the variant values.
 
-- Allow format references as field types.  This is too useful to leave
-  out.  We could require formats to be byte aligned.
-
 - A nice thing to provide good support for is optional fields.  Though
   they can be manually translated as follows:
 

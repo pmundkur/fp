@@ -10,7 +10,6 @@
     raise (Parsing_error (e, loc))
 
   let keyword_list = [
-    ("def", fun l -> DEF l);
     ("array", fun l -> ARRAY l);
     ("align", fun l -> ALIGN l);
     ("label", fun l -> LABEL l);
