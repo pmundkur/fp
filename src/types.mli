@@ -170,10 +170,11 @@ val is_field_name_in_struct: string -> struct_type -> bool
 val lookup_field_in_struct_env: string -> struct_type -> (Ident.t * field_info) option
 val get_field_type: string -> struct_type -> (Ident.t * field_type)
 
-(* range checks *)
+(* range and equality checks *)
 
 val within_bit_range: int -> int -> bool
 val exp_within_range: start:exp -> finish:exp -> exp -> bool
+val exp_value_equal: exp -> exp -> bool
 
 (* type coercions *)
 
@@ -189,3 +190,4 @@ val pr_primitive: primitive -> string
 val pr_base_type: base_type -> string
 val pr_field_type: field_type -> string
 val pr_struct_pattern: struct_pattern -> string
+val pr_exp_desc: exp_desc -> string

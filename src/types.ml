@@ -274,7 +274,7 @@ let get_field_type fn st =
     | Some (fid, (ft, _)) ->
         fid, ft
 
-(* range checks *)
+(* range and equality checks *)
 
 let within_bit_range i vlen =
   assert (0 < vlen && vlen <= max_bit_vector_length);
@@ -284,17 +284,62 @@ let within_bit_range i vlen =
 let exp_within_range ~start:st ~finish:fi exp =
   match st.exp_desc, fi.exp_desc, exp.exp_desc with
     | Texp_const_bit s, Texp_const_bit f, Texp_const_bit e
+    | Texp_const_bit s, Texp_const_bit f, Texp_const_int e
+
     | Texp_const_byte s, Texp_const_byte f, Texp_const_byte e
+    | Texp_const_byte s, Texp_const_byte f, Texp_const_int e
+
     | Texp_const_int16 s, Texp_const_int16 f, Texp_const_int16 e
+    | Texp_const_int16 s, Texp_const_int16 f, Texp_const_int e
+
     | Texp_const_int s, Texp_const_int f, Texp_const_int e ->
         compare s e <= 0 && compare e f <= 0
     | Texp_const_int32 s, Texp_const_int32 f, Texp_const_int32 e ->
         Int32.compare s e <= 0 && Int32.compare e f <= 0
+
+    | Texp_const_int32 s, Texp_const_int32 f, Texp_const_int e ->
+        if ((Int32.of_int Pervasives.max_int) <> -1l) then
+          (* int has a smaller precision than 32 bits *)
+          Int32.compare s (Int32.of_int e) <= 0
+          && Int32.compare (Int32.of_int e) f <= 0
+        else
+          compare (Int32.to_int s) e <= 0
+          && compare e (Int32.to_int f) <= 0
+
     | Texp_const_uint32 s, Texp_const_uint32 f, Texp_const_uint32 e
     | Texp_const_int64 s, Texp_const_int64 f, Texp_const_int64 e ->
         Int64.compare s e <= 0 && Int64.compare e f <= 0
+
+    | Texp_const_uint32 s, Texp_const_uint32 f, Texp_const_int e
+    | Texp_const_int64 s, Texp_const_int64 f, Texp_const_int e ->
+        Int64.compare s (Int64.of_int e) <= 0
+        && Int64.compare (Int64.of_int e) f <= 0
+
     | _ ->
+        Printf.fprintf stderr "Invalid exp combo!\n";
         false
+
+let exp_value_equal e1 e2 =
+  let with_right_int e1 e2 =
+    match e1.exp_desc, e2.exp_desc with
+      | Texp_const_bit l, Texp_const_int r
+      | Texp_const_byte l, Texp_const_int r
+      | Texp_const_int16 l, Texp_const_int r
+      | Texp_const_uint16 l, Texp_const_int r ->
+          l = r
+      | Texp_const_int32 l, Texp_const_int r ->
+          if ((Int32.of_int Pervasives.max_int) <> -1l) then
+            (* int has a smaller precision than 32 bits *)
+            Int32.compare l (Int32.of_int r) = 0
+          else
+            compare (Int32.to_int l) r = 0
+      | Texp_const_uint32 l, Texp_const_int r
+      | Texp_const_int64 l, Texp_const_int r ->
+          Int64.compare l (Int64.of_int r) = 0
+      | _ ->
+          false
+  in
+    e1 = e2 || with_right_int e1 e2 || with_right_int e2 e1
 
 (* type coercions *)
 
@@ -418,3 +463,16 @@ let pr_struct_pattern sp =
       Printf.sprintf "%s = %s" p cn in
   let bgs = List.rev (collect_struct_paths ([], []) sp) in
     String.concat ", " (List.map pr_bg bgs)
+
+let pr_exp_desc = function
+  | Texp_unit -> "unit"
+  | Texp_var p -> Printf.sprintf "var %s" (pr_path p)
+  | Texp_const_bit b -> Printf.sprintf "bit %d" b
+  | Texp_const_byte b -> Printf.sprintf "byte %d" b
+  | Texp_const_int16 i -> Printf.sprintf "int16 %d" i
+  | Texp_const_uint16 i -> Printf.sprintf "uint16 %d" i
+  | Texp_const_int i -> Printf.sprintf "int %d" i
+  | Texp_const_int32 i -> Printf.sprintf "int32 %ld" i
+  | Texp_const_uint32 i -> Printf.sprintf "uint32 %Ld" i
+  | Texp_const_int64 i -> Printf.sprintf "int64 %Ld" i
+  | Texp_apply (id, _) -> Printf.sprintf "%s()" (Ident.pr_ident_name id)

@@ -220,8 +220,8 @@ let lookup_path env path =
     | Pfield fn ->
         (* This path should not be present in the path env, and it
            should be a field of map type in the field env. *)
-        if Env.lookup_path env path <> None then
-          raise_duplicate_path path;
+        if Env.lookup_path env path <> None
+        then raise_duplicate_path path;
         let fid, ft = get_field_type env fn in
           (Tvar_ident fid), ft
     | Ppath _ ->
@@ -255,8 +255,8 @@ let check_field_type_compatible_with_exp_type field_type exp_type loc =
         raise_field_exp_type_mismatch field_type exp_type loc
 
 let check_exp_type_equal received expected loc =
-  if received <> expected then
-    raise_exp_exp_type_mismatch received expected loc
+  if received <> expected
+  then raise_exp_exp_type_mismatch received expected loc
 
 (* Const checking and folding functions. *)
 
@@ -287,34 +287,30 @@ let rec const_fold_as_int64 env exp =
 let const_fold_as_bit env exp =
   (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
-    if i <> 0 && i <> 1 then
-      raise_invalid_const_expression Tprim_bit exp.pexp_loc
-    else
-      i
+    if i <> 0 && i <> 1
+    then raise_invalid_const_expression Tprim_bit exp.pexp_loc
+    else i
 
 let const_fold_as_byte env exp =
   (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
-    if i < 0 || i > 0xff then
-      raise_invalid_const_expression Tprim_byte exp.pexp_loc
-    else
-      i
+    if i < 0 || i > 0xff
+    then raise_invalid_const_expression Tprim_byte exp.pexp_loc
+    else i
 
 let const_fold_as_int16 env exp =
   (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
-    if i < -32768 || i > 32767  then
-      raise_invalid_const_expression Tprim_int16 exp.pexp_loc
-    else
-      i
+    if i < -32768 || i > 32767
+    then raise_invalid_const_expression Tprim_int16 exp.pexp_loc
+    else i
 
 let const_fold_as_uint16 env exp =
   (* TODO: range check *)
   let i = Int64.to_int (const_fold_as_int64 env exp) in
-    if i < 0 || i > 0xffff  then
-      raise_invalid_const_expression Tprim_uint16 exp.pexp_loc
-    else
-      i
+    if i < 0 || i > 0xffff
+    then raise_invalid_const_expression Tprim_uint16 exp.pexp_loc
+    else i
 
 let const_fold_as_int32 env exp =
   let i64 = const_fold_as_int64 env exp in
@@ -323,10 +319,9 @@ let const_fold_as_int32 env exp =
 
 let const_fold_as_uint32 env exp =
   let i64 = const_fold_as_int64 env exp in
-    if i64 < 0L || i64 > 0xffffffffL then
-      raise_invalid_const_expression Tprim_uint32 exp.pexp_loc
-    else
-      i64
+    if i64 < 0L || i64 > 0xffffffffL
+    then raise_invalid_const_expression Tprim_uint32 exp.pexp_loc
+    else i64
 
 let const_fold_as_int env exp =
   let i64 = const_fold_as_int64 env exp in
@@ -338,10 +333,9 @@ let const_fold_as_base_type env exp bt id loc =
     match bt with
       | Tbase_vector (Tprim_bit, { exp_desc = Texp_const_int vlen }) ->
           let v = const_fold_as_int env exp in
-            if not (Types.within_bit_range v vlen) then
-              raise_type_coercion_as_base_type bt exp.pexp_loc
-            else
-              Texp_const_int v
+            if not (Types.within_bit_range v vlen)
+            then raise_type_coercion_as_base_type bt exp.pexp_loc
+            else Texp_const_int v
       | Tbase_vector _ -> raise_invalid_const_type id loc
       | Tbase_primitive Tprim_bit ->
           Texp_const_bit (const_fold_as_bit env exp)
@@ -435,16 +429,16 @@ let type_check_exp_as_base_type env exp as_base_type =
               vt as_base_type exp.pexp_loc;
             Texp_var p
       | Pexp_const_int i ->
-          if not (Types.can_coerce_int i as_base_type) then
-            raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
+          if not (Types.can_coerce_int i as_base_type)
+          then raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
           Texp_const_int i
       | Pexp_const_int32 i ->
-          if not (Types.can_coerce_int32 i as_base_type) then
-            raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
+          if not (Types.can_coerce_int32 i as_base_type)
+          then raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
           Texp_const_int32 i
       | Pexp_const_int64 i ->
-          if not (Types.can_coerce_int64 i as_base_type) then
-            raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
+          if not (Types.can_coerce_int64 i as_base_type)
+          then raise_type_coercion_as_base_type as_base_type exp.pexp_loc;
           Texp_const_int64 i
       | Pexp_apply (fname, arglist) ->
           let fid, (fat, frt) = lookup_function_info env fname in
@@ -476,11 +470,9 @@ let check_variant_def vc_list =
   let check_case (ce, cn, def) =
     let nm = Location.node_of cn in
       ignore (check_exp_const ce);
-      if StringSet.mem nm !names then begin
-        raise_non_unique_case_name cn
-      end else begin
-        names := StringSet.add nm !names;
-      end;
+      if StringSet.mem nm !names
+      then raise_non_unique_case_name cn
+      else names := StringSet.add nm !names;
       if def then
         match !default with
           | None -> default := Some cn
@@ -507,12 +499,11 @@ let kinding env cur_align te =
     | Pbase tn ->
         let _, (pt, ptsize) = lookup_typename env tn in
         let next_align =
-          if is_bit_typename tn then
-            cur_align + 1
-          else if not (is_byte_aligned cur_align) then
-            raise_bad_alignment cur_align 8 te.ptype_exp_loc
-          else
-            cur_align + ptsize
+          if is_bit_typename tn
+          then cur_align + 1
+          else if not (is_byte_aligned cur_align)
+          then raise_bad_alignment cur_align 8 te.ptype_exp_loc
+          else cur_align + ptsize
         in
           (Tbase_primitive pt), next_align
     | Pvector (tn, e) ->
@@ -524,10 +515,9 @@ let kinding env cur_align te =
         let e' =
           match clen_opt with
             | None ->
-                if is_bit_type then
-                  raise_non_const_exp e.pexp_loc
-                else
-                  e'
+                if is_bit_type
+                then raise_non_const_exp e.pexp_loc
+                else e'
             | Some len ->
                 if len <= 0 then
                   raise_negative_vector_len len e.pexp_loc
@@ -538,12 +528,11 @@ let kinding env cur_align te =
                     exp_loc = e'.exp_loc } in
         let _, (pt, _) = lookup_typename env tn in
         let next_align =
-          if is_bit_type then
-            cur_align + const_fold_as_int env e
-          else if not (is_byte_aligned cur_align) then
-            raise_bad_alignment cur_align 8 te.ptype_exp_loc
-          else
-            0
+          if is_bit_type
+          then cur_align + const_fold_as_int env e
+          else if not (is_byte_aligned cur_align)
+          then raise_bad_alignment cur_align 8 te.ptype_exp_loc
+          else 0
         in
           Tbase_vector (pt, e'), next_align
 
@@ -665,13 +654,12 @@ let type_check_value_attrib env f bt vcl classify_fields branch_fields =
     let fvd =
       match vc.pvalue_case_desc with
         | Pvalue_auto ->
-            if List.mem f branch_fields then
-              Tvalue_auto
-            else
-              raise_invalid_auto_value f vc.pvalue_case_loc
+            if List.mem f branch_fields
+            then Tvalue_auto
+            else raise_invalid_auto_value f vc.pvalue_case_loc
         | Pvalue_default e ->
-            if !default_present then
-              raise_duplicate_default_value f vc.pvalue_case_loc;
+            if !default_present
+            then raise_duplicate_default_value f vc.pvalue_case_loc;
             Tvalue_default (type_check_exp_as_base_type env e bt)
         | Pvalue_branch (bgl, e) ->
             let ext_env = extend_env_with_branch_paths env bgl in
@@ -687,8 +675,8 @@ let type_check_value_attrib env f bt vcl classify_fields branch_fields =
     (* Check that if a default was present, it was the last case
        specified.  This condition is crucially relied on the
        classification branch pattern checker.  *)
-    if !default_present && not (is_default_case last_vc) then
-      raise_default_value_is_not_last_case f last_vc.pvalue_case_loc;
+    if !default_present && not (is_default_case last_vc)
+    then raise_default_value_is_not_last_case f last_vc.pvalue_case_loc;
     fvl
 
 (* This is an extension of the typing of value expressions to the
@@ -711,31 +699,28 @@ let type_attribs env f ft fal classify_fields branch_fields =
   let value_present = ref false in
   let variant_present = ref false in
   let check_and_mark_present attrib_name flag loc =
-    if !flag then
-      raise_duplicate_attribute f attrib_name loc
-    else
-      flag := true in
+    if !flag
+    then raise_duplicate_attribute f attrib_name loc
+    else flag := true in
   let check_flags () =
     (*
       - (max|min) conflicts with const+variant
       - const conflicts with default+value+variant
     *)
     if !max_present || !min_present then
-      if !const_present then
-        raise_conflicting_attributes f "range" "const"
-      else if !variant_present then
-        raise_conflicting_attributes f "range" "variant"
-      else
-        ()
+      if !const_present
+      then raise_conflicting_attributes f "range" "const"
+      else if !variant_present
+      then raise_conflicting_attributes f "range" "variant"
+      else ()
     else if !const_present then
-      if !default_present then
-        raise_conflicting_attributes f "const" "default"
-      else if !value_present then
-        raise_conflicting_attributes f "const" "value"
-      else if !variant_present then
-        raise_conflicting_attributes f "const" "variant"
-      else
-        ()
+      if !default_present
+      then raise_conflicting_attributes f "const" "default"
+      else if !value_present
+      then raise_conflicting_attributes f "const" "value"
+      else if !variant_present
+      then raise_conflicting_attributes f "const" "variant"
+      else ()
     else
       () in
   let get_variant_def env vn =
@@ -794,13 +779,12 @@ let rec type_field (env, cur_align, fl) f =
   match f.pfield_desc with
     | Pfield_align a ->
         let c = const_fold_as_int env a in
-          if not (is_byte_aligned c) then
-            raise_invalid_align c a.pexp_loc
-          else
-            env, 0, (Align (f.pfield_loc, c)) :: fl
+          if not (is_byte_aligned c)
+          then raise_invalid_align c a.pexp_loc
+          else env, 0, (Align (f.pfield_loc, c)) :: fl
     | Pfield_name (fn, ft) ->
-        if is_field_name_used fn fl then
-          raise_duplicate_field fn;
+        if is_field_name_used fn fl
+        then raise_duplicate_field fn;
         let fi = Ident.from_node fn in
           match ft.pfield_type_desc with
             | Ptype_simple (te, fal) ->
@@ -808,27 +792,26 @@ let rec type_field (env, cur_align, fl) f =
                 let e = Env.add_field fi (Ttype_base bt) env in
                   e, next_align, (Field (f.pfield_loc, fi, fal)) :: fl
             | Ptype_label ->
-                if not (is_byte_aligned cur_align) then
-                  raise_bad_alignment cur_align 8 ft.pfield_type_loc;
+                if not (is_byte_aligned cur_align)
+                then raise_bad_alignment cur_align 8 ft.pfield_type_loc;
                 let e = Env.add_field fi Ttype_label env in
                   e, cur_align, (Field (f.pfield_loc, fi, [])) :: fl
             | Ptype_format fn ->
-                if not (is_byte_aligned cur_align) then
-                  raise_bad_alignment cur_align 8 ft.pfield_type_loc;
+                if not (is_byte_aligned cur_align)
+                then raise_bad_alignment cur_align 8 ft.pfield_type_loc;
                 let e = Env.add_field fi (Ttype_format fn) env in
                   e, cur_align, (Field (f.pfield_loc, fi, [])) :: fl
             | Ptype_array (len, fmt) ->
                 if not (is_byte_aligned cur_align) then
                   raise_bad_alignment cur_align 8 ft.pfield_type_loc
-                else begin
+                else
                   let tlen = type_check_exp_as_exp_type env len Texp_type_int in
                   let st = type_format env fmt in
                   let e = Env.add_field fi (Ttype_array (tlen, st)) env in
                     e, 0, (Field (f.pfield_loc, fi, [])) :: fl
-                end
             | Ptype_classify (e, cl) ->
-                if not (is_byte_aligned cur_align) then
-                  raise_bad_alignment cur_align 8 ft.pfield_type_loc;
+                if not (is_byte_aligned cur_align)
+                then raise_bad_alignment cur_align 8 ft.pfield_type_loc;
                 (* Restrict classification expressions to variables to
                    simplify typing, for now. *)
                 let eid, et = match e.pexp_desc with
@@ -856,8 +839,8 @@ let rec type_field (env, cur_align, fl) f =
                   List.fold_left
                     (fun a (cn, ce, fmt) ->
                        let cnm = Location.node_of cn in
-                         if List.mem_assoc cnm a then
-                           raise_duplicate_classify_case cn;
+                         if List.mem_assoc cnm a
+                         then raise_duplicate_classify_case cn;
                          let te = match ce.pcase_exp_desc with
                            | Pcase_const c ->
                                Tcase_const (const_fold_as_base_type env c bt fi c.pexp_loc)
@@ -883,9 +866,9 @@ let rec type_field (env, cur_align, fl) f =
    struct-oriented types, i.e. arrays and classifications.
 
    The layering principle is enforced here, via the adjustment of the
-   environment in which the field attributes, especially the value
-   expression attribute (i.e. the "value expression" of the
-   specification) are typed in.
+   environment (see Env.clone) in which the field attributes,
+   especially the value expression attribute (i.e. the "value
+   expression" of the specification) are typed in.
 *)
 and type_format env fmt =
   let lookup_type fid env =
@@ -893,8 +876,8 @@ and type_format env fmt =
       | None -> assert false
       | Some ft -> ft in
   let check_align align =
-    if not (is_byte_aligned align) then
-      raise_bad_alignment align 8 fmt.pformat_loc in
+    if not (is_byte_aligned align)
+    then raise_bad_alignment align 8 fmt.pformat_loc in
   let type_fields () =
     List.fold_left type_field (env, 0, []) fmt.pformat_desc in
   let get_value_env ext_env fl =
@@ -905,7 +888,7 @@ and type_format env fmt =
                e
            | Field (_, id, _) ->
                Env.add_field id (lookup_type id ext_env) e)
-      (init_typing_env ())
+      (Env.clone ext_env)
       (List.rev fl) in
   let get_classify_fields venv fl =
     List.fold_left

@@ -392,7 +392,9 @@ let check_case (cid, cn, ce) (bid, vl) =
       | Tcase_const _, [] ->
           ()
       | Tcase_range _, [] ->
-          raise_field_needs_value_for_range bid cn ce
+          (* There's no error if we merely reached the end of non-empty list. *)
+          if num_mv = 0 then
+            raise_field_needs_value_for_range bid cn ce
       | Tcase_const c, v :: vl ->
           (match v.field_value_desc with
              | Tvalue_auto ->
@@ -402,17 +404,19 @@ let check_case (cid, cn, ce) (bid, vl) =
                     pattern exhaustiveness has been checked prior to
                     this.  If so, the condition implies that the
                     default is the only match for this branch case. *)
-                 if num_mv = 1 && c <> e
+                 if num_mv = 1 && not (exp_value_equal c e)
                  then raise_field_value_mismatch bid v cn ce
                  else checker vl
              | Tvalue_branch bv ->
-                 if c <> bv.value
+                 if not (exp_value_equal c bv.value)
                  then raise_field_value_mismatch bid v cn ce
                  else checker vl)
       | Tcase_range (st, fi), v :: vl ->
           (match v.field_value_desc with
              | Tvalue_auto ->
-                 checker vl
+                 if num_mv = 1
+                 then raise_field_needs_value_for_range bid cn ce
+                 else checker vl
              | Tvalue_default e ->
                  (* See above note on (num_mv = 1). *)
                  if num_mv = 1 && not (exp_within_range ~start:st ~finish:fi e)
@@ -451,7 +455,7 @@ let check_branch_values field_env bi =
           raise_field_needs_value_for_range bi.branch_field cn ce
       | Some (vl, vloc), None ->
           raise_unnecessary_field_value bi.branch_field vloc
-      | Some (vl, _), _ ->
+      | Some (vl, _), Some _ ->
           check_value_list field_env
             (bi.branch_field, vl)
             (bi.classify_field, bi.branch_map)
@@ -498,19 +502,19 @@ let handle_pattern_exception e =
            "%s: field %s needs a value specification due to its use in a range in case %s at %s"
            (Location.pr_location (Ident.location_of bid))
            (Ident.pr_ident_name bid)
-           (Location.node_of cn) (Location.pr_location ce.case_exp_loc)
+           (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
      | Field_value_mismatch (bid, fv, cn, ce) ->
          Printf.fprintf stderr
            "%s: the value specified for field %s does not match its use in case %s at %s"
            (Location.pr_location fv.field_value_loc)
            (Ident.pr_ident_name bid)
-           (Location.node_of cn) (Location.pr_location ce.case_exp_loc)
+           (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
      | Field_value_out_of_range (bid, fv, cn, ce) ->
          Printf.fprintf stderr
            "%s: the value specified for field %s is out of the range specified for case %s at %s"
            (Location.pr_location fv.field_value_loc)
            (Ident.pr_ident_name bid)
-           (Location.node_of cn) (Location.pr_location ce.case_exp_loc)
+           (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
      | Overspecified_case (bid, cn, loc) ->
          Printf.fprintf stderr
            "%s: field %s is overspecified for case %s"

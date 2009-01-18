@@ -115,3 +115,10 @@ let add_branch_field fid loc env =
 let find_branch_field t fid =
   try Some (List.assoc fid t.branch_fields)
   with Not_found -> None
+
+let clone env =
+  { env with
+      fields = Ident.empty_env;
+      path_map = PathMap.empty;
+      paths = [];
+      branch_fields = [] }
