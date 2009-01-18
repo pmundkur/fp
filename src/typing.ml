@@ -932,114 +932,115 @@ and type_format env fmt =
 
 (* Type-checker top-level *)
 
+let errmsg e =
+  match e with
+    | Unknown_identifier ln ->
+        Printf.sprintf "%s: Unknown identifier \"%s\""
+          (Location.pr_location (Location.location_of ln)) (Location.node_of ln)
+    | Unknown_path p ->
+        Printf.sprintf "%s: Invalid path %s"
+          (Location.pr_location (path_location_of p)) (Types.pr_path p)
+    | Arg_count_mismatch (fn, rcvd, expct) ->
+        Printf.sprintf "%s: arg count mismatch for function %s, %d received, %d expected"
+          (Location.pr_location (Location.location_of fn)) (Location.node_of fn) rcvd expct
+    | Type_mismatch_field_base (ft, bt, loc) ->
+        Printf.sprintf "%s: field type %s is incompatible with %s"
+          (Location.pr_location loc) (pr_field_type ft) (pr_base_type bt)
+    | Type_mismatch_field_exp (ft, et, loc) ->
+        Printf.sprintf "%s: field type %s is incompatible as expression of type %s"
+          (Location.pr_location loc) (pr_field_type ft) (pr_exp_type et)
+    | Type_mismatch_exp_exp (rcvd, expct, loc) ->
+        Printf.sprintf "%s: type mismatch, %s received, %s expected"
+          (Location.pr_location loc) (pr_exp_type rcvd) (pr_exp_type expct)
+    | Type_coercion_as_base_type (bt, loc) ->
+        Printf.sprintf "%s: type coercion to %s failed"
+          (Location.pr_location loc) (pr_base_type bt)
+    | Non_const_expression loc ->
+        Printf.sprintf "%s: non-constant expression"
+          (Location.pr_location loc)
+    | Non_const_integral_expression loc ->
+        Printf.sprintf "%s: non-constant integral expression"
+          (Location.pr_location loc)
+    | Non_const_foldable_function fn ->
+        Printf.sprintf "%s: function %s cannot be constant folded"
+          (Location.pr_location (Location.location_of fn)) (Location.node_of fn)
+    | Invalid_const_expression (prim, loc) ->
+        Printf.sprintf "%s: constant is invalid as %s\n"
+          (Location.pr_location loc) (pr_primitive prim)
+    | Negative_vector_len (len, loc) ->
+        Printf.sprintf "%s: invalid vector len %d\n"
+          (Location.pr_location loc) len
+    | Bit_vector_length_limit (len, limit, loc) ->
+        Printf.sprintf "%s: bit vector len %d exceeds current implementation limit of %d\n"
+          (Location.pr_location loc) len limit
+    | Non_unique_case_name cn ->
+        Printf.sprintf "%s: duplicate case name \"%s\""
+          (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
+    | Unknown_case_name cn ->
+        Printf.sprintf "%s: unknown case name \"%s\""
+          (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
+    | Non_unique_case_default (cn2, cn1) ->
+        Printf.sprintf "%s: duplicate default \"%s\" (first was \"%s\")"
+          (Location.pr_location (Location.location_of cn2)) (Location.node_of cn2) (Location.node_of cn1)
+    | Bad_alignment (cur, reqd, loc) ->
+        Printf.sprintf "%s: bad alignment %d, required alignment is %d"
+          (Location.pr_location loc) (cur mod 8) reqd
+    | Invalid_align (a, loc) ->
+        Printf.sprintf "%s: bad alignment %d"
+          (Location.pr_location loc) a
+    | Duplicate_field fn ->
+        Printf.sprintf "%s: duplicate field \"%s\""
+          (Location.pr_location (Location.location_of fn)) (Location.node_of fn)
+    | Unsupported_classify_expr loc ->
+        Printf.sprintf "%s: unsupported classify expression"
+          (Location.pr_location loc)
+    | Invalid_classify_expr loc ->
+        Printf.sprintf "%s: invalid classify expression"
+          (Location.pr_location loc)
+    | Duplicate_attribute (fid, s, loc) ->
+        Printf.sprintf "%s: duplicate %s attribute for field \"%s\""
+          (Location.pr_location loc) s (Ident.pr_ident_name fid)
+    | Invalid_attribute (fid, loc) ->
+        Printf.sprintf "%s: invalid attribute for field \"%s\""
+          (Location.pr_location loc) (Ident.pr_ident_name fid)
+    | Conflicting_attributes (fid, at1, at2) ->
+        Printf.sprintf "%s: attribute %s of field \"%s\" conflicts with attribute %s"
+          (Location.pr_location (Ident.location_of fid)) at1 (Ident.pr_ident_name fid) at2
+    | Invalid_variant_type (fid, loc) ->
+        Printf.sprintf "%s: the variant attribute is invalid for the type of field \"%s\""
+          (Location.pr_location loc) (Ident.pr_ident_name fid)
+    | Invalid_const_type (fid, loc) ->
+        Printf.sprintf "%s: for field \"%s\", an expression cannot be constant folded due to its type"
+          (Location.pr_location loc) (Ident.pr_ident_name fid)
+    | Duplicate_classify_case cn ->
+        Printf.sprintf "%s: duplicate classify branch name \"%s\""
+          (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
+    | Duplicate_default_value (fid, loc) ->
+        Printf.sprintf "%s: field \"%s\" specifies multiple default values"
+          (Location.pr_location loc) (Ident.pr_ident_name fid)
+    | Invalid_auto_value (fid, loc) ->
+        Printf.sprintf "%s: field \"%s\" is not a branch field, and cannot specify an auto value"
+          (Location.pr_location loc) (Ident.pr_ident_name fid)
+    | Default_value_is_not_last_case (fid, loc) ->
+        Printf.sprintf "%s: default value for field \"%s\" is not specified last"
+          (Location.pr_location loc) (Ident.pr_ident_name fid)
+    | Unspecified_path p ->
+        Printf.sprintf "%s: path \"%s\" was not specified"
+          (Location.pr_location (Ast.path_location_of p)) (Ast.pr_path p)
+    | Duplicate_path p ->
+        Printf.sprintf "%s: \"%s\" is a duplicate path"
+          (Location.pr_location (Ast.path_location_of p)) (Ast.pr_path p)
+    | Path_is_not_struct p ->
+        Printf.sprintf "%s: path \"%s\" does not point to a struct"
+          (Location.pr_location (Types.path_location_of p)) (Types.pr_path p)
+    | Classify_multiple_use (fid, cur_use, prev_use) ->
+        Printf.sprintf "%s: field \"%s\" is used mutiple times for classification, previous use was at %s"
+          (Location.pr_location cur_use) (Ident.pr_ident_name fid) (Location.pr_line_info prev_use)
+    | e ->
+        raise e
+
 let handle_typing_exception e =
-  (match e with
-     | Unknown_identifier ln ->
-         Printf.fprintf stderr "%s: Unknown identifier \"%s\""
-           (Location.pr_location (Location.location_of ln)) (Location.node_of ln)
-     | Unknown_path p ->
-         Printf.fprintf stderr "%s: Invalid path %s"
-           (Location.pr_location (path_location_of p)) (Types.pr_path p)
-     | Arg_count_mismatch (fn, rcvd, expct) ->
-         Printf.fprintf stderr "%s: arg count mismatch for function %s, %d received, %d expected"
-           (Location.pr_location (Location.location_of fn)) (Location.node_of fn) rcvd expct
-     | Type_mismatch_field_base (ft, bt, loc) ->
-         Printf.fprintf stderr "%s: field type %s is incompatible with %s"
-           (Location.pr_location loc) (pr_field_type ft) (pr_base_type bt)
-     | Type_mismatch_field_exp (ft, et, loc) ->
-         Printf.fprintf stderr "%s: field type %s is incompatible as expression of type %s"
-           (Location.pr_location loc) (pr_field_type ft) (pr_exp_type et)
-     | Type_mismatch_exp_exp (rcvd, expct, loc) ->
-         Printf.fprintf stderr "%s: type mismatch, %s received, %s expected"
-           (Location.pr_location loc) (pr_exp_type rcvd) (pr_exp_type expct)
-     | Type_coercion_as_base_type (bt, loc) ->
-         Printf.fprintf stderr "%s: type coercion to %s failed"
-           (Location.pr_location loc) (pr_base_type bt)
-     | Non_const_expression loc ->
-         Printf.fprintf stderr "%s: non-constant expression"
-           (Location.pr_location loc)
-     | Non_const_integral_expression loc ->
-         Printf.fprintf stderr "%s: non-constant integral expression"
-           (Location.pr_location loc)
-     | Non_const_foldable_function fn ->
-         Printf.fprintf stderr "%s: function %s cannot be constant folded"
-           (Location.pr_location (Location.location_of fn)) (Location.node_of fn)
-     | Invalid_const_expression (prim, loc) ->
-         Printf.fprintf stderr "%s: constant is invalid as %s\n"
-           (Location.pr_location loc) (pr_primitive prim)
-     | Negative_vector_len (len, loc) ->
-         Printf.fprintf stderr "%s: invalid vector len %d\n"
-           (Location.pr_location loc) len
-     | Bit_vector_length_limit (len, limit, loc) ->
-         Printf.fprintf stderr "%s: bit vector len %d exceeds current implementation limit of %d\n"
-           (Location.pr_location loc) len limit
-     | Non_unique_case_name cn ->
-         Printf.fprintf stderr "%s: duplicate case name \"%s\""
-           (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
-     | Unknown_case_name cn ->
-         Printf.fprintf stderr "%s: unknown case name \"%s\""
-           (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
-     | Non_unique_case_default (cn2, cn1) ->
-         Printf.fprintf stderr "%s: duplicate default \"%s\" (first was \"%s\")"
-           (Location.pr_location (Location.location_of cn2)) (Location.node_of cn2) (Location.node_of cn1)
-     | Bad_alignment (cur, reqd, loc) ->
-         Printf.fprintf stderr "%s: bad alignment %d, required alignment is %d"
-           (Location.pr_location loc) (cur mod 8) reqd
-     | Invalid_align (a, loc) ->
-         Printf.fprintf stderr "%s: bad alignment %d"
-           (Location.pr_location loc) a
-     | Duplicate_field fn ->
-         Printf.fprintf stderr "%s: duplicate field \"%s\""
-           (Location.pr_location (Location.location_of fn)) (Location.node_of fn)
-     | Unsupported_classify_expr loc ->
-         Printf.fprintf stderr "%s: unsupported classify expression"
-           (Location.pr_location loc)
-     | Invalid_classify_expr loc ->
-         Printf.fprintf stderr "%s: invalid classify expression"
-           (Location.pr_location loc)
-     | Duplicate_attribute (fid, s, loc) ->
-         Printf.fprintf stderr "%s: duplicate %s attribute for field \"%s\""
-           (Location.pr_location loc) s (Ident.pr_ident_name fid)
-     | Invalid_attribute (fid, loc) ->
-         Printf.fprintf stderr "%s: invalid attribute for field \"%s\""
-           (Location.pr_location loc) (Ident.pr_ident_name fid)
-     | Conflicting_attributes (fid, at1, at2) ->
-         Printf.fprintf stderr "%s: attribute %s of field \"%s\" conflicts with attribute %s"
-           (Location.pr_location (Ident.location_of fid)) at1 (Ident.pr_ident_name fid) at2
-     | Invalid_variant_type (fid, loc) ->
-         Printf.fprintf stderr "%s: the variant attribute is invalid for the type of field \"%s\""
-           (Location.pr_location loc) (Ident.pr_ident_name fid)
-     | Invalid_const_type (fid, loc) ->
-         Printf.fprintf stderr "%s: for field \"%s\", an expression cannot be constant folded due to its type"
-           (Location.pr_location loc) (Ident.pr_ident_name fid)
-     | Duplicate_classify_case cn ->
-         Printf.fprintf stderr "%s: duplicate classify branch name \"%s\""
-           (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
-     | Duplicate_default_value (fid, loc) ->
-         Printf.fprintf stderr "%s: field \"%s\" specifies multiple default values"
-           (Location.pr_location loc) (Ident.pr_ident_name fid)
-     | Invalid_auto_value (fid, loc) ->
-         Printf.fprintf stderr "%s: field \"%s\" is not a branch field, and cannot specify an auto value"
-           (Location.pr_location loc) (Ident.pr_ident_name fid)
-     | Default_value_is_not_last_case (fid, loc) ->
-         Printf.fprintf stderr "%s: default value for field \"%s\" is not specified last"
-           (Location.pr_location loc) (Ident.pr_ident_name fid)
-     | Unspecified_path p ->
-         Printf.fprintf stderr "%s: path \"%s\" was not specified"
-           (Location.pr_location (Ast.path_location_of p)) (Ast.pr_path p)
-     | Duplicate_path p ->
-         Printf.fprintf stderr "%s: \"%s\" is a duplicate path"
-           (Location.pr_location (Ast.path_location_of p)) (Ast.pr_path p)
-     | Path_is_not_struct p ->
-         Printf.fprintf stderr "%s: path \"%s\" does not point to a struct"
-           (Location.pr_location (Types.path_location_of p)) (Types.pr_path p)
-     | Classify_multiple_use (fid, cur_use, prev_use) ->
-         Printf.fprintf stderr "%s: field \"%s\" is used mutiple times for classification, previous use was at %s"
-           (Location.pr_location cur_use) (Ident.pr_ident_name fid) (Location.pr_line_info prev_use)
-     | e ->
-         raise e
-  );
-  Printf.fprintf stderr "\n";
+  Printf.fprintf stderr "%s\n" (errmsg e);
   exit 1
 
 let type_check env decls =

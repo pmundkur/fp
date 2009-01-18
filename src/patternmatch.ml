@@ -487,47 +487,44 @@ let check_struct_branch_field_values st =
    any errors that result.
 *)
 
+let errmsg e =
+  match e with
+    | Redundant_branch_pattern loc ->
+        Printf.sprintf "%s: redundant branch guard" (Location.pr_location loc)
+    | Unmatched_branch_pattern (id, sp) ->
+        Printf.sprintf "%s: non-exhaustive value guards for field %s (example: %s)"
+          (Location.pr_location (Ident.location_of id))
+          (Ident.pr_ident_name id) (pr_struct_pattern sp)
+    | Field_needs_value_for_range (bid, cn, ce) ->
+        Printf.sprintf
+          "%s: field %s needs a value specification due to its use in a range in case %s at %s"
+          (Location.pr_location (Ident.location_of bid))
+          (Ident.pr_ident_name bid)
+          (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
+    | Field_value_mismatch (bid, fv, cn, ce) ->
+        Printf.sprintf
+          "%s: the value specified for field %s does not match its use in case %s at %s"
+          (Location.pr_location fv.field_value_loc)
+          (Ident.pr_ident_name bid)
+          (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
+    | Field_value_out_of_range (bid, fv, cn, ce) ->
+        Printf.sprintf
+          "%s: the value specified for field %s is out of the range specified for case %s at %s"
+          (Location.pr_location fv.field_value_loc)
+          (Ident.pr_ident_name bid)
+          (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
+    | Overspecified_case (bid, cn, loc) ->
+        Printf.sprintf "%s: field %s is overspecified for case %s"
+          (Location.pr_location loc)
+          (Ident.pr_ident_name bid) (Location.node_of cn)
+    | Unnecessary_field_value (bid, loc) ->
+        Printf.sprintf "%s: field %s has an auto-computed value"
+          (Location.pr_location loc) (Ident.pr_ident_name bid)
+    | e ->
+        raise e
+
 let handle_pattern_exception e =
-  (match e with
-     | Redundant_branch_pattern loc ->
-         Printf.fprintf stderr "%s: redundant branch guard"
-           (Location.pr_location loc)
-     | Unmatched_branch_pattern (id, sp) ->
-         Printf.fprintf stderr
-           "%s: non-exhaustive value guards for field %s (example: %s)"
-           (Location.pr_location (Ident.location_of id))
-           (Ident.pr_ident_name id) (pr_struct_pattern sp)
-     | Field_needs_value_for_range (bid, cn, ce) ->
-         Printf.fprintf stderr
-           "%s: field %s needs a value specification due to its use in a range in case %s at %s"
-           (Location.pr_location (Ident.location_of bid))
-           (Ident.pr_ident_name bid)
-           (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
-     | Field_value_mismatch (bid, fv, cn, ce) ->
-         Printf.fprintf stderr
-           "%s: the value specified for field %s does not match its use in case %s at %s"
-           (Location.pr_location fv.field_value_loc)
-           (Ident.pr_ident_name bid)
-           (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
-     | Field_value_out_of_range (bid, fv, cn, ce) ->
-         Printf.fprintf stderr
-           "%s: the value specified for field %s is out of the range specified for case %s at %s"
-           (Location.pr_location fv.field_value_loc)
-           (Ident.pr_ident_name bid)
-           (Location.node_of cn) (Location.pr_line_info ce.case_exp_loc)
-     | Overspecified_case (bid, cn, loc) ->
-         Printf.fprintf stderr
-           "%s: field %s is overspecified for case %s"
-           (Location.pr_location loc)
-           (Ident.pr_ident_name bid) (Location.node_of cn)
-     | Unnecessary_field_value (bid, loc) ->
-         Printf.fprintf stderr
-           "%s: field %s has an auto-computed value"
-           (Location.pr_location loc) (Ident.pr_ident_name bid)
-     | e ->
-         raise e
-  );
-  Printf.fprintf stderr "\n";
+  Printf.fprintf stderr "%s\n" (errmsg e);
   exit 1
 
 let check_formats fmts =
