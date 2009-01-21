@@ -7,15 +7,6 @@
 
 OCAMLFLAGS    += -dtypes
 
-# Runtime library
-
-LIB_FILES[] =
-    fp_lib
-
-LIB = fp_lib
-FP_LIB = $(OCamlLibrary $(LIB), $(LIB_FILES))
-
-
 # Compiler
 
 GEN_FILES = parser.mli parser.ml lexer.ml
@@ -36,7 +27,7 @@ FP_FILES[] =
 FP = fp
 FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))
 
-.DEFAULT: $(FP_COMPILER) $(FP_LIB)
+.DEFAULT: $(FP_COMPILER)
 
 clean:
-    $(CLEAN) $(FP_COMPILER) $(FP_LIB) *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa $(GEN_FILES) *.output *.spot
+    $(CLEAN) $(FP_COMPILER) $(GEN_FILES)

@@ -1,0 +1,23 @@
+.PHONY: clean
+
+# Hook in Jun Furuse's ocamlspot
+
+#OCAMLC = /home/prashanth/src/ocamlspotter/ocaml-src/install/bin/ocamlc.opt
+#OCAMLOPT = /home/prashanth/src/ocamlspotter/ocaml-src/install/bin/ocamlopt.opt
+
+OCAMLFLAGS    += -dtypes
+
+# Runtime library
+
+LIB_FILES[] =
+    fp_lib
+
+LIB = fp_lib
+FP_LIB = $(OCamlLibrary $(LIB), $(LIB_FILES))
+
+.DEFAULT: $(FP_LIB)
+
+clean:
+    $(CLEAN) $(FP_LIB)
+
+
