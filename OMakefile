@@ -1,5 +1,2 @@
-.PHONY: clean
-
-CLEAN = rm -rf *.cmi *.cmo *.o *.a *.annot *.cmx *.cmxa *.output *.spot
 
 .SUBDIRS: compiler runtime doc examples

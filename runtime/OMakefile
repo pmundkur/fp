@@ -18,6 +18,4 @@ FP_LIB = $(OCamlLibrary $(LIB), $(LIB_FILES))
 .DEFAULT: $(FP_LIB)
 
 clean:
-    $(CLEAN) $(FP_LIB)
-
-
+    rm -f $(filter-proper-targets $(ls R, .)) *.annot *.spot

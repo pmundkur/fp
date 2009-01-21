@@ -30,4 +30,4 @@ FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))
 .DEFAULT: $(FP_COMPILER)
 
 clean:
-    $(CLEAN) $(FP_COMPILER) $(GEN_FILES)
+    rm -f $(filter-proper-targets $(ls R, .)) *.annot *.spot
