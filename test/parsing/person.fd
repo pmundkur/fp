@@ -1,0 +1,36 @@
+variant phone_type { | 0 -> Mobile | 1 => Home | 2 -> Work }
+
+format string {
+    len : byte;
+    content : byte[len];
+}
+
+format phone_number {
+    number : format string;
+
+    type_option : byte;
+    type : classify (type_option) {
+        | 0:No_type -> {}
+        | 1:Type -> {
+            type : byte variant phone_type;
+        }
+    }
+}
+
+format person {
+    name: format string;
+
+    email_option : byte value(|email_address = No_email -> 0
+                              |email_address = Email -> 1);
+    email_address : classify (email_option) {
+        | 0:No_email -> {}
+        | 1..2:Email -> {
+            email : format string;
+        }
+    };
+
+    num_phones : int16;
+    phones : array (num_phones) {
+        phone : format phone_number;
+    }
+}

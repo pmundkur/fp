@@ -7,7 +7,7 @@ doc/ott.tex
 # other generated files
 .omakedb
 .omakedb.lock
-*OMake*.omc
+*.omc
 *.o
 *.a
 *.cmo

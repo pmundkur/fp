@@ -1,7 +1,7 @@
 open Lexing
 open Asttypes
 
-let options = []
+let options = [ ("-test", Arg.Set Config.test_mode, " unit-test mode") ]
 
 let parse_args () =
   let files = ref [] in
@@ -18,13 +18,13 @@ let handle_syntax_error e l =
   in
     Printf.printf "%s at file \"%s\", line %d, character %d\n"
       msg l.pos_fname l.pos_lnum (l.pos_cnum - l.pos_bol);
-    exit 1
+    Util.exit_with_code 1
 
 let handle_parse_error lexbuf =
   Printf.printf "Parse error in %s at line %d, char %d\n"
     lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum
     (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol);
-  exit 1
+  Util.exit_with_code 1
 
 let handle_parsing_error e l =
   let st = Location.start_of l in
@@ -42,7 +42,7 @@ let handle_parsing_error e l =
        Printf.printf "%s at file \"%s\", line %d, character %d - line %d, character %d\n"
          msg st.pos_fname st.pos_lnum (st.pos_cnum - st.pos_bol)
          ed.pos_lnum (ed.pos_cnum - ed.pos_bol));
-    exit 1
+    Util.exit_with_code 1
 
 let parse_file f ic =
   let lexbuf = Lexing.from_channel ic in
@@ -71,8 +71,12 @@ let process_file f =
     let formats = Env.get_formats typed_env in
       Patternmatch.check_formats formats
   with
-    | Sys_error s -> prerr_endline s
-
+    | Sys_error s ->
+        prerr_endline s;
+        Util.exit_with_code 1
+    | e ->
+        Printf.fprintf stderr "%s\n" (Printexc.to_string e);
+        Util.exit_with_code 1
 
 let _ =
   let input_files = parse_args () in

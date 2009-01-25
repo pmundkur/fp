@@ -1,0 +1,35 @@
+gen_test_output(cmd, cmdopts, filenames) =
+    outfiles[] =
+    foreach(file, $(filenames))
+        f = $(rootname $(file))
+        $(f).out: $(cmd) $(file)
+            $(cmd) $(cmdopts) $(file) >& $(f).out
+        outfiles += $(f).out
+        export
+    value $(outfiles)
+
+filecmp(file1, file2) =
+    s1 = $(cat $(file1))
+    s2 = $(cat $(file2))
+    value $(equal $(s1), $(s2))
+
+check_test_output(files, expected_ext, output_ext) =
+    failures = []
+    errors = []
+    foreach(f, $(files))
+        output = $(addsuffix $(output_ext), $(rootname $(f)))
+        expected = $(addsuffix $(expected_ext), $(rootname $(f)))
+	if $(test -f $(output) -a -f $(expected))
+            if $(not $(filecmp $(output), $(expected)))
+                failures += f
+                echo Test $(f) failed.
+            else
+                echo Test $(f) passed.
+        elseif $(test -s $(output) -a ! -f $(expected))
+#           Currently, -s returns false on 0-byte files.  Why?
+            echo Test $(f) passed.
+        else
+            errors += f
+            echo Test $(f) had an error.
+        export
+    value $(failures), $(errors)

@@ -1,13 +1,6 @@
 .PHONY: clean
 
-# Hook in Jun Furuse's ocamlspot
-
-#OCAMLC = /home/prashanth/src/ocamlspotter/ocaml-src/install/bin/ocamlc.opt
-#OCAMLOPT = /home/prashanth/src/ocamlspotter/ocaml-src/install/bin/ocamlopt.opt
-
 OCAMLFLAGS    += -dtypes
-
-# Compiler
 
 GEN_FILES = parser.mli parser.ml lexer.ml
 OCamlGeneratedFiles($(GEN_FILES))
@@ -22,6 +15,8 @@ FP_FILES[] =
     types
     typing
     patternmatch
+    config
+    util
     fpc
 
 FP = fp

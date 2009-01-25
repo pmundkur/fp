@@ -1041,7 +1041,7 @@ let errmsg e =
 
 let handle_typing_exception e =
   Printf.fprintf stderr "%s\n" (errmsg e);
-  exit 1
+  Util.exit_with_code 1
 
 let type_check env decls =
   try
