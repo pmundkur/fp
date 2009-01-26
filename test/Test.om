@@ -19,14 +19,15 @@ check_test_output(files, expected_ext, output_ext) =
     foreach(f, $(files))
         output = $(addsuffix $(output_ext), $(rootname $(f)))
         expected = $(addsuffix $(expected_ext), $(rootname $(f)))
-	if $(test -f $(output) -a -f $(expected))
+        if $(test -f $(output) -a -f $(expected))
             if $(not $(filecmp $(output), $(expected)))
                 failures += f
                 echo Test $(f) failed.
             else
                 echo Test $(f) passed.
-        elseif $(test -s $(output) -a ! -f $(expected))
-#           Currently, -s returns false on 0-byte files.  Why?
+        elseif $(test ! -s $(output) -a ! -f $(expected))
+#           Currently, -s returns false on 0-byte files, i.e.
+#           the opposite of what the documentation says.
             echo Test $(f) passed.
         else
             errors += f
