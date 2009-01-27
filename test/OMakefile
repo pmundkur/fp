@@ -1,22 +1,12 @@
 include Test
 
-.PHONY: parsing_test pattern_test clean
+.PHONY: test_all clean
 
-PARSING_TESTS = $(glob i, parsing/*.fd)
-TYPING_TESTS  = $(glob i, typing/*.fd)
-PATTERN_TESTS = $(glob i, patterns/*.fd)
-CODEGEN_TESTS = $(glob i, codegen/*.fd)
+TEST_DIRS = parsing typing patterns codegen
 
-PARSING_TEST_OUTPUT = $(gen_test_output $(COMPILER), -test, $(PARSING_TESTS))
-PATTERN_TEST_OUTPUT = $(gen_test_output $(COMPILER), -test, $(PATTERN_TESTS))
-
-parsing_test: $(PARSING_TEST_OUTPUT)
-    check_test_output($(PARSING_TESTS), .exp, .out)
-
-pattern_test: $(PATTERN_TEST_OUTPUT)
-    check_test_output($(PATTERN_TESTS), .exp, .out)
-
-.DEFAULT: parsing_test pattern_test
+test_all: $(test_targets $(TEST_DIRS), $(COMPILER), -test, .fd, .out, .exp)
 
 clean:
-    rm -rf $(PARSING_TEST_OUTPUT) $(PATTERN_TEST_OUTPUT)
+    rm -f $(filter-proper-targets $(ls R, .))
+
+.DEFAULT: test_all

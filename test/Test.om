@@ -1,10 +1,10 @@
-gen_test_output(cmd, cmdopts, filenames) =
-    outfiles[] =
+gen_test_output(cmd, cmdopts, filenames, output_ext) =
+    outfiles =
     foreach(file, $(filenames))
         f = $(rootname $(file))
-        $(f).out: $(cmd) $(file)
-            $(cmd) $(cmdopts) $(file) >& $(f).out
-        outfiles += $(f).out
+        $(f)$(output_ext): $(cmd) $(file)
+            $(cmd) $(cmdopts) $(file) >& $(f)$(output_ext)
+        outfiles += $(f)$(output_ext)
         export
     value $(outfiles)
 
@@ -14,23 +14,73 @@ filecmp(file1, file2) =
     value $(equal $(s1), $(s2))
 
 check_test_output(files, expected_ext, output_ext) =
-    failures = []
-    errors = []
+    failures =
+    errors   =
     foreach(f, $(files))
-        output = $(addsuffix $(output_ext), $(rootname $(f)))
+        output   = $(addsuffix $(output_ext), $(rootname $(f)))
         expected = $(addsuffix $(expected_ext), $(rootname $(f)))
-        if $(test -f $(output) -a -f $(expected))
-            if $(not $(filecmp $(output), $(expected)))
-                failures += f
-                echo Test $(f) failed.
-            else
-                echo Test $(f) passed.
-        elseif $(test ! -s $(output) -a ! -f $(expected))
-#           Currently, -s returns false on 0-byte files, i.e.
-#           the opposite of what the documentation says.
-            echo Test $(f) passed.
+        if $(test ! -f $(output))
+            # gen_test_output above should always generate an output file.
+            errors += $(f)
+            println($(f)\: error)
+            export
         else
-            errors += f
-            echo Test $(f) had an error.
+            if $(test ! -f $(expected))
+                # An empty expected file need not be present.
+                if $(test -s $(output))
+                    # The output file is non-empty.
+                    failures += $(f)
+                    println($(f): failed)
+                    export
+                else
+                    println($(f): passed)
+                export
+            else
+                if $(not $(filecmp $(output), $(expected)))
+                    failures += $(f)
+                    println($(f): failed.)
+                    export
+                else
+                    println($(f): passed)
+                export
+            export
         export
-    value $(failures), $(errors)
+    results = $(Map)
+    results. +=
+        $|tests|    = $(rootname $(files))
+        $|failures| = $(failures)
+        $|errors|   = $(errors)
+    value $(results)
+
+adjust_plural(count, noun) =
+    if $(eq $(count), 1)
+        value one $(noun)
+    else
+        value $(count) $(noun)s
+
+print_test_results(test, results) =
+    tests    = $(results.find tests)
+    failures = $(results.find failures)
+    errors   = $(results.find errors)
+    if $(gt $(tests.length), $(int 0))
+        f_str = $(adjust_plural $(failures.length), failure)
+        e_str = $(adjust_plural $(errors.length), error)
+        echo The $(test) test suite had $(f_str), and $(e_str).
+        echo
+
+test_suite(subdir, exe, exe_options, input_ext, output_ext, expected_ext) =
+    tests = $(glob i, $(subdir)/*$(input_ext))
+    test_output = $(gen_test_output $(exe), $(exe_options), $(tests), $(output_ext))
+    .PHONY: $(subdir).suite
+    $(subdir).suite: $(test_output)
+        section
+            results = $(check_test_output $(test_output), $(expected_ext), $(output_ext))
+            print_test_results($(subdir), $(results))
+    value $(subdir).suite
+
+test_targets(subdirs, exe, exe_options, input_ext, output_ext, expected_ext) =
+    foreach(d, $(subdirs))
+        suite_target = $(test_suite $(d), $(exe), $(exe_options), $(input_ext), $(output_ext), $(expected_ext))
+        .PHONY: test.$(d)
+        test.$(d): $(suite_target)
+    value $(addprefix test., $(subdirs))
