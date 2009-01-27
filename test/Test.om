@@ -9,9 +9,7 @@ gen_test_output(cmd, cmdopts, filenames, output_ext) =
     value $(outfiles)
 
 filecmp(file1, file2) =
-    s1 = $(cat $(file1))
-    s2 = $(cat $(file2))
-    value $(equal $(s1), $(s2))
+    value $(equal $(cat $(file1)), $(cat $(file2)))
 
 check_test_output(files, expected_ext, output_ext) =
     failures =
@@ -45,12 +43,7 @@ check_test_output(files, expected_ext, output_ext) =
                 export
             export
         export
-    results = $(Map)
-    results. +=
-        $|tests|    = $(rootname $(files))
-        $|failures| = $(failures)
-        $|errors|   = $(errors)
-    value $(results)
+    value $(create-map tests, $(rootname $(files)), failures, $(failures), errors, $(errors))
 
 adjust_plural(count, noun) =
     if $(eq $(count), 1)

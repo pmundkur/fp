@@ -1,0 +1,14 @@
+Notes on using the framework:
+
+. Test input files have the .fd extension.
+
+. The compiler is called with the -test option for the tests.
+
+. The compiler's output to both stdout and stderr is captured into a
+  .out file.
+
+. The compiler's expected output should be put in a file with the
+  corresponding rootname and a .ext extension.
+
+. If the test is supposed to succeed without any output, there is no
+  need to add a .ext file.
