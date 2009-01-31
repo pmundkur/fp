@@ -382,7 +382,6 @@ let check_case (cid, cn, ce) (bid, vl) =
       | Tvalue_branch { struct_pattern = (Pt_struct bl) } ->
           List.iter
             (fun b ->
-               assert (b.branch_info.branch_field = bid);
                if (b.branch_info.classify_field <> cid)
                  && (b.pattern <> Pt_any)
                then raise_overspecified_case bid cn v.field_value_loc)
