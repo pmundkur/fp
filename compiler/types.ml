@@ -339,7 +339,7 @@ let exp_value_equal e1 e2 =
       | _ ->
           false
   in
-    e1 = e2 || with_right_int e1 e2 || with_right_int e2 e1
+    e1.exp_desc = e2.exp_desc || with_right_int e1 e2 || with_right_int e2 e1
 
 (* type coercions *)
 
