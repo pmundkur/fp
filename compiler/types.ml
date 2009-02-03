@@ -476,3 +476,10 @@ let pr_exp_desc = function
   | Texp_const_uint32 i -> Printf.sprintf "uint32 %Ld" i
   | Texp_const_int64 i -> Printf.sprintf "int64 %Ld" i
   | Texp_apply (id, _) -> Printf.sprintf "%s()" (Ident.pr_ident_name id)
+
+let pr_case_exp_desc = function
+  | Tcase_const e ->
+      pr_exp_desc e.exp_desc
+  | Tcase_range (s, e) ->
+      Printf.sprintf "(%s .. %s)"
+        (pr_exp_desc s.exp_desc) (pr_exp_desc e.exp_desc)

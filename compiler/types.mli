@@ -191,3 +191,4 @@ val pr_base_type: base_type -> string
 val pr_field_type: field_type -> string
 val pr_struct_pattern: struct_pattern -> string
 val pr_exp_desc: exp_desc -> string
+val pr_case_exp_desc: case_exp_desc -> string
