@@ -366,6 +366,7 @@ exception Overspecified_case of Ident.t * Asttypes.case_name * Location.t
 exception Unnecessary_field_value of Ident.t * Location.t
 exception Unmatched_variant_case of Ident.t * Ident.t * exp
 exception Unmatched_classify_case of Ident.t * Ident.t * case_exp
+exception Invalid_variant_value of Ident.t * exp
 
 let raise_field_needs_value_for_range bid cn ce =
   raise (Field_needs_value_for_range (bid, cn, ce))
@@ -381,6 +382,8 @@ let raise_unmatched_variant_case vid cid e =
   raise (Unmatched_variant_case (vid, cid, e))
 let raise_unmatched_classify_case vid cid ce =
   raise (Unmatched_classify_case (vid, cid, ce))
+let raise_invalid_variant_value vid e =
+  raise (Invalid_variant_value (vid, e))
 
 (* This is the main routine that ensures that a classify case has an
    appropriate value specification for the corresponding branch field.
@@ -457,7 +460,7 @@ let check_value_list field_env (bid, vl) (cid, mt) =
     (fun _ (cn, ce, st) -> check_case (cid, cn, ce) (bid, vl))
     mt.map_type_desc
 
-let check_variant_cases (bid, v) (cid, mt) =
+let check_variant_cases (bid, v) (cid, mt) vl_opt =
   let cases_contain e =
     StringMap.fold
       (fun _ (_, ce, _) b ->
@@ -467,17 +470,16 @@ let check_variant_cases (bid, v) (cid, mt) =
                  | Tcase_range (start, finish) ->
                      exp_within_range ~start ~finish e))
       mt.map_type_desc false in
-  let variant_contains ce =
-    let matches e =
-      List.fold_left (fun b (ve, _, _) -> b || exp_value_equal e ve) false v.variant_desc
-    in
+  let variant_contains_e e =
+    List.fold_left (fun b (ve, _, _) -> b || exp_value_equal e ve) false v.variant_desc in
+  let variant_contains_ce ce =
       match ce.case_exp_desc with
         | Tcase_const c ->
-            matches c
+            variant_contains_e c
         | Tcase_range (start, finish) ->
             (* Approximate this by checking if both 'start' and
                'finish' are includes in the variant. *)
-            matches start && matches finish
+            variant_contains_e start && variant_contains_e finish
   in
     List.iter
       (fun (e, _, _) ->
@@ -486,9 +488,23 @@ let check_variant_cases (bid, v) (cid, mt) =
       v.variant_desc;
     StringMap.iter
       (fun _ (_, ce, _) ->
-         if not (variant_contains ce) then
+         if not (variant_contains_ce ce) then
            raise_unmatched_classify_case bid cid ce)
-      mt.map_type_desc
+      mt.map_type_desc;
+    match vl_opt with
+      | None ->
+          ()
+      | Some vl ->
+          List.iter
+            (fun fv ->
+               match fv.field_value_desc with
+                 | Tvalue_auto ->
+                     ()
+                 | Tvalue_default e
+                 | Tvalue_branch { value = e } ->
+                     if not (variant_contains_e e) then
+                       raise_invalid_variant_value bid e)
+            vl
 
 let check_branch_values field_env bi =
   let vl, vr =
@@ -507,13 +523,13 @@ let check_branch_values field_env bi =
       | None, _, Some (cn, ce) ->
           raise_field_needs_value_for_range bi.branch_field cn ce
       | None, Some (v, _), None ->
-          check_variant_cases (bi.branch_field, v) (bi.classify_field, bi.branch_map)
+          check_variant_cases (bi.branch_field, v) (bi.classify_field, bi.branch_map) None
       | Some (vl, vloc), _, None ->
           raise_unnecessary_field_value bi.branch_field vloc
       | Some (vl, _), None, Some _ ->
           check_value_list field_env (bi.branch_field, vl) (bi.classify_field, bi.branch_map)
       | Some (vl, _), Some (v, _), Some _ ->
-          check_variant_cases (bi.branch_field, v) (bi.classify_field, bi.branch_map);
+          check_variant_cases (bi.branch_field, v) (bi.classify_field, bi.branch_map) (Some vl);
           check_value_list field_env (bi.branch_field, vl) (bi.classify_field, bi.branch_map)
 
 let check_struct_branch_field_values st =
@@ -584,6 +600,9 @@ let errmsg e =
         Printf.sprintf "%s: classify case %s of field %s is not contained in the variants of %s"
           (Location.pr_location ce.case_exp_loc) (pr_case_exp_desc ce.case_exp_desc)
           (Ident.pr_ident_name cid) (Ident.pr_ident_name vid)
+    | Invalid_variant_value (vid, e) ->
+        Printf.sprintf "%s: expression does not match any of the variants of %s"
+          (Location.pr_location e.exp_loc) (Ident.pr_ident_name vid)
     | e ->
         raise e
 
