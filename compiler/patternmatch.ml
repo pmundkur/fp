@@ -308,6 +308,21 @@ let get_value_attrib fal =
     with
       | Found (vl, loc) -> Some (vl, loc)
 
+exception Found of variant * Location.t
+let get_variant_attrib fal =
+  let matcher a = match a.field_attrib_desc with
+    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
+    | Tattrib_default _ | Tattrib_value _ ->
+        ()
+    | Tattrib_variant v ->
+        raise (Found (v, a.field_attrib_loc))
+  in
+    try
+      List.iter matcher fal;
+      None
+    with
+      | Found (v, loc) -> Some (v, loc)
+
 exception Found of Asttypes.case_name * case_exp
 let find_range_case mt =
   try
@@ -349,6 +364,8 @@ exception Field_value_mismatch of Ident.t * field_value * Asttypes.case_name * c
 exception Field_value_out_of_range of Ident.t * field_value * Asttypes.case_name * case_exp
 exception Overspecified_case of Ident.t * Asttypes.case_name * Location.t
 exception Unnecessary_field_value of Ident.t * Location.t
+exception Unmatched_variant_case of Ident.t * Ident.t * exp
+exception Unmatched_classify_case of Ident.t * Ident.t * case_exp
 
 let raise_field_needs_value_for_range bid cn ce =
   raise (Field_needs_value_for_range (bid, cn, ce))
@@ -360,6 +377,10 @@ let raise_overspecified_case bid cn loc =
   raise (Overspecified_case (bid, cn, loc))
 let raise_unnecessary_field_value bid loc =
   raise (Unnecessary_field_value (bid, loc))
+let raise_unmatched_variant_case vid cid e =
+  raise (Unmatched_variant_case (vid, cid, e))
+let raise_unmatched_classify_case vid cid ce =
+  raise (Unmatched_classify_case (vid, cid, ce))
 
 (* This is the main routine that ensures that a classify case has an
    appropriate value specification for the corresponding branch field.
@@ -436,28 +457,64 @@ let check_value_list field_env (bid, vl) (cid, mt) =
     (fun _ (cn, ce, st) -> check_case (cid, cn, ce) (bid, vl))
     mt.map_type_desc
 
+let check_variant_cases (bid, v) (cid, mt) =
+  let cases_contain e =
+    StringMap.fold
+      (fun _ (_, ce, _) b ->
+         b || (match ce.case_exp_desc with
+                 | Tcase_const c ->
+                     exp_value_equal c e
+                 | Tcase_range (start, finish) ->
+                     exp_within_range ~start ~finish e))
+      mt.map_type_desc false in
+  let variant_contains ce =
+    let matches e =
+      List.fold_left (fun b (ve, _, _) -> b || exp_value_equal e ve) false v.variant_desc
+    in
+      match ce.case_exp_desc with
+        | Tcase_const c ->
+            matches c
+        | Tcase_range (start, finish) ->
+            (* Approximate this by checking if both 'start' and
+               'finish' are includes in the variant. *)
+            matches start && matches finish
+  in
+    List.iter
+      (fun (e, _, _) ->
+         if not (cases_contain e) then
+           raise_unmatched_variant_case bid cid e)
+      v.variant_desc;
+    StringMap.iter
+      (fun _ (_, ce, _) ->
+         if not (variant_contains ce) then
+           raise_unmatched_classify_case bid cid ce)
+      mt.map_type_desc
+
 let check_branch_values field_env bi =
-  let va =
+  let vl, vr =
     match Ident.assoc_by_id field_env bi.branch_field with
       | None ->
           raise (Failure ("check_branch_values: field "
                           ^ (Ident.name_of bi.branch_field)
                           ^ " not found"))
       | Some (ft, fal) ->
-          get_value_attrib fal in
+          get_value_attrib fal, get_variant_attrib fal in
   let rc_opt = find_range_case bi.branch_map
   in
-    match va, rc_opt with
-      | None, None ->
+    match vl, vr, rc_opt with
+      | None, None, None ->
           ()
-      | None, Some (cn, ce) ->
+      | None, _, Some (cn, ce) ->
           raise_field_needs_value_for_range bi.branch_field cn ce
-      | Some (vl, vloc), None ->
+      | None, Some (v, _), None ->
+          check_variant_cases (bi.branch_field, v) (bi.classify_field, bi.branch_map)
+      | Some (vl, vloc), _, None ->
           raise_unnecessary_field_value bi.branch_field vloc
-      | Some (vl, _), Some _ ->
-          check_value_list field_env
-            (bi.branch_field, vl)
-            (bi.classify_field, bi.branch_map)
+      | Some (vl, _), None, Some _ ->
+          check_value_list field_env (bi.branch_field, vl) (bi.classify_field, bi.branch_map)
+      | Some (vl, _), Some (v, _), Some _ ->
+          check_variant_cases (bi.branch_field, v) (bi.classify_field, bi.branch_map);
+          check_value_list field_env (bi.branch_field, vl) (bi.classify_field, bi.branch_map)
 
 let check_struct_branch_field_values st =
   let rec checker field_env st =
@@ -519,6 +576,14 @@ let errmsg e =
     | Unnecessary_field_value (bid, loc) ->
         Printf.sprintf "%s: field %s has an auto-computed value"
           (Location.pr_location loc) (Ident.pr_ident_name bid)
+    | Unmatched_variant_case (vid, cid, e) ->
+        Printf.sprintf "%s: variant case %s of field %s is not contained in the cases of %s"
+          (Location.pr_location e.exp_loc) (pr_exp_desc e.exp_desc)
+          (Ident.pr_ident_name vid) (Ident.pr_ident_name cid)
+    | Unmatched_classify_case (vid, cid, ce) ->
+        Printf.sprintf "%s: classify case %s of field %s is not contained in the variants of %s"
+          (Location.pr_location ce.case_exp_loc) (pr_case_exp_desc ce.case_exp_desc)
+          (Ident.pr_ident_name cid) (Ident.pr_ident_name vid)
     | e ->
         raise e
 
