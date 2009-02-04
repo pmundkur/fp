@@ -346,6 +346,6 @@ Notes:
   'generate'.  This in conjunction with ranges for classification
   branches would complicate generation checking.
 
-  This check can be removed later.
-
-
+  This check can be removed later via a command-line option: this
+  would result in generation code that remove such branching fields
+  from the auto-computed set.

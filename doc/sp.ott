@@ -1,4 +1,4 @@
-metavar field, x, y, name, n            ::= {{ lex alphanum }} {{ com field label }}
+metavar field, x, y, name, n            ::= {{ lex alphanum }} {{ com Field or label }}
 
 metavar integer_literal, i              ::= {{ lex numeral }}  {{ com Literal integers }}
 
@@ -10,26 +10,36 @@ indexvar index, j, k                    ::= {{ lex numeral }}  {{ com Indices }}
 
 grammar
 
-% Kinds of types.  Vectors and arrays are treated separately, since we
-% don't have arrays of classifications (i.e. Sigma -> Map).
+% Kinds of types.
 kind, K :: '' ::=                               {{ com Kinds }}
  | T                                ::  :: base_type    {{ com Base types }}
- | Sigma -> T                       ::  :: vectors      {{ com Vector types }}  {{ tex \sigma\rightarrow [[T]] }}
  | Struct                           ::  :: struct_type  {{ com Struct types }}
+
+ % Sigma below refers to expression values, so that vectors and arrays
+ % are dependent types.
+ | Sigma -> T                       ::  :: vectors      {{ com Vector types }}  {{ tex \sigma\rightarrow [[T]] }}
  | Sigma -> Struct                  ::  :: array        {{ com Array types }}   {{ tex \sigma\rightarrow [[Struct]] }}
+
+ % A map arises from the classify construct, and actually should be
+ % dependently-typed like vectors and arrays, but we simplify it by
+ % making it a map from names (i.e. branch labels) to structs.
  | Map                              ::  :: map          {{ com Cases types }}
 
-% Primitive types.  Note that int is only here as an interface to the
-% int type of the implementation language used by the generated code
-% (e.g. Ocaml); it's only used in the value expression typing rules.
+% Primitive types.
 base, b :: '' ::=                               {{ com Base types }}
  | bit                      ::  :: bit
  | byte                     ::  :: byte
  | int16                    ::  :: int16
  | int32                    ::  :: int32
  | int64                    ::  :: int64
+
+ % int is only here as an interface to the int type of the
+ % implementation language used by the generated code (e.g. Ocaml);
+ % it's only used in the value expression typing rules.
  | int                      ::  :: int
 
+% Expressions.
+%
 % These are expressions that are used to specify vector-lengths, and a
 % slight extension of these expressions will be used to specify value
 % specifications.
@@ -46,24 +56,40 @@ exp, e :: '' ::=                                {{ com Expressions }}
  | num_set_bits x           ::  :: num_set_bits
  | remaining ()             ::  :: remaining
 
+% Path expressions.
+%
 % The path expressions are used in branch case guards and value
-% expressions.
+% expressions.  Paths are used to refer to fields inside structs that
+% are nested inside maps.  Although they could be used to refer to
+% structs inside arrays, that is not done here.  Note that paths
+% depend on the environment set up by the branch cases; see the
+% value_exp_typing rule.
 path, p :: '' ::=                               {{ com Path expressions }}
  | x                        ::  :: path_leaf
  | path . x                 ::  :: dot_path
 
+% Field types.
+%
 % Note that this definition allows fields inside structs to have
-% struct types.  Also, the value expressions for fields are seperated
-% out into a separate syntactic rule, and appear in a struct after
-% field declarations.  This has been done to ease the typing
-% specification, since the environment for the value expressions
-% includes _all_ the fields in the enclosing struct, including fields
-% that lexically come later in the actual language.
+% struct types, i.e. structs can nest inside structs.
+%
+% Also, the value expressions for fields (VD) are separated out into a
+% separate syntactic rule, and appear in a struct after field
+% declarations.  This has been done to ease the typing specification,
+% since the environment for the value expressions includes _all_ the
+% fields in the enclosing struct, including fields that lexically come
+% later in the concrete syntax.
 tau {{ tex \tau }} :: '' ::=                    {{ com Type expressions }}
  | b                            ::  :: base
  | b [ e ]                      ::  :: vector
  | struct { D ;; VD }           ::  :: struct
+
+ % A classify field is typed as a list of case tuples.
  | </ vj , nj , tauj // j />    ::  :: cases_struct
+
+ % The array type notation differs from that of vectors since the tau
+ % will actually be a struct, and not a base type.  Perhaps the
+ % notation could be unified.
  | ( e , tau )                  ::  :: array_struct
 
 % A sequence of field and alignment declarations.
@@ -79,34 +105,61 @@ F :: '' ::=                                     {{ com Labeled Fields }}
  | x : array ( e ) { D ;; VD }          ::  :: struct_array
  | x : classify ( y ) { cases }         ::  :: classify
 
+% Classification cases.
+%
+% Each case is represented as a tuple of the expression for the
+% branching value, the branch name, and the nested struct.  The branch
+% name will be used in the branch guard components of the cases of a
+% field value.
 cases :: '' ::=                                 {{ com Classification trees }}
  | </ ej : nj -> { Dj ;; VDj } // j />  ::  :: cases
 
-% The value declarations are unordered, so we should use a list form.
-% This ensures that we use the same environment for each decl, and
-% also enables us to define one less typing production.  However, Ott
-% had issues with the way I attempted it ...
+% Value declarations.
+%
+% The value declarations are unordered, so we use a list form.  This
+% ensures that we use the same environment for each decl.  I think Ott
+% had issues with the way I attempted it using the dot form, so we
+% just resort to the comprehension form instead.
 VD :: '' ::=                                    {{ com Value declarations }}
  | </ Vj // j />            ::  :: value_decls
 
+% A field value declaration.
 V :: '' ::=                                     {{ com Field value specification }}
  | x : value_cases          ::  :: value_case_decls
 
+% Field value cases.
+%
+% A value can be specified for each branch of a classification tree,
+% using a case per branch.
 value_cases, vcs :: '' ::=                      {{ com Value cases }}
  | </ value_casej // j />   ::  :: value_cases
 
+% A field value case.
+%
+% The value is guarded by the branch specifier.  In the implementation
+% we also support the "default" branch (i.e. "_"), but we don't
+% specify it here for simplicity.
 value_case, vc :: '' ::=                        {{ com Value case }}
  | bcases -> value_exp      ::  :: value_case
 
+% Branch cases.
+%
+% A branch is specified using an ordered list of branch cases.
 bcases, cs :: '' ::=                            {{ com Branch case }}
  |                          ::  :: nil_branch_case
  | bcases ; branch_case     ::  :: cons_branch_case
 
+% A branch case.
+%
+% Each branch case names a particular branch of the classification
+% tree emanating from the field specified by path.
 branch_case, bc :: '' ::=                       {{ com Branch guard }}
  | path = n                 ::  :: branch_guard
 
-% The path syntax allows value expressions to refer to fields within
-% classification trees.
+% Value expressions.
+%
+% This extends the expression syntax.  The path syntax allows value
+% expressions to refer to fields within classification trees.
 value_exp, ve :: '' ::=                         {{ com Value expressions }}
  | e                        ::  :: expr
  | path                     ::  :: qualified_field
@@ -114,6 +167,9 @@ value_exp, ve :: '' ::=                         {{ com Value expressions }}
  | offset path              ::  :: path_offset
  | num_set_bits path        ::  :: path_num_set_bits
 
+% The typing environment.
+%
+% As usual, this maps a field name to its field type.
 E :: '' ::=                                     {{ com Typing environments }}
  |                          ::  :: env_nil
  | x : tau                  ::  :: env_cons
@@ -121,64 +177,89 @@ E :: '' ::=                                     {{ com Typing environments }}
  | E1 ; E2                  ::  :: env_append
  | E1 \ E2                  ::  :: env_subtract
 
-% The classification tree environment stores the current set of paths
-% in the classification tree.  The paths point to the selected Struct
-% within a Map.
+
+% The branching environment.
+%
+% This environment stores the current set of paths in the
+% classification tree.  The paths point to the selected Struct within
+% a Map.
 C :: '' ::=
  |                          ::  :: class_env_nil
- | path : Struct            ::  :: class_env_cons
+ | path : tau            ::  :: class_env_cons
  | C1 ; C2                  ::  :: class_env_append
 
 % Sets containing field and label names.
+%
+% These sets are usually used to ensure uniqueness of names, or to
+% ensure the use of known names.
 S, L :: '' ::=                                  {{ com Label and name sets }}
  | Empty                     ::  :: nil         {{ com Empty set }}             {{ tex \empty }}
  | S + x                     ::  :: set_union   {{ com Set union }}             {{ tex [[S]] \cup {[[x]]} }}
 
-% The ( exp ) production is purely a mechanism to inject expressions
-% as alignments, without disambiguation.  const_fold is a function
-% that is defined when exp can be constant-folded into a constant, and
-% is not defined otherwise.
+% Alignment expressions.
 align_expr, a :: '' ::=                         {{ com Alignment expressions }}
  | current_alignment        ::  :: align_var
  | integer_literal          ::  :: align_const
- | ( exp )                  ::  :: align_exp
  | a1 + a2                  ::  :: align_plus
  | a1 * a2                  ::  :: align_multiple
- | const_fold ( exp )       ::  :: align_const_fold
  | sizeof ( tau )           ::  :: align_sizeof
 
+ % The ( exp ) production is purely a mechanism for the benefit of
+ % Ott, to inject expressions as alignments without causing Ott any
+ % heartburn.
+ | ( exp )                  ::  :: align_exp
+
+ % const_fold is a function that is defined when exp can be
+ % constant-folded into a constant, and is not defined otherwise.
+ | const_fold ( exp )       ::  :: align_const_fold
+
+
+% Additional syntax for premises in inference rules.  See the Ott
+% manual.
 formula :: formula_ ::=
  | judgement                    ::  :: judgement
  | </ formulaj // j />          ::  :: formula_list
  | E ; x : tau ; E'             ::  :: env
  | x in S                       ::  :: in_S             {{ tex [[x]]\not\in [[S]] }}
  | x not in S                   ::  :: not_in_S         {{ tex [[x]]\not\in [[S]] }}
- | x : tau in fields ( tau' )   ::  :: in_fields_tau    {{ tex [[x]] [[:]] [[tau]] \in fields([[tau']]) }}
- | n in </ nj // j />           ::  :: in_keys          {{ tex [[n]] \in { [[n]]_j } }}
  | E ( x ) = label              ::  :: label_in_E
  | a                            ::  :: current_alignment
  | a '%' i1 = i2                ::  :: alignment_boundary
  | a < a'                       ::  :: alignment_compare
  | v = a                        ::  :: alignment_equal
+
+ % This is a predicate that ensures a field type is compatible to an
+ % int.
  | T_to_int ( tau )             ::  :: type_cast_to_int
- | T_from_int ( tau )           ::  :: type_cast_from_int
+
  | distinct ( </ nj // j /> )   ::  :: distinct_names
- | n in branches ( Map )        ::  :: names_in_map
- | C1 ; path : Struct ; C2      ::  :: class_env
+ | n in branches ( tau )        ::  :: names_in_map
+
+ % This is used to extract the field type of a field from a struct.
+ | tau . x  = tau'              ::  :: field_selection
+
+ % Formulae specifically for rules related to classification and
+ % branching.
+ | C1 ; path : tau ; C2         ::  :: class_env
  | path  in dom ( C )           ::  :: path_in_class_env
  | path not in dom ( C )        ::  :: path_not_in_class_env
- | Map [ n ] = Struct           ::  :: branch_selection
+ | tau [ n ] = tau'             ::  :: branch_selection
  | x in dom ( Struct )          ::  :: field_in_struct
- | Struct [ x ] = tau           ::  :: struct_selection
 
 terminals :: '' ::=                             {{ com Syntax terminals }}
  | ->                       ::  :: rarrow       {{ tex \rightarrow }}
  | |-                       ::  :: vdash        {{ tex \vdash }}
 
+
+
+% The type checking rules follow.
+
+
+
 defns
 Type_checked_parsing :: '' ::=
 
-% Environment lookup for variables.
+% Type environment lookup for variables.
 defn
 E ( x ) = tau     ::  :: typing_context :: 'typing_context_' by
 
@@ -186,13 +267,17 @@ E1 ; x : tau ; E2
 --------------------------  :: var
 E ( x ) = tau
 
+
+
 % Class environment lookup for paths.
 defn
-C |- path : Struct  ::  :: class_env_contect :: 'class_env_context_' by
+C |- path : tau  ::  :: class_env_context :: 'class_env_context_' by
 
-C1 ; path : Struct ; C2
+C1 ; path : tau ; C2
 --------------------------  :: path
-C |- path : Struct
+C |- path : tau
+
+
 
 % Rules to type length expressions.
 %
@@ -206,7 +291,7 @@ C |- path : Struct
 % differentiated syntactically above (to handle paths in value
 % expressions), they will be typed using the same typing relation, and
 % the difference between the two is implemented in the typing relation
-% for V (field_value_typing).
+% for V (value_case_decl_typing).
 defn
 E |- exp : int ::  :: array_size_typing :: 'array_size_typing_' by
 
@@ -215,13 +300,14 @@ E |- integer_literal : int
 
 % We handle bit-vectors specially, and the generic case below: they
 % can be converted into integers if their length is a constant and
-% less then a limit.
+% less then a limit.  We don't support 64-bit conversion for now,
+% since a work-around using two 32-bit vectors exists.
 E ( x ) = bit [ e ]
 const_fold ( e ) < 32
 --------------------------  :: var_bit_vector
 E |- x : int
 
-% This is the more generic case.
+% This is the generic case.
 E ( x ) = tau
 T_to_int ( tau )
 --------------------------  :: var
@@ -263,12 +349,16 @@ E ( x ) = label
 --------------------------  :: offset_label
 E |- offset x  : int
 
-E ( x ) = tau
+E ( x ) = bit [ e ]
 --------------------------  :: num_set_bits
 E |- num_set_bits x  : int
 
+% There might be some context restrictions on this later, but for
+% typing, we don't need them.
 --------------------------  :: remaining
 E |- remaining ()  : int
+
+
 
 % Rules to ensure that type expressions are well-kinded.  We also
 % thread an alignment offset 'a' through the rules, since type
@@ -324,71 +414,76 @@ E |- e : int
 --------------------------  :: int64_vector
 E, a |- int64[e] : Sigma -> T , 0
 
-% TODO: We need to add some check for D!
+% We allow nested structs only on byte-boundaries; i.e. they need to
+% start and end on byte-boundaries.
 a % 8 = 0
+E , 0 , Empty , Empty |- D , E' , a' , S , L
+a' % 8 = 0
 --------------------------  :: struct
 E, a |- struct { D ;; VD } : Struct, 0
 
-% TODO: We need to add some check for tau!
+% We allow arrays only on byte-boundaries with byte-aligned elements;
+% i.e. each array element needs to start and end on byte boundaries.
 a % 8 = 0
 E |- e : int
+E , 0 |- tau : Struct , a'
+a' % 8 = 0
 --------------------------  :: array
 E, a |- ( e, tau ) : Sigma -> Struct, 0
 
-% For cases, we need to check that each case branch will leave the
-% subsequent fields suitably aligned.
+% For cases, we need to check that, starting from the same alignment,
+% each case branch will leave the subsequent fields suitably aligned.
 a % 8 = 0
 </ E, a |- tauj : Kj , aj // j />
 </ aj % 8 = 0 // j />
 --------------------------  :: cases
 E, a |- </ vj , nj , tauj // j /> : Map, 0
 
-% TODO:
-%
-% This rule type checks a top-level struct.  Note that the environment
-% threading in this rule adds the fields in the struct to the
-% environment without any qualification.  This will be rectified for
-% nested structs, below.  Also, note that the environment used to type
-% VD is the one computed after typing D.
-% E , a |- D , E' , a'
-% E' |- VD
-% --------------------------  :: named_struct
-% E , a |- struct n { D ;; VD } : Struct, a'
-
-% There is no rule for typing an unamed array struct, since this will
-% never appear in the source syntax.
 
 
 % Rules to process a sequence of field and alignment declarations.
 % Since field and label names cannot conflict, and since there cannot
 % be duplicate field or label names, we thread a set of current names
-% through the rules.
+% through the rules.  To ensure linearity of classification use, we
+% also thread a set of fields used for classification.  See the
+% field_typing rule below for more explanation.
 defn
-E , a , S |- D , E' , a' , S'   ::  :: decls_typing :: 'decls_typing_' by
+E , a , S , L |- D , E' , a' , S' , L'  ::  :: decls_typing :: 'decls_typing_' by
 
-% That's not a typo: it's the null decl!
+% That's not a typo below: it's the null decl!
 --------------------------  :: nil
-E , a , S |- , E , a , S
+E , a , S , L |- , E , a , S , L
 
-E  , a ,  S  |- F , E'  , a'  , S'
-E' , a' , S' |- D , E'' , a'' , S''
+E  , a  , S  , L   |- F , E'  , a'  , S'  , L'
+E' , a' , S' , L'  |- D , E'' , a'' , S'' , L''
 --------------------------  :: decl_cons
-E , a , S    |- F ; D , E'' , a'' , S''
+E  , a  , S  , L'' |- F ; D , E'' , a'' , S'' , L''
 
-% Rules to process a single field or alignment declaration.  Alignment
-% declarations update the bit alignment, and field declarations add to
-% the environment as well as update the bit alignment, and so each
-% rule will output a possibly modified environment and an updated bit
-% alignment.  We also thread a set of field and label names to check
-% for conflicts.
+
+% Rules to process a single field or alignment declaration.
+%
+% Alignment declarations update the bit alignment, and field
+% declarations add to the environment as well as update the bit
+% alignment, and so each rule will output a possibly modified
+% environment and an updated bit alignment.
+%
+%
+% We thread a set S of field and label names to check for uniqueness.
+% This set is checked and updated by each non-alignment field.
+%
+% We also thread a set L of fields used for classification, to ensure
+% that fields are not used for branching multiple times.  This is
+% actually a generation-facet check, not a parsing-facet check, but
+% it's easier to do at type checking time.  The set L is only checked
+% and updated at classify fields.
 defn
-E , a , S |- F , E' , a' , S'   ::  :: field_typing :: 'field_typing_' by
+E , a , S , L |- F , E' , a' , S' , L'   ::  :: field_typing :: 'field_typing_' by
 
 % We only support constant expressions for alignment values, and only
 % support alignment at byte boundaries.
 const_fold ( e ) % 8 = 0
 --------------------------  :: alignment
-E , a , S |- align e , E , 0 , S
+E , a , S , L |- align e , E , 0 , S , L
 
 % A label is simply added to the environment as a label; in
 % particular, the current alignment is unchanged.  We support labels
@@ -397,53 +492,64 @@ E , a , S |- align e , E , 0 , S
 a % 8 = 0
 x not in S
 --------------------------  :: label
-E , a , S |- x : label , E ; x : label , 0 , S + x
+E , a , S , L |- x : label , E ; x : label , 0 , S + x , L
 
-% We don't have a single rule for x : tau, but instead seperate out
+% We don't have a single rule for x : tau, but instead separate out
 % the rules for the top level cases of tau.  This is to specially
 % handle the case where tau is a struct.
 
 x not in S
 E , a |- b : K , a'
 --------------------------  :: base
-E , a , S |- x : b , E ; x : b , a' , S + x
+E , a , S , L |- x : b , E ; x : b , a' , S + x , L
 
 x not in S
 E , a |- b [ e ] : K , a'
 --------------------------  :: vector
-E , a , S |- x : b [ e ] , E ; x : b [ e ] , a' , S + x
+E , a , S , L |- x : b [ e ] , E ; x : b [ e ] , a' , S + x , L
 
 % The array needs to start and end on a byte-boundary.  Note the
-% adjustment of the environment for typing value expressions.  This is
+% adjustment of the environment for typing value expressions: this is
 % to enforce layering, i.e. generation code of embedded struct fields
 % cannot depend on the embedding environment.  This ensures that
-% structs can be generated bottom up.
+% structs can be generated bottom-up/inside-out.  Note also the
+% adjustment (reset) of the S set, and the threading of the L set, in
+% the rule for the nested struct.
 
 x not in S
 a % 8 = 0
 E |- e : int
-E , 0 , Empty |- D , E' , a' , S'
+E , 0 , Empty , L |- D , E' , a' , S' , L'
 ( e ) * a' % 8 = 0
 E' \ E |- VD
 --------------------------  :: array
-E , a , S |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , 0 , S + x
+E , a , S , L |- x : array ( e ) { D ;; VD } , E ; x : ( e , struct { D ;; VD } ) , 0 , S + x , L'
 
 % The field y should not be a label.  The root of the classification
 % tree should be byte-aligned, and each path in the classification
 % tree should end on a byte-aligned boundary.  Layering is again
-% enforced by adjusting the environment the value expressions of each
-% classified struct are typed in.
-
+% enforced by adjusting the environment for the typing of the value
+% expressions of each classified struct.
+%
+% As before, the set S is adjusted again for the nested structs.
+%
+% The L set is used and modified in this rule only.  Note that the
+% same L is used for each branch: this is valid, since at generation
+% time, the branches are mutually exclusive, and any updates of L in
+% one branch cannot affect another.
 x not in S
 a % 8 = 0
+y not in L
 E ( y ) = tau
 distinct ( </ nj // j /> )
 vj = const_fold ( ej )
-</ E , 0 , Empty |- Dj , Ej , aj , Sj // j />
+</ E , 0 , Empty , L |- Dj , Ej , aj , Sj , Lj // j />
 aj % 8 = 0
 </ Ej \ E |- VDj // j />
 --------------------------  :: classify
-E , a , S |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , 0 , S + x
+E , a , S , L |- x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } , E ; x : </ vj , nj , struct { Dj ;; VDj } // j /> , 0 , S + x , L + y
+
+
 
 % Value expressions.
 
@@ -453,6 +559,8 @@ E |- VD                     ::  :: field_values_typing :: '' by
 </ E |- Vj // j />
 --------------------------  :: field_values
 E |- </ Vj // j />
+
+
 
 defn
 E |- V                      ::  :: value_case_decl_typing :: '' by
@@ -464,6 +572,8 @@ E ( x ) = base
 </ E |- value_casej : base // j />
 --------------------------  :: value_cases
 E |- x : value_cases
+
+
 
 % This relation specifies how the environment used for path lookups is
 % built from the branch case specifications for the value expression.
@@ -479,22 +589,28 @@ E , C |- branch_case : C'   ::  ::  branch_case_env :: '' by
 % enclosing struct.  We disallow repeated branch cases, hence this
 % path must not be present in dom(C), but looked up in the environment
 % E.
+x not in dom ( C )
 E ( x ) = tau
 E , 0 |- tau : Map , a'
-x not in dom ( C )
-n in branches ( Map )
-Map [ n ] = Struct
+n in branches ( tau )
+tau [ n ] = tau'
+E , 0 |- tau' : Struct , a''
 --------------------------  :: leaf_guard_check
-E , C |- x = n : C ; x : Struct
+E , C |- x = n : C ; x : tau'
 
 % Multicomponent paths are looked up in C based on their prefix.
 path in dom ( C )
-C |- path : Struct
-Struct [ x ] = tau
-E , 0 |- tau : Map , a'
-Map [ n ] = Struct
+C |- path : tau
+E , 0 |- tau : Struct , a'
+tau . x  = tau'
+E , 0 |- tau' : Map , a''
+n in branches ( tau' )
+tau' [ n ] = tau''
+E, 0 |- tau'' : Struct , a''
 --------------------------  :: path_guard_check
-E , C |- path . x  = n : C ; x : Struct
+E , C |- path . x  = n : C ; x : tau''
+
+
 
 % This relation merely specifies how to process a list of branch
 % cases.
@@ -509,20 +625,24 @@ E , C' |- branch_case : C''
 --------------------------  :: cons_class_env_spec
 E , C |- bcases ; branch_case : C''
 
+
+
 % A value_case is processed by first computing the classification tree
 % environment from the specified branch cases, and then typing the
 % value_exp.
 defn
 E |- value_case : tau       ::  :: value_case_typing :: '' by
 
-E , |- bcases : C
+E ,   |- bcases : C
 E , C |- value_exp : tau
 --------------------------  :: value_case
 E |- bcases -> value_exp : tau
 
+
+
 % This relation computes the type of a value_exp given the two
 % environment components.  This is largely similar to the typing of
-% expressions in the parsing facet, with the following differences:
+% expressions in the parsing-facet, with the following differences:
 % - paths appear only in value expressions, and need to be looked up
 %   using the classification tree environment C
 % - some functions (e.g. sizeof, offset) appear only in value
@@ -534,10 +654,10 @@ E ( x ) = tau
 --------------------------  :: field_value
 E , C |- x : tau
 
-C |- path : Struct
-Struct [ x ] = tau
+C |- path : tau
+tau . x  = tau'
 --------------------------  :: path_value
-E , C |- path . x : tau
+E , C |- path . x : tau'
 
 E , C |- path : tau
 --------------------------  :: sizeof

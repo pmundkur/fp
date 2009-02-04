@@ -684,9 +684,9 @@ let type_check_value_attrib env f bt vcl classify_fields branch_fields =
    specification to keep it simple.  The caller supplies the adjusted
    environment to enforce the layering principle.
 
-   The implemented rule is a generalization of:
+   The implemented rule is a generalization of value_case_decl_typing:
 
-     E |- x : value_exp
+     E |- x : value_cases
 
    The classify_fields argument is only used for generating struct
    patterns from branch cases for field value attributes.
@@ -769,8 +769,8 @@ let type_attribs env f ft fal classify_fields branch_fields =
     check_flags ();
     tal
 
-(* This implements the field-checking relation:
-        E, a, S |- F, E', a', S'
+(* This implements the field_typing relation:
+        E, a, S , L |- F, E', a', S' , L'
 
    However, instead of using an explicit name set S, we instead thread
    a list containing information on the fields checked thus far.
