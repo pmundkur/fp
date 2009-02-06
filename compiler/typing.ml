@@ -29,6 +29,7 @@ exception Conflicting_attributes of Ident.t * string * string
 exception Invalid_variant_type of Ident.t * Location.t
 exception Invalid_const_type of Ident.t * Location.t
 exception Duplicate_classify_case of case_name
+exception Overlapping_classify_value of exp * (* error loc *) Location.t * (* overlap loc *) Location.t
 exception Duplicate_default_value of Ident.t * Location.t
 exception Invalid_auto_value of Ident.t * Location.t
 exception Default_value_is_not_last_case of Ident.t * Location.t
@@ -91,6 +92,8 @@ let raise_invalid_const_type id loc =
   raise (Invalid_const_type (id, loc))
 let raise_duplicate_classify_case cn =
   raise (Duplicate_classify_case cn)
+let raise_overlapping_classify_value e eloc oloc =
+  raise (Overlapping_classify_value (e, eloc, oloc))
 let raise_duplicate_default_value id loc =
   raise (Duplicate_default_value (id, loc))
 let raise_invalid_auto_value id loc =
@@ -211,7 +214,6 @@ let lookup_var env path =
            prefix. *)
         lookup_qualified_var env path
 
-
 (* This is called with branch specifications in the context of
    classification guards of value attributes.
 *)
@@ -228,6 +230,12 @@ let lookup_path env path =
         (* The path prefix should be present in the path env, and the
            struct it points to should contain the suffix as a field. *)
         lookup_qualified_var env path
+
+
+(* The byte-alignment checker *)
+let is_byte_aligned a =
+  a mod 8 = 0
+
 
 (* Type compatibility check functions. *)
 
@@ -458,13 +466,20 @@ let type_check_exp_as_base_type env exp as_base_type =
     { exp_desc = exp_typer exp;
       exp_loc = exp.pexp_loc }
 
+
+(* This implements a variant checker that is used for both top-level
+   variant definitions, as well as inline variant attribute
+   definitions.
+
+   It checks that:
+   . the exps are consts
+   . the case_names are distinct
+   . there is only one default
+*)
+
 module StringSet = Set.Make (struct type t = string let compare = compare end)
 
 let check_variant_def vc_list =
-  (* . the exps should be const
-     . the case_names should be distinct
-     . there should only be one default
-  *)
   let names = ref StringSet.empty in
   let default = ref None in
   let check_case (ce, cn, def) =
@@ -480,8 +495,6 @@ let check_variant_def vc_list =
   in
     List.iter check_case vc_list
 
-let is_byte_aligned a =
-  a mod 8 = 0
 
 (* This implements the base cases of the kinding relation of
    the specification:
@@ -835,23 +848,42 @@ let rec type_field (env, cur_align, fl) f =
                 let bt = match et with
                   | Ttype_base bt -> bt
                   | _ -> raise_invalid_classify_expr e.pexp_loc in
+                let check_case_is_non_overlapping (tce, loc) typed_case_list =
+                  let check_ce cc =
+                    List.iter
+                      (fun (_, (_, pc, _)) ->
+                         let overlapping =
+                           match pc.case_exp_desc with
+                             | Tcase_const c ->
+                                 exp_value_equal cc c
+                             | Tcase_range (start, finish) ->
+                                 exp_within_range ~start ~finish cc
+                         in
+                           if overlapping then
+                             raise_overlapping_classify_value cc loc pc.case_exp_loc)
+                      typed_case_list in
+                  match tce with
+                    | Tcase_const c ->  check_ce c
+                    | Tcase_range (l, r) ->  check_ce l; check_ce r in
                 let tcl =
                   List.fold_left
                     (fun a (cn, ce, fmt) ->
                        let cnm = Location.node_of cn in
                          if List.mem_assoc cnm a
                          then raise_duplicate_classify_case cn;
-                         let te = match ce.pcase_exp_desc with
+                         let tce = match ce.pcase_exp_desc with
                            | Pcase_const c ->
                                Tcase_const (const_fold_as_base_type env c bt fi c.pexp_loc)
                            | Pcase_range (l, r) ->
                                let tl = const_fold_as_base_type env l bt fi l.pexp_loc in
                                let tr = const_fold_as_base_type env r bt fi r.pexp_loc in
                                  Tcase_range (tl, tr) in
-                         let te = { case_exp_desc = te;
-                                    case_exp_loc = ce.pcase_exp_loc } in
+                         let tce =
+                           check_case_is_non_overlapping (tce, ce.pcase_exp_loc) a;
+                           { case_exp_desc = tce;
+                             case_exp_loc = ce.pcase_exp_loc } in
                          let tfmt = type_format env fmt in
-                           (cnm, (cn, te, tfmt)) :: a)
+                           (cnm, (cn, tce, tfmt)) :: a)
                     [] cl in
                 let m =
                   List.fold_left
@@ -1015,6 +1047,10 @@ let errmsg e =
     | Duplicate_classify_case cn ->
         Printf.sprintf "%s: duplicate classify branch name \"%s\""
           (Location.pr_location (Location.location_of cn)) (Location.node_of cn)
+    | Overlapping_classify_value (e, eloc, oloc) ->
+        Printf.sprintf "%s: match expression %s overlaps with previous matching expression at %s"
+          (Location.pr_location eloc) (pr_exp_desc e.exp_desc)
+          (Location.pr_line_info oloc)
     | Duplicate_default_value (fid, loc) ->
         Printf.sprintf "%s: field \"%s\" specifies multiple default values"
           (Location.pr_location loc) (Ident.pr_ident_name fid)
