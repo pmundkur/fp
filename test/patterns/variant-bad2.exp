@@ -1,0 +1,1 @@
+File "patterns/variant-bad2.fd", line 4, characters 21-38: the value specified for field v is out of the range specified for case CRange at line 8, characters 10-14

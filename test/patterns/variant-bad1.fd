@@ -1,0 +1,11 @@
+/* value for v in case c = CRange should be one of {0, 1, 2, 3} */
+format a {
+    v : byte variant { | 0 -> Zero | 1 -> One | 2 -> Two | 3 -> Three }
+             value ( | c = CRange -> 4 | _ -> _ );
+
+    c : classify (v) {
+        | 0:CZero -> {}
+        | 1..3:CRange  -> {}
+    }
+}
+

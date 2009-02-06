@@ -1,0 +1,1 @@
+File "patterns/variant-bad4.fd", line 3, characters 25-26: variant case byte 0 of field v is not contained in the cases of c

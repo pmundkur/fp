@@ -1,0 +1,11 @@
+/* c's classification is incomplete with respect to v's variant of 0. */
+format a {
+    v : byte variant { | 0 -> Zero | 1 -> One | 2 -> Two | 3 -> Three }
+             value ( | c = CRange -> 1 | _ -> _ );
+
+    c : classify (v) {
+        | 1:COne -> {}
+        | 2..3:CRange  -> {}
+    }
+}
+
