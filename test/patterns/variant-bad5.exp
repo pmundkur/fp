@@ -1,1 +1,0 @@
-File "patterns/variant-bad5.fd", line 7, characters 10-14: match expression byte 0 overlaps with previous matching expression at line 6, characters 10-11

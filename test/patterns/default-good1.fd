@@ -1,7 +1,7 @@
 format cl {
   f : int16;
   p : int16;
-  q : int16 value (|g=B->2|_ -> _);
+  q : int16 value (| g = B -> 2 | _ -> _);
   g : classify (q) {
         | 1:A -> { }
         | 2..3:B -> { }
