@@ -1,0 +1,84 @@
+This project was inspired by the MPL language described in Anil
+Madhavapeddy's thesis [1]: "Creating High-Performance, Statically
+Type-Safe Network Applications", 2007, and implemented in the Melange
+project [2].
+
+[1] http://anil.recoil.org/papers/anil-thesis-doublesided.pdf
+[2] http://melange.recoil.org/  (currently offline?)
+
+The major differences between the MPL language in Melange (circa Jan
+2009, since Melange has not yet had a formal release) and this
+implementation are documented below:
+
+- The anonymous classify blocks in MPL are named fields in the current
+  implementation; thus the syntax is slightly different.
+
+  The semantics of a classify are however significantly different.  In
+  MPL, the fields following the classify block are inserted at the end
+  of each of the branches of the classify block.  This implies that
+  serial classification blocks result in a "multiplication effect",
+  where each subsequent classify block is duplicated in each of the
+  branches of a previous classify block.
+
+  This is not the case in the current implementation, i.e. the fields
+  following classify blocks are not inserted into the branches of the
+  classify blocks.
+
+- In MPL, a value attribute can specify only a single expression,
+  which cannot refer to fields inside classify (and array) blocks.
+
+  In the current implementation, value attributes can specify a value
+  expression per branch of a classification tree, using a branch guard
+  pattern for each expression.  The branch guard specifies the context
+  for the variables in the expression, and provides a mechanism for
+  referring to fields nested inside classification blocks.  However,
+  fields inside array blocks cannot be referenced in value
+  expressions; this is the same as in MPL.
+
+- The MPL specification supports state variable arguments to the
+  "packet" specifications that can be used as classify match guards.
+  The current implementation does not support this, although this
+  might be supported in the future.
+
+- The runtime library is significantly different in the current
+  implementation.
+
+  . The parsing functions in MPL are written in imperative style, and
+    destructively modify the parsing environment they are given,
+    leaving the caller holding the modified environment after the
+    call.
+
+    The parsing functions in the current implementation are written in
+    a functional "environment-passing" style where a modified copy of
+    the environment is returned to the caller (which is simpler and
+    makes the code more regular, but is not as efficient).
+
+  . In MPL, the parsing environment is refilled in a synchronous
+    fashion using a 'fill' function.  If the environment originates
+    from a socket or file buffer, then the associated 'fill' function
+    needs to perform blocking reads on the socket or file.
+
+    In the current implementation, the parsing functions throw a
+    "Insufficient_data" exception on prematurely reaching the end of a
+    parsing environment, thus allowing the callers to retry after
+    appending new data to the environment.  This allows the parsing
+    environment to be refilled asynchronously from a socket or file.
+
+Minor differences between the two implementations are:
+
+- The align field attribute in MPL is made a first-class (but
+  anonymous) field in the current implementation.  This means that in
+  MPL, a packet format cannot start with a padding alignment, but the
+  current implementation allows it.
+
+  In MPL, the argument to the align attribute needed to be a multiple
+  of 8; this sufficed since it was primarily used to provide padding
+  after bit-vectors.  The current implementation allows arbitrary
+  padding.
+
+- The typing algorithm for the current implementation is specified in
+  some detail using the Ott tool [3].  This specification proved to be
+  an invaluable aid during implementation, and should also provide a
+  more rigorous documentation of the language semantics.
+
+[3] http://www.cl.cam.ac.uk/~pes20/ott/
