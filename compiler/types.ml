@@ -42,6 +42,22 @@ and exp_desc =
   | Texp_const_int64 of Int64.t
   | Texp_apply of Ident.t * exp list
 
+let is_const_exp e =
+  match e.exp_desc with
+    | Texp_unit
+    | Texp_const_bit _
+    | Texp_const_byte _
+    | Texp_const_int16 _
+    | Texp_const_uint16 _
+    | Texp_const_int _
+    | Texp_const_int32 _
+    | Texp_const_uint32 _
+    | Texp_const_int64 _
+        -> true
+    | Texp_var _
+    | Texp_apply _
+        -> false
+
 type base_type =
   | Tbase_primitive of primitive
   | Tbase_vector of primitive * exp
@@ -292,11 +308,14 @@ let exp_within_range ~start:st ~finish:fi exp =
     | Texp_const_int16 s, Texp_const_int16 f, Texp_const_int16 e
     | Texp_const_int16 s, Texp_const_int16 f, Texp_const_int e
 
+    | Texp_const_uint16 s, Texp_const_uint16 f, Texp_const_uint16 e
+    | Texp_const_uint16 s, Texp_const_uint16 f, Texp_const_int e
+
     | Texp_const_int s, Texp_const_int f, Texp_const_int e ->
         compare s e <= 0 && compare e f <= 0
+
     | Texp_const_int32 s, Texp_const_int32 f, Texp_const_int32 e ->
         Int32.compare s e <= 0 && Int32.compare e f <= 0
-
     | Texp_const_int32 s, Texp_const_int32 f, Texp_const_int e ->
         if ((Int32.of_int Pervasives.max_int) <> -1l) then
           (* int has a smaller precision than 32 bits *)

@@ -42,6 +42,8 @@ and exp_desc =
   | Texp_const_int64 of Int64.t
   | Texp_apply of Ident.t * exp list
 
+val is_const_exp: exp -> bool
+
 type base_type =
   | Tbase_primitive of primitive
   | Tbase_vector of primitive * exp

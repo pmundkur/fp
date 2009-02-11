@@ -442,11 +442,13 @@ let check_case (cid, cn, ce) (bid, vl) =
                  else checker vl
              | Tvalue_default e ->
                  (* See above note on (num_mv = 1). *)
-                 if num_mv = 1 && not (exp_within_range ~start:st ~finish:fi e)
+                 if num_mv = 1 && is_const_exp e
+                   && not (exp_within_range ~start:st ~finish:fi e)
                  then raise_field_value_out_of_range bid v cn ce
                  else checker vl
              | Tvalue_branch bv ->
-                 if not (exp_within_range ~start:st ~finish:fi bv.value)
+                 if is_const_exp bv.value
+                   && not (exp_within_range ~start:st ~finish:fi bv.value)
                  then raise_field_value_out_of_range bid v cn ce
                  else checker vl)
   in

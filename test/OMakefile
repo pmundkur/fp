@@ -2,7 +2,7 @@ include Test
 
 .PHONY: test_all clean
 
-TEST_DIRS = parsing typing patterns codegen
+TEST_DIRS = parsing typing patterns codegen mpl_examples
 
 test_all: $(test_targets $(TEST_DIRS), $(COMPILER), -test, .fd, .out, .exp)
 
