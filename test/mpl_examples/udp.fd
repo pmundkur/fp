@@ -1,0 +1,8 @@
+format udp {
+    source_port: int16;
+    dest_port: int16;
+    length: int16 min(8) value(offset(total_length));
+    checksum: int16 default(0);
+    data: byte[length - offset(checksum)];
+    total_length: label
+}

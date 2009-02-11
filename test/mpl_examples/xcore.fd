@@ -1,0 +1,179 @@
+/* We split up the setup_request packet into two, since we cannot
+   change Mpl endianness in the middle of parsing a packet. */
+
+format setup_request_init {
+    /* default to MSB order: 0x42 (66). LSB order is 0x6c (108). */
+    byte_order: byte default(66);
+    pad_byte: byte const(0)
+}
+
+format setup_request {
+    protocol_major_version: uint16;
+    protocol_minor_version: uint16;
+    len_auth_proto_name: uint16 value(byte_sizeof(auth_name));
+    len_auth_proto_data: uint16 value(byte_sizeof(auth_data));
+    auth_name: byte[len_auth_proto_name];
+    align(32);
+    auth_data: byte[len_auth_proto_data];
+    align(32)
+}
+
+format setup_response {
+    code: byte;
+    resp: classify (code) {
+            |0:Failure -> {
+                len_reason: byte value(byte_sizeof(reason));
+                protocol_major_version: uint16;
+                protocol_minor_version: uint16;
+                data_len: uint16;
+                reason: byte[len_reason];
+                align(32)
+            }
+            |1:Success -> {
+                pad_byte1: byte const(0);
+                protocol_major_version: uint16;
+                protocol_minor_version: uint16;
+                length: uint16 value(remaining() / 4);
+                release_number: uint32;
+                resource_id_base: uint32;
+                resource_id_mask: uint32;
+                motion_buffer_size: uint32;
+                vendor_len: uint16 value(byte_sizeof(vendor));
+                max_request_length: uint16;
+                num_screens: byte value(array_length(screens));
+                num_pixmap_formats: byte value(array_length(pixmap_formats));
+                image_byte_order: byte variant { |0 -> LSBFirst |1 -> MSBFirst };
+                bitmap_format_bit_order: byte variant { |0 -> LeastSignificant
+                                                        |1 -> MostSignificant };
+                bitmap_format_scanline_unit: byte;
+                bitmap_format_scanline_pad: byte;
+                min_keycode: byte;
+                max_keycode: byte;
+                unused_word: uint32 const(0);
+                vendor: byte[vendor_len];
+                pixmap_formats: array (num_pixmap_formats) {
+                    depth: byte;
+                    bits_per_pixel: byte; /* TODO: Allowed values: {1, 4, 8, 16, 24, 32} */
+                    scanline_pad: byte;   /* TODO: Allowed values: {8, 16, 32} */
+                    unused0: byte const(0);
+                    unused4: uint32 const(0)
+                };
+                screens: array (num_screens) {
+                    /* The max() limits below are because the protocol
+                       guarantees that the specified Xids have the top 3
+                       bits equaling zero.
+                    */
+                    root: uint32 max(1073741823); /* Window */
+                    default_colormap: uint32 max(1073741823); /* Colormap */
+                    white_pixel: uint32;
+                    black_pixel: uint32;
+                    current_input_masks: uint32; /* SetOfEvent */
+                    width_in_pixels: uint16;
+                    height_in_pixels: uint16;
+                    width_in_millimeters: uint16;
+                    height_in_millimeters: uint16;
+                    min_installed_maps: uint16;
+                    max_installed_maps: uint16;
+                    root_visual: uint32 max(1073741823); /* VisualId */
+                    backing_stores: byte variant { |0 -> Never
+                                                   |1 -> WhenMapped
+                                                   |2 -> Always };
+                    save_unders: byte variant {|0 -> True |1 -> False };
+                    root_depth: byte;
+                    num_allowed_depths: byte value(array_length(depths));
+                    depths: array (num_allowed_depths) {
+                        depth: byte;
+                        pad_byte2: byte const(0);
+                        num_visuals: uint16 value(array_length(visuals));
+                        pad_word1: uint32 const(0);
+                        visuals: array (num_visuals) {
+                            visual_id: uint32 max(1073741823); /* VisualId */
+                            visual_class: byte variant { |0 -> StaticGray
+                                                         |1 -> GrayScale
+                                                         |2 -> StaticColor
+                                                         |3 -> PseudoColor
+                                                         |4 -> TrueColor
+                                                         |5 -> DirectColor };
+                            bits_per_rgb_value: byte;
+                            colormap_entries: uint16;
+                            red_mask: uint32;
+                            green_mask: uint32;
+                            blue_mask: uint32;
+                            pad_word2: uint32
+                        }
+                    }
+                }
+            }
+
+        |2:Authenticate -> {
+            dummy_byte: byte const(0);
+            pad: uint32 const(0);
+            len_reason: uint16 value(byte_sizeof(reason) / 4);
+            reason: byte[len_reason]
+        }
+    }
+}
+
+format request {
+    opcode: byte;
+    byte_val: byte;
+    length: uint16 value(1 + (byte_sizeof(data) / 4));
+    data: byte[(length - 1) * 4]
+}
+
+/* This would be the ideal packet description for the server
+   responses, but MPL does not support non-value range fields.
+
+packet server_message {
+    message_type: byte;
+    classify (message_type) {
+        |0:Error ->
+            error_code: byte;
+            seq_num: uint16;
+            bad_value: uint32 default(0);
+            minor_opcode: uint16;
+            major_opcode: byte;
+            data: byte[21];
+        |1:Reply ->
+            byte_value: byte;
+            seq_num: uint16;
+            length: uint32 value(byte_sizeof(data) / 4);
+            hdr: byte[24];
+            data: byte[length * 4];
+        |2..255:Event ->
+            detail: byte;
+            seq_num: uint16;
+            data: byte[28];
+    };
+}
+
+  So, instead, we split the message_type field into its own packet,
+  like we did for the endianness field of the setup_request message.
+*/
+
+format server_message_type {
+    message_type: byte
+}
+
+format server_message_error {
+    error_code: byte;
+    seq_num: uint16;
+    bad_value: uint32 default(0);
+    minor_opcode: uint16;
+    major_opcode: byte;
+    data: byte[21]
+}
+
+format server_message_reply {
+    byte_value: byte;
+    seq_num: uint16;
+    length: uint32 value(byte_sizeof(data) / 4);
+    hdr: byte[24];
+    data: byte[length * 4]
+}
+
+format server_message_event {
+    detail: byte;
+    seq_num: uint16;
+    data: byte[28]
+}

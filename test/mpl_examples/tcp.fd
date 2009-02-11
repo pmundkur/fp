@@ -1,0 +1,23 @@
+format tcp {
+    src_port: uint16;
+    dst_port: uint16;
+    seq_num: uint32;
+    ack_num: uint32;
+    data_offset: bit[4] min(5) max(15) value(offset(data) / 4);
+    reserved: bit[4] const(0);
+    congestion_window_reduced: bit[1] variant {|0 => Unset |1 -> Set};
+    ecn_echo: bit variant {|0 => Unset |1 -> Set};
+    urgent: bit variant {|0 => Unset |1 -> Set};
+    ack: bit variant {|0 => Unset |1 -> Set};
+    push: bit variant {|0 => Unset |1 -> Set};
+    reset: bit variant {|0 => Unset |1 -> Set};
+    syn: bit variant {|0 => Unset |1 -> Set};
+    fin: bit variant {|0 => Unset |1 -> Set};
+    rcv_window: int16;
+    checksum: int16 default(0);
+    urgent_ptr: int16 default(0);
+    options: byte[(data_offset * 4) - offset(urgent_ptr)];
+    align(32);
+    header_end: label;
+    data: byte[remaining()]
+}
