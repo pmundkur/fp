@@ -160,6 +160,7 @@ val ident_map: struct_type -> field_info Ident.env
 val free_variables: struct_type -> Ident.t list
 
 (* path utilities *)
+
 val path_head_ident: path -> Ident.t
 val path_tail_ident: path -> Ident.t
 val path_decompose: path -> string list
@@ -171,6 +172,9 @@ val path_location_of: path -> Location.t
 val is_field_name_in_struct: string -> struct_type -> bool
 val lookup_field_in_struct_env: string -> struct_type -> (Ident.t * field_info) option
 val get_field_type: string -> struct_type -> (Ident.t * field_type)
+val has_const_attrib: field_attrib list -> bool
+val get_value_attrib: field_attrib list -> (field_value list * Location.t) option
+val get_variant_attrib: field_attrib list -> (variant * Location.t) option
 
 (* range and equality checks *)
 

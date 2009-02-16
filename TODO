@@ -114,7 +114,7 @@ TODO:
     mistakes, or severely limit the expressible formats.  The latter
     is not advisable, since it can actually be useful to allow the
     generation of formats that do not follow the parsing
-    specification.  Generating invalid formats can be to test the
+    specification.  Generating invalid formats can be used to test the
     error handling of the parsing code.
 
     So this checking stage is used to autocompute as many fields of

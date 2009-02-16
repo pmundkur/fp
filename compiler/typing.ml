@@ -1,3 +1,7 @@
+(* This file implements the typing algorithm specified using Ott in
+   the documentation directory.
+*)
+
 open Asttypes
 open Ast
 open Types

@@ -290,6 +290,50 @@ let get_field_type fn st =
     | Some (fid, (ft, _)) ->
         fid, ft
 
+exception Found of field_value list * Location.t
+let get_value_attrib fal =
+  let matcher a = match a.field_attrib_desc with
+    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
+    | Tattrib_default _ | Tattrib_variant _ ->
+        ()
+    | Tattrib_value vl ->
+        raise (Found (vl, a.field_attrib_loc))
+  in
+    try
+      List.iter matcher fal;
+      None
+    with
+      | Found (vl, loc) -> Some (vl, loc)
+
+exception Found of variant * Location.t
+let get_variant_attrib fal =
+  let matcher a = match a.field_attrib_desc with
+    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
+    | Tattrib_default _ | Tattrib_value _ ->
+        ()
+    | Tattrib_variant v ->
+        raise (Found (v, a.field_attrib_loc))
+  in
+    try
+      List.iter matcher fal;
+      None
+    with
+      | Found (v, loc) -> Some (v, loc)
+
+exception Found
+let has_const_attrib fal =
+  let matcher a = match a.field_attrib_desc with
+    | Tattrib_const _ -> raise Found
+    | Tattrib_max _ | Tattrib_min _
+    | Tattrib_default _ | Tattrib_value _
+    | Tattrib_variant _ -> ()
+  in
+    try
+      List.iter matcher fal;
+      false
+    with
+      | Found -> true
+
 (* range and equality checks *)
 
 let within_bit_range i vlen =

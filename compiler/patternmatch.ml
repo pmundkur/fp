@@ -293,36 +293,6 @@ let rec check_struct_patterns st =
    specification for a range should lie within the range.
 *)
 
-exception Found of field_value list * Location.t
-let get_value_attrib fal =
-  let matcher a = match a.field_attrib_desc with
-    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
-    | Tattrib_default _ | Tattrib_variant _ ->
-        ()
-    | Tattrib_value vl ->
-        raise (Found (vl, a.field_attrib_loc))
-  in
-    try
-      List.iter matcher fal;
-      None
-    with
-      | Found (vl, loc) -> Some (vl, loc)
-
-exception Found of variant * Location.t
-let get_variant_attrib fal =
-  let matcher a = match a.field_attrib_desc with
-    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
-    | Tattrib_default _ | Tattrib_value _ ->
-        ()
-    | Tattrib_variant v ->
-        raise (Found (v, a.field_attrib_loc))
-  in
-    try
-      List.iter matcher fal;
-      None
-    with
-      | Found (v, loc) -> Some (v, loc)
-
 exception Found of Asttypes.case_name * case_exp
 let find_range_case mt =
   try
