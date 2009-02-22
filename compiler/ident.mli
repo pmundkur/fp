@@ -35,7 +35,12 @@ type 'a env
 
 val empty_env: 'a env
 
+(* no check is performed to see whether env already contains t *)
 val add: t -> 'a -> 'a env -> 'a env
+(* raises Not_found if the entry is not found *)
+val replace: t -> 'a -> 'a env -> 'a env
+(* performs a replace if the entry is found, otherwise does an add *)
+val put: t -> 'a -> 'a env -> 'a env
 
 val exists: (t -> 'a -> bool) -> 'a env -> bool
 

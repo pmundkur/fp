@@ -51,6 +51,22 @@ let empty_env = []
 let add id info env =
   (id, info) :: env
 
+let rec replace id info = function
+  | [] ->
+      raise Not_found
+  | ((id', _) as ent) :: tl ->
+      if compare id id' = 0 then
+        (id, info) :: tl
+      else
+        ent :: (replace id info tl)
+
+let put id info env =
+  try
+    replace id info env
+  with
+    | Not_found ->
+        add id info env
+
 let exists f env =
   let rec ex = function
     | [] ->
