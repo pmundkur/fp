@@ -765,47 +765,57 @@ let type_attribs env f ft fal classify_fields branch_fields =
     match Env.lookup_variant_by_name env (Location.node_of vn) with
       | None -> raise_unknown_ident vn
       | Some vd -> vd in
-  let tal =
-    List.map
-      (fun fa ->
-         let ta =
+  let tas =
+    List.fold_left
+      (fun tas fa ->
            match fa.pfield_attrib_desc, ft with
              | Pattrib_max e, Ttype_base bt ->
                  check_and_mark_present "max" max_present fa.pfield_attrib_loc;
                  ignore (type_check_exp_as_base_type env e bt);
-                 Tattrib_max (const_fold_as_base_type env e bt f fa.pfield_attrib_loc)
+                 let te = const_fold_as_base_type env e bt f fa.pfield_attrib_loc in
+                   { tas with
+                       field_attrib_max = Some (te, fa.pfield_attrib_loc) }
              | Pattrib_min e, Ttype_base bt ->
                  check_and_mark_present "min" min_present fa.pfield_attrib_loc;
                  ignore (type_check_exp_as_base_type env e bt);
-                 Tattrib_min (const_fold_as_base_type env e bt f fa.pfield_attrib_loc)
+                 let te = const_fold_as_base_type env e bt f fa.pfield_attrib_loc in
+                   { tas with
+                       field_attrib_min = Some (te, fa.pfield_attrib_loc) }
              | Pattrib_const e, Ttype_base bt ->
                  check_and_mark_present "const" const_present fa.pfield_attrib_loc;
                  ignore (type_check_exp_as_base_type env e bt);
-                 Tattrib_const (const_fold_as_base_type env e bt f fa.pfield_attrib_loc)
+                 let te = const_fold_as_base_type env e bt f fa.pfield_attrib_loc in
+                   { tas with
+                       field_attrib_const = Some (te, fa.pfield_attrib_loc) }
              | Pattrib_default e, Ttype_base bt ->
                  check_and_mark_present "default" default_present fa.pfield_attrib_loc;
-                 Tattrib_default (type_check_exp_as_base_type env e bt)
+                 let te = type_check_exp_as_base_type env e bt in
+                   { tas with
+                       field_attrib_default = Some (te, fa.pfield_attrib_loc) }
              | Pattrib_value vcl, Ttype_base bt ->
                  check_and_mark_present "value" value_present fa.pfield_attrib_loc;
-                 Tattrib_value (type_check_value_attrib env f bt vcl classify_fields branch_fields)
+                 let te = type_check_value_attrib env f bt vcl classify_fields branch_fields in
+                   { tas with
+                       field_attrib_value = Some (te,  fa.pfield_attrib_loc) }
              | Pattrib_variant_ref vn, Ttype_base bt ->
                  check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                  let _, vdef = get_variant_def env vn in
-                   Tattrib_variant (type_check_variant_attrib env f bt vdef)
+                 let tv = type_check_variant_attrib env f bt vdef in
+                   { tas with
+                       field_attrib_variant = Some (tv, fa.pfield_attrib_loc) }
              | Pattrib_variant_inline vdef, Ttype_base bt ->
                  check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                  check_variant_def vdef.pvariant_desc;
-                 Tattrib_variant (type_check_variant_attrib env f bt vdef)
+                 let tv = type_check_variant_attrib env f bt vdef in
+                   { tas with
+                       field_attrib_variant = Some (tv, fa.pfield_attrib_loc) }
              | _ ->
                  raise_invalid_attribute f fa.pfield_attrib_loc
-         in
-           { field_attrib_desc = ta;
-             field_attrib_loc = fa.pfield_attrib_loc }
       )
-      fal
+      null_field_attribs fal
   in
     check_flags ();
-    tal
+    tas
 
 (* This implements the field_typing relation:
         E, a, S , L |- F, E', a', S' , L'

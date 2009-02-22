@@ -262,16 +262,14 @@ let check_field_value_list fid fvl st =
       [] fvl
   in
     match get_unmatched_pattern final_matrix st.classify_fields with
-      | None ->
-          ()
-      | Some p ->
-          raise_unmatched_branch_pattern fid (Pt_struct p)
+      | None -> ()
+      | Some p -> raise_unmatched_branch_pattern fid (Pt_struct p)
 
 let rec check_struct_patterns st =
-  let rec do_field st fid (ft, fal) =
+  let rec do_field st fid (ft, fas) =
     match ft with
       | Ttype_base _ ->
-          do_attribs fid fal st
+          do_attribs fid fas st
       | Ttype_struct st ->
           check_struct_patterns st
       | Ttype_map (_, mt) ->
@@ -283,16 +281,10 @@ let rec check_struct_patterns st =
       | Ttype_label
       | Ttype_format _ ->
           ()
-  and do_attribs fid fal st =
-    List.iter
-      (fun fa ->
-         match fa.field_attrib_desc with
-           | Tattrib_max _ | Tattrib_min _
-           | Tattrib_const _ | Tattrib_default _ | Tattrib_variant _ ->
-               ()
-           | Tattrib_value fvl ->
-               check_field_value_list fid fvl st)
-      fal
+  and do_attribs fid fas st =
+    match fas.field_attrib_value with
+      | None ->  ()
+      | Some (fvl, _) ->  check_field_value_list fid fvl st
   in
     Ident.iter (do_field st) st.fields
 
@@ -506,8 +498,8 @@ let check_branch_values field_env bi =
           raise (Failure ("check_branch_values: field "
                           ^ (Ident.name_of bi.branch_field)
                           ^ " not found"))
-      | Some (ft, fal) ->
-          get_value_attrib fal, get_variant_attrib fal in
+      | Some (ft, fas) ->
+          fas.field_attrib_value, fas.field_attrib_variant in
   let rc_opt = find_range_case bi.branch_map
   in
     match vl, vr, rc_opt with
@@ -531,7 +523,7 @@ let check_struct_branch_field_values st =
     List.iter (check_branch_values field_env) st.classify_fields;
     (* Now check nested structs. *)
     Ident.iter
-      (fun fid (ft, fal) ->
+      (fun fid (ft, _) ->
          match ft with
            | Ttype_base _ | Ttype_label | Ttype_format _ ->
                ()

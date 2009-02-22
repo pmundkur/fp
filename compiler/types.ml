@@ -132,17 +132,13 @@ and field_value_desc =
   | Tvalue_default of exp
   | Tvalue_branch of branch_value
 
-and field_attrib =
-    { field_attrib_desc: field_attrib_desc;
-      field_attrib_loc: Location.t }
-
-and field_attrib_desc =
-  | Tattrib_max of exp
-  | Tattrib_min of exp
-  | Tattrib_const of exp
-  | Tattrib_default of exp
-  | Tattrib_value of field_value list
-  | Tattrib_variant of variant
+and field_attribs =
+    { field_attrib_max: (exp * Location.t) option;
+      field_attrib_min: (exp * Location.t) option;
+      field_attrib_const: (exp * Location.t) option;
+      field_attrib_default: (exp * Location.t) option;
+      field_attrib_value: ((field_value list) * Location.t) option;
+      field_attrib_variant: (variant * Location.t) option }
 
 and field_type =
   | Ttype_base of base_type
@@ -156,7 +152,7 @@ and field_entry =
     { field_entry_desc: field_entry_desc;
       field_entry_loc: Location.t }
 
-and field_info = field_type * field_attrib list
+and field_info = field_type * field_attribs
 
 and field_entry_desc =
   | Tfield_name of Ident.t * field_info
@@ -175,6 +171,14 @@ and map_type =
       map_type_loc: Location.t }
 
 and map_type_desc =  map_entry StringMap.t
+
+let null_field_attribs =
+    { field_attrib_max = None;
+      field_attrib_min = None;
+      field_attrib_const = None;
+      field_attrib_default = None;
+      field_attrib_value = None;
+      field_attrib_variant = None }
 
 (* information stored in environment *)
 
@@ -310,50 +314,6 @@ let get_field_type fn st =
         raise Not_found
     | Some (fid, (ft, _)) ->
         fid, ft
-
-exception Found of field_value list * Location.t
-let get_value_attrib fal =
-  let matcher a = match a.field_attrib_desc with
-    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
-    | Tattrib_default _ | Tattrib_variant _ ->
-        ()
-    | Tattrib_value vl ->
-        raise (Found (vl, a.field_attrib_loc))
-  in
-    try
-      List.iter matcher fal;
-      None
-    with
-      | Found (vl, loc) -> Some (vl, loc)
-
-exception Found of variant * Location.t
-let get_variant_attrib fal =
-  let matcher a = match a.field_attrib_desc with
-    | Tattrib_max _ | Tattrib_min _ | Tattrib_const _
-    | Tattrib_default _ | Tattrib_value _ ->
-        ()
-    | Tattrib_variant v ->
-        raise (Found (v, a.field_attrib_loc))
-  in
-    try
-      List.iter matcher fal;
-      None
-    with
-      | Found (v, loc) -> Some (v, loc)
-
-exception Found
-let has_const_attrib fal =
-  let matcher a = match a.field_attrib_desc with
-    | Tattrib_const _ -> raise Found
-    | Tattrib_max _ | Tattrib_min _
-    | Tattrib_default _ | Tattrib_value _
-    | Tattrib_variant _ -> ()
-  in
-    try
-      List.iter matcher fal;
-      false
-    with
-      | Found -> true
 
 (* range and equality checks *)
 
