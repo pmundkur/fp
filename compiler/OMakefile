@@ -15,6 +15,7 @@ FP_FILES[] =
     types
     typing
     patternmatch
+    dependency
     config
     util
     fpc

@@ -64,6 +64,7 @@ and exp_desc =
   | Texp_apply of Ident.t * exp list
 
 val is_const_exp: exp -> bool
+val vars_of_exp: exp -> path list
 
 type base_type =
   | Tbase_primitive of primitive
