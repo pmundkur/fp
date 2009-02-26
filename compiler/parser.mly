@@ -1,6 +1,6 @@
 /**************************************************************************/
 /*  Copyright 2009          Prashanth Mundkur.                            */
-/*  Author  Prashanth Mundkur <prashanth.mundkur@gmail.com>               */
+/*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          */
 /*                                                                        */
 /*  This file is part of FormatCompiler.                                  */
 /*                                                                        */
