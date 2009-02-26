@@ -188,7 +188,7 @@ val path_compose: path -> path -> path
 val path_location_of: path -> Location.t
 
 (* type utilities *)
-
+val is_scalar: field_type -> bool
 val is_field_name_in_struct: string -> struct_type -> bool
 val lookup_field_in_struct_env: string -> struct_type -> (Ident.t * field_info) option
 val get_field_type: string -> struct_type -> (Ident.t * field_type)

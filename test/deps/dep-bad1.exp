@@ -1,0 +1,4 @@
+File "deps/dep-bad1.fd", line 3, characters 2-3: field f is used as a classify brancher for field g and in the length of field i
+File "deps/dep-bad1.fd", line 3, characters 2-3: field f is used as a classify brancher for field g and in the length of field h
+File "deps/dep-bad1.fd", line 3, characters 2-3: field f is used multiple times in a length (for fields h and i)
+File "deps/dep-bad1.fd", line 3, characters 2-3: use of field f in the length of a non-local field h requires a value specification to be auto-computed

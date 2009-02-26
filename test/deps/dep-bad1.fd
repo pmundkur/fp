@@ -1,0 +1,12 @@
+/* f has two ways to be autocomputed.  An error needs to be thrown. */
+format cl {
+  f : byte;
+  g : classify (f) {
+        | 0:Zero -> {
+            h : byte[f];
+        }
+        | 1:One  -> {
+            i : byte[f + 2];
+        }
+      }
+}

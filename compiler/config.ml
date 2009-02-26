@@ -20,3 +20,4 @@
 (**************************************************************************)
 
 let test_mode = ref false
+let show_dependency_warnings = ref true

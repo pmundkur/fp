@@ -19,5 +19,4 @@
 (*  <http://www.gnu.org/licenses/>.                                       *)
 (**************************************************************************)
 
-val test_mode: bool ref
-val show_dependency_warnings: bool ref
+val analyze_formats : Types.struct_type Ident.env -> unit

@@ -313,6 +313,12 @@ let rec path_location_of = function
 
 (* type utilities *)
 
+let is_scalar = function
+  | Ttype_base (Tbase_vector _) -> false
+  | Ttype_base (Tbase_primitive _) -> true
+  | Ttype_struct _ | Ttype_map _ | Ttype_array _ | Ttype_format _ -> false
+  | Ttype_label -> true (* special case *)
+
 let is_field_name_in_struct fn st =
   Ident.exists (fun id _ -> Ident.name_of id = fn) st.fields
 

@@ -38,10 +38,6 @@
    emitted indicating potential inconsistencies between the parsing
    and generation facets.
 
-   The checks for fields involved in vector and array length
-   expressions are performed below.  An additional check performed is
-   to disallow variant fields from being used as array/vector lengths.
-
    Also, checks are performed to ensure that expressions for values
    attributes do not have dependencies cycles.
 *)
@@ -63,6 +59,16 @@ type dpath =
     (* field within a struct block *)
   | In_struct of Ident.t * dpath
 
+let rec dpath_tail_ident = function
+  | Field id -> id
+  | In_classify (_, _, _, dp)
+  | In_array (_, dp)
+  | In_struct (_, dp) -> dpath_tail_ident dp
+
+let is_local_dpath = function
+  | Field _ -> true
+  | In_classify _ | In_array _ | In_struct _ -> false
+
 (* A context frame.  These form entries in a context stack. *)
 type frame =
   | Classify_block of struct_type * Ident.t * Asttypes.case_name
@@ -80,18 +86,23 @@ let rec make_dpath id = function
       In_struct (sid, make_dpath id tl)
 
 type dependency =
-    { attribs: field_attribs;
+    { field_type: field_type;
+      field_attribs: field_attribs;
       (* controlled by usage in remote fields *)
-      length: dpath list;
-      branch: dpath list;
-      length_expr: dpath list;
+      length_of: dpath list;
+      branch_of: dpath list;
+      in_length_of: dpath list;
+      (* analysis result *)
+      mutable autocompute: bool
     }
 
-let null_dependency =
-  { attribs = null_field_attribs;
-    length = [];
-    branch = [];
-    length_expr = []
+let make_dep ft fas =
+  { field_type = ft;
+    field_attribs = fas;
+    length_of = [];
+    branch_of = [];
+    in_length_of = [];
+    autocompute = false
  }
 
 let generate_depinfo fmt =
@@ -105,7 +116,7 @@ let generate_depinfo fmt =
                  raise (Failure ("generate_depinfo: failure to look up "
                                  ^ (Ident.name_of id)))
              | Some (ft, fas) ->
-                 { null_dependency with attribs = fas }) in
+                 make_dep ft fas) in
   let store_dep tid dep deps =
     Ident.put tid dep deps in
   let rec process_length_expr deps ctxt lid e =
@@ -115,7 +126,7 @@ let generate_depinfo fmt =
         | Texp_var p ->
             let tid = path_tail_ident p in
             let dep = lookup_dep deps tid in
-            let dep = { dep with length = dpath :: dep.length }
+            let dep = { dep with length_of = dpath :: dep.length_of }
             in
               store_dep tid dep deps
         | _ ->
@@ -124,7 +135,7 @@ let generate_depinfo fmt =
               List.fold_left
                 (fun deps tid ->
                    let dep = lookup_dep deps tid in
-                   let dep = { dep with length_expr = dpath :: dep.length_expr }
+                   let dep = { dep with in_length_of = dpath :: dep.in_length_of }
                    in
                      store_dep tid dep deps)
                 deps tidl in
@@ -143,7 +154,8 @@ let generate_depinfo fmt =
             process_struct deps (Struct_block id :: ctxt) st
         | Ttype_map (bid, mt) ->
             let dep = lookup_dep deps bid in
-            let dep = { dep with branch = (make_dpath id ctxt) :: dep.branch } in
+            let dep = { dep with
+                          branch_of = (make_dpath id ctxt) :: dep.branch_of } in
             let deps = store_dep bid dep deps
             in
               StringMap.fold
@@ -162,3 +174,115 @@ let generate_depinfo fmt =
       st.fields deps
   in
     process_struct Ident.empty_env [] fmt
+
+type dep_warning =
+  | Multiple_length_use of (* field *) Ident.t * (* lengths *) Ident.t * Ident.t
+  | Non_local_length_use of (* field *) Ident.t * (* length *) Ident.t
+  | Multiple_branch_use of (* field *) Ident.t * (* branches *) Ident.t * Ident.t
+  | Branch_and_length_use of (* field *) Ident.t * (* branch *) Ident.t * (* length *) Ident.t
+  | Const_as_length_use of (* const *) Ident.t * (* length *) Ident.t
+  | Variant_as_length_use of (* variant *) Ident.t * (* length *) Ident.t
+
+let warnmsg = function
+  | Multiple_length_use (fid, l1, l2) ->
+      Printf.sprintf "%s: field %s is used multiple times in a length (for fields %s and %s)"
+        (Location.pr_location (Ident.location_of fid))
+        (Ident.pr_ident_name fid) (Ident.pr_ident_name l1) (Ident.pr_ident_name l2)
+  | Non_local_length_use (fid, l) ->
+      Printf.sprintf "%s: use of field %s in the length of a non-local field %s requires a value specification to be auto-computed"
+        (Location.pr_location (Ident.location_of fid))
+        (Ident.pr_ident_name fid) (Ident.pr_ident_name l)
+  | Multiple_branch_use (fid, br1, br2) ->
+      Printf.sprintf "%s: field %s is used multiple times as a classify brancher (for fields %s and %s)"
+        (Location.pr_location (Ident.location_of fid))
+        (Ident.pr_ident_name fid) (Ident.pr_ident_name br1) (Ident.pr_ident_name br2)
+  | Branch_and_length_use (fid, br, l) ->
+      Printf.sprintf "%s: field %s is used as a classify brancher for field %s and in the length of field %s"
+        (Location.pr_location (Ident.location_of fid))
+        (Ident.pr_ident_name fid) (Ident.pr_ident_name br) (Ident.pr_ident_name l)
+  | Const_as_length_use (c, l) ->
+      Printf.sprintf "%s: field %s is marked as a constant but used as the length of field %s"
+        (Location.pr_location (Ident.location_of c))
+        (Ident.pr_ident_name c) (Ident.pr_ident_name l)
+  | Variant_as_length_use (v, l) ->
+      Printf.sprintf "%s: field %s is marked as a variant but used as the length of field %s"
+        (Location.pr_location (Ident.location_of v))
+        (Ident.pr_ident_name v) (Ident.pr_ident_name l)
+
+let multiple_length_use fid l1 l2 =
+  Multiple_length_use (fid, l1, l2)
+let non_local_length_use fid l =
+  Non_local_length_use (fid, l)
+let multiple_branch_use fid br1 br2 =
+  Multiple_branch_use (fid, br1, br2)
+let branch_and_length_use fid br l =
+  Branch_and_length_use (fid, br, l)
+let const_as_length_use c l =
+  Const_as_length_use (c, l)
+let variant_as_length_use v l =
+  Variant_as_length_use (v, l)
+
+let analyze_depinfo fid dep =
+  let warnings = ref [] in
+  let add_warning w =
+    warnings := w :: !warnings
+  in
+    if dep.field_attribs.field_attrib_value = None then begin
+      (* if auto-computation is required, ensure that it is possible in
+         the absence of a value specifier *)
+      (match dep.length_of with
+         | l1 :: l2 :: _ ->
+             add_warning (multiple_length_use fid (dpath_tail_ident l1)
+                            (dpath_tail_ident l2))
+         | [ l ] ->
+             if not (is_local_dpath l) then
+               add_warning (non_local_length_use fid (dpath_tail_ident l))
+         | [] -> ());
+      (match dep.length_of, dep.in_length_of with
+         | (l1 :: _), (l2 :: _) ->
+             add_warning (multiple_length_use fid (dpath_tail_ident l1)
+                            (dpath_tail_ident l2))
+         | _ -> ());
+      (match dep.branch_of with
+         | br1 :: br2 :: _ ->
+             add_warning (multiple_branch_use fid (dpath_tail_ident br1)
+                            (dpath_tail_ident br2))
+         | _ -> ());
+      (match dep.branch_of, dep.length_of with
+         | (br :: _), (l :: _) ->
+             add_warning (branch_and_length_use fid (dpath_tail_ident br)
+                            (dpath_tail_ident l))
+         | _ -> ());
+      (match dep.branch_of, dep.in_length_of with
+         | (br :: _), (l :: _) ->
+             add_warning (branch_and_length_use fid (dpath_tail_ident br)
+                            (dpath_tail_ident l))
+         | _ -> ());
+      (match dep.field_attribs.field_attrib_const, dep.length_of with
+         | Some _, (l :: _) ->
+             add_warning (const_as_length_use fid (dpath_tail_ident l))
+         | _ -> ());
+      (match dep.field_attribs.field_attrib_variant, dep.length_of with
+         | Some _, (l :: _) ->
+             add_warning (variant_as_length_use fid (dpath_tail_ident l))
+         | _ -> ());
+    end;
+    if List.length !warnings > 0 then begin
+      if !Config.show_dependency_warnings then
+        List.iter (fun w ->
+                     Printf.fprintf stderr "%s\n" (warnmsg w)
+                  ) !warnings
+    end else
+      dep.autocompute <- is_scalar dep.field_type
+
+let analyze_formats fmts =
+  (* TODO: cyclic dependency analysis *)
+  try
+    Ident.iter (fun _ st ->
+                  let deps = generate_depinfo st in
+                    Ident.iter (fun fid dep ->
+                                  analyze_depinfo fid dep
+                               ) deps
+               ) fmts
+  with
+    | e -> raise e
