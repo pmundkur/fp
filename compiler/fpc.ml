@@ -91,7 +91,7 @@ let process_file f =
     let typed_env = Typing.type_check (Typing.init_typing_env ()) pt in
     let formats = Env.get_formats typed_env in
       Patternmatch.check_formats formats;
-      Dependency.analyze_formats formats
+      ignore (Dependency.analyze_formats formats)
   with
     | Sys_error s ->
         prerr_endline s;

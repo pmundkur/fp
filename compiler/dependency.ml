@@ -38,8 +38,8 @@
    emitted indicating potential inconsistencies between the parsing
    and generation facets.
 
-   Also, checks are performed to ensure that expressions for values
-   attributes do not have dependencies cycles.
+   In addition, checks are performed to ensure that expressions for
+   values attributes do not have dependencies cycles.
 *)
 
 open Types
@@ -96,6 +96,8 @@ type dependency =
       mutable autocompute: bool
     }
 
+type dep_info = dependency Ident.env
+
 let make_dep ft fas =
   { field_type = ft;
     field_attribs = fas;
@@ -104,6 +106,19 @@ let make_dep ft fas =
     in_length_of = [];
     autocompute = false
  }
+
+let can_autocompute = function
+  | { field_type = ft }
+      when not (is_scalar ft) ->
+      false
+  | { field_attribs = fa }
+      when fa.field_attrib_value <> None ->
+      true
+  | { length_of = l; branch_of = b }
+      when (List.length l > 0) || (List.length b > 0) ->
+      true
+  | _ ->
+      false
 
 let generate_depinfo fmt =
   let fenv = ident_map fmt in
@@ -267,22 +282,23 @@ let analyze_depinfo fid dep =
              add_warning (variant_as_length_use fid (dpath_tail_ident l))
          | _ -> ());
     end;
-    if List.length !warnings > 0 then begin
-      if !Config.show_dependency_warnings then
-        List.iter (fun w ->
-                     Printf.fprintf stderr "%s\n" (warnmsg w)
-                  ) !warnings
-    end else
-      dep.autocompute <- is_scalar dep.field_type
+    !warnings
 
 let analyze_formats fmts =
-  (* TODO: cyclic dependency analysis *)
-  try
-    Ident.iter (fun _ st ->
-                  let deps = generate_depinfo st in
-                    Ident.iter (fun fid dep ->
-                                  analyze_depinfo fid dep
-                               ) deps
-               ) fmts
-  with
-    | e -> raise e
+  let analyze_fmt st =
+    let deps = generate_depinfo st in
+      Ident.iter (fun fid dep ->
+                    let warnings = analyze_depinfo fid dep in
+                      if List.length warnings > 0 then
+                        (if !Config.show_dependency_warnings then
+                           List.iter (fun w ->
+                                        Printf.fprintf stderr "%s\n" (warnmsg w)
+                                     ) warnings)
+                      else
+                        dep.autocompute <- can_autocompute dep
+                 ) deps;
+      (st, deps)
+  in
+    Ident.map (fun _ st -> analyze_fmt st) fmts
+
+(* TODO: cyclic dependency analysis *)

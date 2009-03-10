@@ -19,4 +19,6 @@
 (*  <http://www.gnu.org/licenses/>.                                       *)
 (**************************************************************************)
 
-val analyze_formats : Types.struct_type Ident.env -> unit
+type dep_info
+
+val analyze_formats : Types.struct_type Ident.env -> (Types.struct_type * dep_info) Ident.env
