@@ -114,5 +114,11 @@ let rec iter f env =
         f i info;
         iter f tl
 
+let rec map f env =
+  match env with
+    | [] -> []
+    | (i, info) :: tl ->
+        (i, f i info) :: map f tl
+
 let pr_ident_name id =
   id.name

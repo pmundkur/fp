@@ -54,5 +54,7 @@ val fold: (t -> 'a -> 'b -> 'b) -> 'a env -> 'b -> 'b
 
 val iter: (t -> 'a -> unit) -> 'a env -> unit
 
+val map: (t -> 'a -> 'b) -> 'a env -> 'b env
+
 val pr_ident_name: t -> string
 
