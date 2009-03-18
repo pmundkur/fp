@@ -22,7 +22,9 @@
 open Lexing
 open Asttypes
 
-let options = [ ("-test", Arg.Set Config.test_mode, " unit-test mode") ]
+let options = [ ("-test", Arg.Set Config.test_mode, " unit-test mode");
+                ("-show-dependencies", Arg.Set Config.show_dependencies, " show dependency equations")
+              ]
 
 let parse_args () =
   let files = ref [] in

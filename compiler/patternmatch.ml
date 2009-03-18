@@ -463,7 +463,7 @@ let check_variant_cases (bid, v) (cid, mt) vl_opt =
             variant_contains_e c
         | Tcase_range (start, finish) ->
             (* Approximate this by checking if both 'start' and
-               'finish' are includes in the variant. *)
+               'finish' are included in the variant. *)
             variant_contains_e start && variant_contains_e finish
   in
     List.iter

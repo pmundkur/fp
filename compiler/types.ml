@@ -79,14 +79,20 @@ let is_const_exp e =
     | Texp_apply _
         -> false
 
-let vars_of_exp e =
+(* exp utilities *)
+
+let vars_of_exp ?(traverse_offset_call=true) e =
   let rec vars acc e =
     match e.exp_desc with
       | Texp_unit | Texp_const_bit _ | Texp_const_byte _
       | Texp_const_int16 _ | Texp_const_uint16 _ | Texp_const_int _
       | Texp_const_int32 _ | Texp_const_uint32 _ | Texp_const_int64 _ -> acc
       | Texp_var p -> p :: acc
-      | Texp_apply (_, el) -> List.fold_left vars acc el
+      | Texp_apply (fn, el)
+          when not traverse_offset_call && (Ident.name_of fn) = "offset" ->
+            acc
+      | Texp_apply (fn, el) ->
+          List.fold_left vars acc el
   in
     vars [] e
 

@@ -810,8 +810,7 @@ let type_attribs env f ft fal classify_fields branch_fields =
                    { tas with
                        field_attrib_variant = Some (tv, fa.pfield_attrib_loc) }
              | _ ->
-                 raise_invalid_attribute f fa.pfield_attrib_loc
-      )
+                 raise_invalid_attribute f fa.pfield_attrib_loc)
       null_field_attribs fal
   in
     check_flags ();

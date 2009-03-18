@@ -63,8 +63,9 @@ and exp_desc =
   | Texp_const_int64 of Int64.t
   | Texp_apply of Ident.t * exp list
 
+(* exp utilities *)
 val is_const_exp: exp -> bool
-val vars_of_exp: exp -> path list
+val vars_of_exp: ?traverse_offset_call:bool -> exp -> path list
 
 type base_type =
   | Tbase_primitive of primitive

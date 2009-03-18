@@ -21,3 +21,4 @@
 
 val test_mode: bool ref
 val show_dependency_warnings: bool ref
+val show_dependencies: bool ref

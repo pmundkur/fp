@@ -59,6 +59,13 @@ type dpath =
     (* field within a struct block *)
   | In_struct of Ident.t * dpath
 
+let rec dpath_head_ident = function
+  | Field id
+  | In_classify (_, id, _, _)
+  | In_array (id, _)
+  | In_struct (id, _)
+    -> id
+
 let rec dpath_tail_ident = function
   | Field id -> id
   | In_classify (_, _, _, dp)
@@ -69,37 +76,57 @@ let is_local_dpath = function
   | Field _ -> true
   | In_classify _ | In_array _ | In_struct _ -> false
 
+let rec pr_dpath = function
+  | Field id ->
+      Ident.pr_ident_name id
+  | In_classify (_, cid, cn, dp) ->
+      Printf.sprintf "%s[\"%s\"].%s"
+        (Ident.pr_ident_name cid) (Location.node_of cn) (pr_dpath dp)
+  | In_array (id, dp) ->
+      Printf.sprintf "%s[].%s"
+        (Ident.pr_ident_name id) (pr_dpath dp)
+  | In_struct (id, dp) ->
+      Printf.sprintf "%s.%s"
+        (Ident.pr_ident_name id) (pr_dpath dp)
+
 (* A context frame.  These form entries in a context stack. *)
 type frame =
   | Classify_block of struct_type * Ident.t * Asttypes.case_name
   | Array_block of Ident.t
   | Struct_block of Ident.t
 
-let rec make_dpath id = function
-  | [] ->
-      Field id
-  | Classify_block (st, cid, cn) :: tl ->
-      In_classify (st, cid, cn, make_dpath id tl)
-  | Array_block aid :: tl ->
-      In_array (aid, make_dpath id tl)
-  | Struct_block sid :: tl ->
-      In_struct (sid, make_dpath id tl)
+let make_dpath id ctxt_stack =
+  let rec maker = function
+    | [] ->
+        Field id
+    | Classify_block (st, cid, cn) :: tl ->
+        In_classify (st, cid, cn, maker tl)
+    | Array_block aid :: tl ->
+        In_array (aid, maker tl)
+    | Struct_block sid :: tl ->
+        In_struct (sid, maker tl)
+  in
+    (* This function is given a stack of context frames, innermost
+       first; however, the path is specified from outside-in.  *)
+    maker (List.rev ctxt_stack)
 
 type dependency =
-    { field_type: field_type;
+    { field_path: dpath;
+      field_type: field_type;
       field_attribs: field_attribs;
       (* controlled by usage in remote fields *)
       length_of: dpath list;
       branch_of: dpath list;
       in_length_of: dpath list;
-      (* analysis result *)
+      (* analysis result for various phases *)
       mutable autocompute: bool
     }
 
 type dep_info = dependency Ident.env
 
-let make_dep ft fas =
-  { field_type = ft;
+let make_dep id ft fas ctxt =
+  { field_path = make_dpath id ctxt;
+    field_type = ft;
     field_attribs = fas;
     length_of = [];
     branch_of = [];
@@ -122,16 +149,23 @@ let can_autocompute = function
 
 let generate_depinfo fmt =
   let fenv = ident_map fmt in
-  let lookup_dep deps id =
+  let init_dep deps id ctxt =
     match Ident.assoc_by_id deps id with
-      | Some d -> d
+      | Some _ ->
+          raise (Failure ("generate_depinfo:init_dep: "
+                          ^ (Ident.name_of id) ^ " already in dep environment!"))
       | None ->
           (match Ident.assoc_by_id fenv id with
              | None ->
-                 raise (Failure ("generate_depinfo: failure to look up "
+                 raise (Failure ("generate_depinfo:init_dep: failure to look up "
                                  ^ (Ident.name_of id)))
              | Some (ft, fas) ->
-                 make_dep ft fas) in
+                 make_dep id ft fas ctxt) in
+  let lookup_dep deps id =
+    match Ident.assoc_by_id deps id with
+      | Some d -> d
+      | None -> raise (Failure ("generate_depinfo:lookup_dep: failure to look up "
+                                ^ (Ident.name_of id))) in
   let store_dep tid dep deps =
     Ident.put tid dep deps in
   let rec process_length_expr deps ctxt lid e =
@@ -145,7 +179,7 @@ let generate_depinfo fmt =
             in
               store_dep tid dep deps
         | _ ->
-            let tidl = List.map path_tail_ident (vars_of_exp e)
+            let tidl = List.map path_tail_ident (vars_of_exp ~traverse_offset_call:false e)
             in
               List.fold_left
                 (fun deps tid ->
@@ -155,8 +189,8 @@ let generate_depinfo fmt =
                      store_dep tid dep deps)
                 deps tidl in
   let rec process_field deps (ctxt, cst) id (ft, fas) =
-    (* Update deps based on the field attributes *)
-    let dep = lookup_dep deps id in
+    (* Initialize dep for field based on the field attributes *)
+    let dep = init_dep deps id ctxt in
     let deps = store_dep id dep deps
     in
       (* Update deps based on the field type *)
@@ -184,9 +218,17 @@ let generate_depinfo fmt =
         | Ttype_label | Ttype_format _ ->
             deps
   and process_struct deps ctxt st =
-    Ident.fold
-      (fun f fi deps -> process_field deps (ctxt, st) f fi)
-      st.fields deps
+    (* Since we're initializing our dep env as we go, process the
+       fields in textual order, instead of iterating over Ident.env in
+       st.fields, where the fields are in unspecified order. *)
+    List.fold_left
+      (fun deps fe ->
+         match fe.field_entry_desc with
+           | Tfield_name (f, fi) ->
+               process_field deps (ctxt, st) f fi
+           | Tfield_align _ ->
+               deps)
+      deps st.entries
   in
     process_struct Ident.empty_env [] fmt
 
@@ -284,6 +326,114 @@ let analyze_depinfo fid dep =
     end;
     !warnings
 
+(* Evaluation order (and cyclic dependency) analysis. *)
+
+(* This routine returns the ident along the path dp that is a sibling
+   of the tail ident of rel.  This implies that the paths of dp and
+   rel have to match all the way except for the last ident.
+*)
+let dep_ident dp rel =
+  let rec extract d r =
+    match d, r with
+      | In_classify (_, _, _, dp), In_classify (_, _, _, rel)
+      | In_array (_, dp), In_array (_, rel)
+      | In_struct (_, dp), In_struct (_, rel) ->
+          extract dp rel
+      | In_classify (_, id, _, _), Field _
+      | In_array (id, _), Field _
+      | In_struct (id, _), Field _
+      | Field id, Field _ ->
+          Some id
+      | _ ->
+          None
+  in
+    extract dp rel
+
+let dep_idents_of_value v =
+  let fv_pattern (Pt_struct bl) =
+    List.fold_left
+      (fun acc b ->
+         let cid = b.branch_info.classify_field in
+           if List.mem cid acc then acc else cid :: acc)
+      [] bl in
+  let fv_idents fv =
+    match fv.field_value_desc with
+      | Tvalue_auto ->
+          []
+      | Tvalue_default e ->
+          List.map path_head_ident (vars_of_exp ~traverse_offset_call:false e)
+      | Tvalue_branch bv ->
+          (fv_pattern bv.struct_pattern)
+          @ (List.map path_head_ident (vars_of_exp ~traverse_offset_call:false bv.value))
+  in
+    match v with
+      | None -> []
+      | Some (fvl, _) -> List.concat (List.map fv_idents fvl)
+
+let get_dep_idents d =
+  let dident dp =
+    match dep_ident dp d.field_path with
+      | Some id ->
+          id
+      | None ->
+          raise (Failure ("get_dep_idents: unexpected path mismatch: "
+                          ^ (pr_dpath dp) ^ " vs " ^ (pr_dpath d.field_path)))
+  in
+    match d with
+      | { field_attribs = fa }
+          when (fa.field_attrib_value <> None) ->
+          dep_idents_of_value fa.field_attrib_value
+      | { length_of = l } when List.length l > 0 ->
+          List.map dident l
+      | { branch_of = l } when List.length l > 0 ->
+          List.map dident l
+      | _ -> (* This is an ugly default. *)
+          []
+
+let get_eval_order st dep_env =
+  let lookup_dep id =
+    match Ident.assoc_by_id dep_env id with
+      | Some d -> d
+      | None -> raise (Failure ("get_eval_order: failure to look up "
+                                ^ (Ident.name_of id))) in
+  let get_auto_computes st =
+    Ident.fold
+      (fun id _ acc ->
+         let d = lookup_dep id in
+           if d.autocompute then (id, d) :: acc
+           else acc)
+      st.fields [] in
+  let pr_deps deps =
+    List.iter (fun (id, l) ->
+                 Printf.printf "%s: %s\n"
+                   (Ident.name_of id)
+                   (String.concat " " (List.map Ident.name_of l))
+              ) deps in
+  let deps = List.map (fun (id, d) ->
+                         id, (get_dep_idents d)
+                      ) (get_auto_computes st)
+  in
+    if !Config.show_dependencies then
+      pr_deps deps
+
+(* external interface *)
+
+let struct_iter f st =
+  let field_iter _ (ft, _) =
+    match ft with
+      | Ttype_base _
+      | Ttype_label
+      | Ttype_format _ ->
+          ()
+      | Ttype_struct st
+      | Ttype_array (_, st) ->
+          f st
+      | Ttype_map (_, mt) ->
+          StringMap.iter (fun _ (_, _, st) -> f st) mt.map_type_desc
+  in
+    f st;
+    Ident.iter field_iter st.fields
+
 let analyze_formats fmts =
   let analyze_fmt st =
     let deps = generate_depinfo st in
@@ -297,8 +447,7 @@ let analyze_formats fmts =
                       else
                         dep.autocompute <- can_autocompute dep
                  ) deps;
+      struct_iter (fun st -> get_eval_order st deps) st;
       (st, deps)
   in
     Ident.map (fun _ st -> analyze_fmt st) fmts
-
-(* TODO: cyclic dependency analysis *)
