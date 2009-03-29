@@ -19,10 +19,9 @@
 (*  <http://www.gnu.org/licenses/>.                                       *)
 (**************************************************************************)
 
-type t = {
-  loc_start : Lexing.position;
-  loc_end : Lexing.position
-}
+type t =
+    { loc_start : Lexing.position;
+      loc_end : Lexing.position }
 
 let start_of l =
   l.loc_start

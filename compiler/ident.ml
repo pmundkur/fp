@@ -19,11 +19,10 @@
 (*  <http://www.gnu.org/licenses/>.                                       *)
 (**************************************************************************)
 
-type t = {
-  name: string;
-  stamp: int;
-  loc: Location.t
-}
+type t =
+    { name: string;
+      stamp: int;
+      loc: Location.t }
 
 let cur_stamp = ref 0
 
