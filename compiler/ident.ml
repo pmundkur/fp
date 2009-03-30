@@ -42,6 +42,8 @@ let location_of i = i.loc
 let compare i1 i2 =
   compare i1.stamp i2.stamp
 
+let hash i = i.stamp
+
 
 type 'a env = (t * 'a) list
 

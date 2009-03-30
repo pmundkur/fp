@@ -31,6 +31,8 @@ val location_of: t -> Location.t
 
 val compare: t -> t -> int
 
+val hash: t -> int
+
 type 'a env
 
 val empty_env: 'a env
