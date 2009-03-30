@@ -77,18 +77,25 @@ module Graph =
       | Pre_order
       | Post_order
 
-    let dfs_traverse g f order only_marked root =
+    type node_select =
+      | Node_select_all
+      | Node_select_marked
+
+    let dfs_traverse g f order node_select root =
       let rec traverse stack elem =
         let node = H.find g elem in
+        let selected =
+          match node_select with
+            | Node_select_all -> true
+            | Node_select_marked -> node.Node.mark
+        in
           match order with
             | Pre_order ->
-                if (not only_marked) || node.Node.mark then
-                  f stack elem;
+                if selected then f stack elem;
                 List.iter (traverse (elem :: stack)) (Node.get_children node)
             | Post_order ->
                 List.iter (traverse (elem :: stack)) (Node.get_children node);
-                if (not only_marked) || node.Node.mark then
-                  f stack elem
+                if selected then f stack elem
       in
         traverse [] root
 
@@ -100,7 +107,7 @@ module Graph =
         if List.mem elem stack then
           raise (Cycle ((elem :: stack), loc))
       in
-        List.iter (dfs_traverse g checker Pre_order false) roots
+        List.iter (dfs_traverse g checker Pre_order Node_select_all) roots
 
     (* NOTE: The topo sorter assumes that the graph has been checked
        for cycles with the above function. *)
@@ -111,6 +118,6 @@ module Graph =
         if not (List.mem elem !order) then
           order := elem :: !order
       in
-        List.iter (dfs_traverse g sorter Post_order true) roots;
+        List.iter (dfs_traverse g sorter Post_order Node_select_marked) roots;
         !order
   end
