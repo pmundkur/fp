@@ -326,12 +326,18 @@ let analyze_depinfo fid dep =
     end;
     !warnings
 
-(* Evaluation order (and cyclic dependency) analysis. *)
+
+(* Cyclic dependency analysis.
+
+   This is done on a per-struct basis, for fields marked auto_compute
+   by the dependency analyzer.  To detect cycles, a dependency graph
+   is constructed from the dependencies of the auto_compute fields,
+   and the graph is checked for cycles.
+*)
 
 (* This routine returns the ident along the path dp that is a sibling
    of the tail ident of rel.  This implies that the paths of dp and
-   rel have to match all the way except for the last ident.
-*)
+   rel have to match all the way except for the last ident. *)
 let dep_ident dp rel =
   let rec extract d r =
     match d, r with
@@ -354,7 +360,7 @@ let dep_idents_of_value v =
     List.fold_left
       (fun acc b ->
          let cid = b.branch_info.classify_field in
-           if List.mem cid acc then acc else cid :: acc)
+           cid :: acc)
       [] bl in
   let fv_idents fv =
     match fv.field_value_desc with
@@ -390,11 +396,19 @@ let get_dep_idents d =
       | _ -> (* This is an ugly default. *)
           []
 
-let get_eval_order st dep_env =
+module DepElem = struct
+  type t = Ident.t
+  let equal n m = Ident.compare n m = 0
+  let hash = Ident.hash
+end
+
+module DepGraph = Graph.Graph (DepElem)
+
+let make_dep_graph st dep_env =
   let lookup_dep id =
     match Ident.assoc_by_id dep_env id with
       | Some d -> d
-      | None -> raise (Failure ("get_eval_order: failure to look up "
+      | None -> raise (Failure ("make_dep_graph: failure to look up "
                                 ^ (Ident.name_of id))) in
   let get_auto_computes st =
     Ident.fold
@@ -403,20 +417,21 @@ let get_eval_order st dep_env =
            if d.autocompute then (id, d) :: acc
            else acc)
       st.fields [] in
-  let pr_deps deps =
-    List.iter (fun (id, l) ->
-                 Printf.printf "%s: %s\n"
-                   (Ident.name_of id)
-                   (String.concat " " (List.map Ident.name_of l))
-              ) deps in
-  let deps = List.map (fun (id, d) ->
-                         id, (get_dep_idents d)
-                      ) (get_auto_computes st)
+  let add_id_deps g id d =
+    List.iter (DepGraph.add_link g id) (get_dep_idents d) in
+  let g = DepGraph.init ()
   in
-    if !Config.show_dependencies then
-      pr_deps deps
+    List.iter (fun (id, d) -> add_id_deps g id d) (get_auto_computes st);
+    g
 
-(* external interface *)
+let print_dep_graph g =
+  DepGraph.iter
+    (fun id n ->
+       let cl = DepGraph.get_children g id in
+         Printf.printf "%s: %s\n"
+           (Ident.name_of id)
+           (String.concat " " ((List.map Ident.name_of) cl))
+    ) g
 
 let struct_iter f st =
   let field_iter _ (ft, _) =
@@ -434,7 +449,30 @@ let struct_iter f st =
     f st;
     Ident.iter field_iter st.fields
 
+(* external interface *)
+
+let errmsg e =
+  match e with
+    | DepGraph.Cycle (l, loc) ->
+        Printf.sprintf "%s: dependency cycle detected among ids %s"
+          (Location.pr_location loc)
+          (String.concat " " (List.map Ident.pr_ident_name l))
+    | e ->
+        raise e
+
+let handle_dep_exception e =
+  Printf.fprintf stderr "%s\n" (errmsg e);
+  Util.exit_with_code 1
+
 let analyze_formats fmts =
+  let cycle_checker st deps loc =
+    let g = make_dep_graph st deps in
+      if !Config.show_dependencies then begin
+        Printf.printf "Dependencies:\n";
+        print_dep_graph g;
+      end;
+      DepGraph.check_cycles g loc
+  in
   let analyze_fmt st =
     let deps = generate_depinfo st in
       Ident.iter (fun fid dep ->
@@ -447,7 +485,10 @@ let analyze_formats fmts =
                       else
                         dep.autocompute <- can_autocompute dep
                  ) deps;
-      struct_iter (fun st -> get_eval_order st deps) st;
+      struct_iter (fun st -> cycle_checker st deps st.struct_type_loc) st;
       (st, deps)
   in
-    Ident.map (fun _ st -> analyze_fmt st) fmts
+    try
+      Ident.map (fun _ st -> analyze_fmt st) fmts
+    with
+      | e -> handle_dep_exception e
