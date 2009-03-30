@@ -21,25 +21,25 @@
 
 module PathMap = Map.Make (struct type t = string list let compare = compare end)
 
-type t = {
-  (* Functions and types are currently predefined only. *)
-  functions: Types.function_info Ident.env;
-  types: Types.type_info Ident.env;
+type t =
+    { (* Functions and types are currently predefined only. *)
+      functions: Types.function_info Ident.env;
+      types: Types.type_info Ident.env;
 
-  (* Variants and formats are defined at the top-level. *)
-  variants: Types.variant_info Ident.env;
-  formats: Types.format_info Ident.env;
+      (* Variants and formats are defined at the top-level. *)
+      variants: Types.variant_info Ident.env;
+      formats: Types.format_info Ident.env;
 
-  (* Fields need a dynamic stacked environment. *)
-  fields: Types.field_type Ident.env;
+      (* Fields need a dynamic stacked environment. *)
+      fields: Types.field_type Ident.env;
 
-  (* Map from paths to structs *)
-  path_map: (Types.path * Types.struct_type) PathMap.t;
-  paths: (Types.path * Asttypes.case_name * Types.struct_type) list;
+      (* Map from paths to structs *)
+      path_map: (Types.path * Types.struct_type) PathMap.t;
+      paths: (Types.path * Asttypes.case_name * Types.struct_type) list;
 
-  (* List of branch fields used for classification *)
-  branch_fields: (Ident.t * Location.t) list;
-}
+      (* List of branch fields used for classification *)
+      branch_fields: (Ident.t * Location.t) list;
+    }
 
 let new_env () =
   { types             = Ident.empty_env;

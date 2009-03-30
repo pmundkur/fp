@@ -125,13 +125,13 @@ type dependency =
 type dep_info = dependency Ident.env
 
 let make_dep id ft fas ctxt =
-  { field_path = make_dpath id ctxt;
-    field_type = ft;
+  { field_path    = make_dpath id ctxt;
+    field_type    = ft;
     field_attribs = fas;
-    length_of = [];
-    branch_of = [];
-    in_length_of = [];
-    autocompute = false
+    length_of     = [];
+    branch_of     = [];
+    in_length_of  = [];
+    autocompute   = false
  }
 
 let can_autocompute = function

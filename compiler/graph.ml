@@ -20,15 +20,18 @@
 (**************************************************************************)
 
 module Node = struct
-  type 'a t = {
-    elem: 'a;
-    mark: bool;
-    children: 'a list;
-    parents: 'a list
-  }
+  type 'a t =
+      { elem: 'a;
+        mark: bool;
+        children: 'a list;
+        parents: 'a list
+      }
 
   let make_node elem mark =
-    { elem = elem; mark = mark; children = []; parents = [] }
+    { elem     = elem;
+      mark     = mark;
+      children = [];
+      parents  = [] }
 
   let get_elem v = v.elem
   let get_children v = v.children
