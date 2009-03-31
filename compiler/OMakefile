@@ -5,21 +5,22 @@ OCAMLFLAGS    += -dtypes
 GEN_FILES = parser.mli parser.ml lexer.ml
 OCamlGeneratedFiles($(GEN_FILES))
 FP_FILES[] =
-    location
-    lexer
-    parser
     ast
     asttypes
-    ident
+    config
+    dependency
     env
+    fpc
+    graph
+    ident
+    lexer
+    location
+    parser
+    patternmatch
     types
     typing
-    patternmatch
-    graph
-    dependency
-    config
     util
-    fpc
+
 
 FP = fp
 FP_COMPILER = $(OCamlProgram $(FP), $(FP_FILES))
