@@ -36,6 +36,7 @@ module Node = struct
   let get_elem v = v.elem
   let get_children v = v.children
   let get_parents v = v.parents
+  let get_mark v = v.mark
 
   let add_child v c =
     if List.mem c v.children then v
