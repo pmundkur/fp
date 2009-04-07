@@ -84,7 +84,7 @@ let parse_file f ic =
 let pprint pt =
   let ff = Format.formatter_of_out_channel stdout in
     List.iter (Ast.pr_decl ff) pt;
-    Format.fprintf ff "\n"
+    Format.fprintf ff "@\n@?"
 
 let process_file f =
   try

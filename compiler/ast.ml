@@ -191,9 +191,9 @@ let pr_variant ff v =
     | [ c ] -> pcase c false
     | c :: cs -> pcase c true; pcases cs
   in
-    Format.fprintf ff "@[<v 0>{@[<v 0>";
+    Format.fprintf ff "{@[<v 0>";
     pcases v.pvariant_desc;
-    Format.fprintf ff "@]@,}@]"
+    Format.fprintf ff "@]@,}"
 
 let pr_branch_guard ff bg =
   let p, cn = bg.pbranch_guard_desc in
@@ -267,7 +267,7 @@ let rec pr_field ff f =
   Format.pp_close_box ff ()
 
 and pr_case ff (cn, ce, fmt) =
-  Format.fprintf ff "@[<v 0>@[<v 4>| ";
+  Format.fprintf ff "@[<v 4>| ";
   (match ce.pcase_exp_desc with
     | Pcase_const c ->
         pr_exp ff c
@@ -277,7 +277,7 @@ and pr_case ff (cn, ce, fmt) =
         pr_exp ff r);
   Format.fprintf ff " : %s -> {@," (Location.node_of cn);
   pr_format ff fmt;
-  Format.fprintf ff "@]@,}@]"
+  Format.fprintf ff "@]@,}"
 
 and pr_field_type ff ft =
   match ft.pfield_type_desc with
@@ -285,22 +285,22 @@ and pr_field_type ff ft =
         pr_type_exp ff te;
         List.iter (fun a -> Format.fprintf ff " "; pr_field_attrib ff a) al
     | Ptype_array (e, fmt) ->
-        Format.fprintf ff "@[<v 0>@[<v 4>array (";
+        Format.fprintf ff "@[<v 4>array (";
         pr_exp ff e;
         Format.fprintf ff ") {@,";
         pr_format ff fmt;
-        Format.fprintf ff "@]@,}@]"
+        Format.fprintf ff "@]@\n}"
     | Ptype_classify (e, cl) ->
         let rec pcases = function
           | [] -> ()
           | [ cs ] -> pr_case ff cs
           | ch :: ct -> pr_case ff ch; Format.fprintf ff "@,"; pcases ct
         in
-          Format.fprintf ff "@[<v 0>@[<v 2>classify (";
+          Format.fprintf ff "@[<v 2>classify (";
           pr_exp ff e;
           Format.fprintf ff ") {@,";
           pcases cl;
-          Format.fprintf ff "@]@,}@]"
+          Format.fprintf ff "@]@\n}"
     | Ptype_label -> Format.fprintf ff "label"
     | Ptype_format f -> Format.fprintf ff "format %s" (Location.node_of f)
 
@@ -317,8 +317,8 @@ let pr_decl ff decl =
     | Pdecl_variant (dn, v) ->
         Format.fprintf ff "def variant %s " (Location.node_of dn);
         pr_variant ff v;
-        Format.pp_print_newline ff ()
+        Format.fprintf ff "@\n@\n"
     | Pdecl_format (dn, fmt) ->
-        Format.fprintf ff "@[<v 0>@[<v 4>format %s {@," (Location.node_of dn);
+        Format.fprintf ff "@[<v 4>format %s {@," (Location.node_of dn);
         pr_format ff fmt;
-        Format.fprintf ff "@]@,}@]@\n"
+        Format.fprintf ff "@]@,}@\n@\n"
