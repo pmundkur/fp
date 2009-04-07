@@ -23,6 +23,7 @@ open Lexing
 open Asttypes
 
 let options = [ ("-test", Arg.Set Config.test_mode, " unit-test mode");
+                ("-pprint-ast", Arg.Set Config.pprint_ast, " pretty-print parsed ast");
                 ("-show-dependencies", Arg.Set Config.show_dependencies, " show dependency equations")
               ]
 
@@ -89,7 +90,7 @@ let process_file f =
   try
     let ic = open_in f in
     let pt = parse_file f ic in
-    (* let _ = pprint pt in *)
+    let _ = if !Config.pprint_ast then pprint pt in
     let typed_env = Typing.type_check (Typing.init_typing_env ()) pt in
     let formats = Env.get_formats typed_env in
       Patternmatch.check_formats formats;
