@@ -433,22 +433,6 @@ let print_dep_graph g =
            (String.concat " " ((List.map Ident.name_of) cl))
     ) g
 
-let struct_iter f st =
-  let field_iter _ (ft, _) =
-    match ft with
-      | Ttype_base _
-      | Ttype_label
-      | Ttype_format _ ->
-          ()
-      | Ttype_struct st
-      | Ttype_array (_, st) ->
-          f st
-      | Ttype_map (_, mt) ->
-          StringMap.iter (fun _ (_, _, st) -> f st) mt.map_type_desc
-  in
-    f st;
-    Ident.iter field_iter st.fields
-
 (* external interface *)
 
 let errmsg e =

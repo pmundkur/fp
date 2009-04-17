@@ -287,6 +287,23 @@ let free_variables st =
   in
     do_struct st st.fields []
 
+(* recursive iteration over structs *)
+let struct_iter f st =
+  let field_iter _ (ft, _) =
+    match ft with
+      | Ttype_base _
+      | Ttype_label
+      | Ttype_format _ ->
+          ()
+      | Ttype_struct st
+      | Ttype_array (_, st) ->
+          f st
+      | Ttype_map (_, mt) ->
+          StringMap.iter (fun _ (_, _, st) -> f st) mt.map_type_desc
+  in
+    f st;
+    Ident.iter field_iter st.fields
+
 (* path utilities *)
 
 let path_head_ident = function

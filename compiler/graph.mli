@@ -37,21 +37,21 @@ module Node:
     val is_leaf: 'a t -> bool
   end
 
-module Graph :
+module Graph:
   functor (Elem : Hashtbl.HashedType) ->
     sig
       type t
 
-      val init : unit -> t
+      val init: unit -> t
 
-      val add_link : t -> Elem.t -> Elem.t -> unit
+      val add_link: t -> Elem.t -> Elem.t -> unit
 
-      val get_children : t -> Elem.t -> Elem.t list
-      val get_roots : t -> Elem.t list
+      val get_children: t -> Elem.t -> Elem.t list
+      val get_roots: t -> Elem.t list
 
-      val iter : (Elem.t -> Elem.t Node.t -> unit) -> t -> unit
+      val iter: (Elem.t -> Elem.t Node.t -> unit) -> t -> unit
 
       exception Cycle of Elem.t list * Location.t
-      val check_cycles : t -> Location.t -> unit
-      val topo_sort : t -> Elem.t list
+      val check_cycles: t -> Location.t -> unit
+      val topo_sort: t -> Elem.t list
     end
