@@ -7,6 +7,7 @@ OCamlGeneratedFiles($(GEN_FILES))
 FP_FILES[] =
     ast
     asttypes
+    codegen
     config
     dependency
     env

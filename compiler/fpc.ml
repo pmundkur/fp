@@ -86,18 +86,33 @@ let pprint pt =
     List.iter (Ast.pr_decl ff) pt;
     Format.fprintf ff "@\n@?"
 
+let output_filename f =
+  let dir, base = Filename.dirname f, Filename.basename f in
+  let stem = Filename.chop_extension base in
+    Filename.concat dir (stem ^ ".ml")
+
+exception Invalid_file_extension of string * string
+
 let process_file f =
   try
+    if Filename.check_suffix f ".ml" then
+      raise (Invalid_file_extension (f, ".ml"));
     let ic = open_in f in
     let pt = parse_file f ic in
     let _ = if !Config.pprint_ast then pprint pt in
     let typed_env = Typing.type_check (Typing.init_typing_env ()) pt in
     let formats = Env.get_formats typed_env in
-      Patternmatch.check_formats formats;
-      ignore (Dependency.analyze_formats formats)
+    let _ = Patternmatch.check_formats formats in
+    let struct_env = Dependency.analyze_formats formats in
+    let ofn = output_filename f in
+      Codegen.generate typed_env struct_env ofn
+
   with
     | Sys_error s ->
         prerr_endline s;
+        Util.exit_with_code 1
+    | Invalid_file_extension (f, e) ->
+        Printf.fprintf stderr "Input file %s has an invalid extension \"%s\"." f e;
         Util.exit_with_code 1
     | e ->
         Printf.fprintf stderr "%s\n" (Printexc.to_string e);
