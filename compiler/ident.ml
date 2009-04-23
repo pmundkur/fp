@@ -102,18 +102,24 @@ let assoc_by_id env i =
 let extend first second =
   first @ second
 
-let rec fold f env init =
-  match env with
-    | [] -> init
-    | (i, info) :: tl ->
-        f i info (fold f tl init)
+let fold f env init =
+  let rec folder e a =
+    match e with
+      | [] -> a
+      | (i, info) :: tl ->
+          f i info (folder tl a)
+  in
+    folder (List.rev env) init
 
-let rec iter f env =
-  match env with
-    | [] -> ()
-    | (i, info) :: tl ->
-        f i info;
-        iter f tl
+let iter f env =
+  let rec iterator e =
+    match e with
+      | [] -> ()
+      | (i, info) :: tl ->
+          f i info;
+          iterator tl
+  in
+    iterator (List.rev env)
 
 let rec map f env =
   match env with
