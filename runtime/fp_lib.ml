@@ -383,11 +383,16 @@ module type FP_bit_elem = sig
   val copy : t -> Env.t -> t * Env.t
   val of_int : int -> v
   val to_int : v -> int
+  val to_string : v -> string
 end
 
 module FP_bit : (FP_bit_elem with type v = int) = struct
   type t = Env.t
   type v = int
+
+  let check_bounds v =
+    if v <> 0 && v <> 1 then
+      raise Arg_out_of_bounds
 
   let rep_to_env (t : t) = (t : Env.t)
 
@@ -400,8 +405,7 @@ module FP_bit : (FP_bit_elem with type v = int) = struct
     (Env.bit_at t 0 : v)
 
   let write (v : v) (t : t) =
-    if v <> 0 && v <> 1 then
-      raise Arg_out_of_bounds;
+    check_bounds v;
     Env.set_bit_at t 0 v
 
   let unmarshal env =
@@ -414,9 +418,13 @@ module FP_bit : (FP_bit_elem with type v = int) = struct
   let copy (t : t) env =
     marshal env (read t)
 
-  let of_int (i : int) = i
+  let of_int (i : int) =
+    check_bounds i;
+    i
 
   let to_int (v : v) = v
+
+  let to_string (v : v) = string_of_int v
 end
 
 module FP_bit_vector = struct
@@ -479,9 +487,14 @@ module FP_byte : (FP_elem with type v = char) = struct
   let copy (t : t) env =
     marshal env (read t)
 
-  let of_int (i : int) = char_of_int i
+  let of_int (i : int) =
+    if i < 0 && i > 255 then
+      raise Arg_out_of_bounds;
+    char_of_int i
 
   let to_int (v : v) = int_of_char v
+
+  let to_string (v : v) = Printf.sprintf "%d" (Char.code v)
 end
 
 module FP_int16 : (FP_elem with type v = int) = struct
@@ -489,6 +502,10 @@ module FP_int16 : (FP_elem with type v = int) = struct
   type v = int
 
   let size = 2
+
+  let check_bounds v =
+    if v < -0x8000 || v > 0x7fff then
+      raise Arg_out_of_bounds
 
   let rep_to_env (t : t) = (t : Env.t)
 
@@ -506,8 +523,7 @@ module FP_int16 : (FP_elem with type v = int) = struct
       ((if sign = 0 then i else (i land 0x7fff) - 0x8000) : v)
 
   let write (v : v) (t : t) =
-    if v < -0x8000 || v > 0x7fff then
-      raise Arg_out_of_bounds;
+    check_bounds v;
     let env = rep_to_env t in
     let sign = v < 0 in
     let b0 = char_of_int (v land 0xff) in
@@ -530,9 +546,13 @@ module FP_int16 : (FP_elem with type v = int) = struct
   let copy (t : t) env =
     marshal env (read t)
 
-  let of_int (i : int) = i
+  let of_int (i : int) =
+    check_bounds i;
+    i
 
   let to_int (v : v) = v
+
+  let to_string (v : v) = string_of_int v
 end
 
 module FP_uint16 : (FP_elem with type v = int) = struct
@@ -540,6 +560,10 @@ module FP_uint16 : (FP_elem with type v = int) = struct
   type v = int
 
   let size = 2
+
+  let check_bounds v =
+    if (v lsr 16) > 0 then
+      raise Arg_out_of_bounds
 
   let rep_to_env (t : t) = (t : Env.t)
 
@@ -557,8 +581,7 @@ module FP_uint16 : (FP_elem with type v = int) = struct
       (i : v)
 
   let write (v : v) (t : t) =
-    if (v lsr 16) > 0 then
-      raise Arg_out_of_bounds;
+    check_bounds v;
     let env = rep_to_env t in
     let b0 = char_of_int (v land 255) in
     let b1 = char_of_int ((v lsr 8) land 255) in
@@ -580,9 +603,13 @@ module FP_uint16 : (FP_elem with type v = int) = struct
   let copy (t : t) env =
     marshal env (read t)
 
-  let of_int (i : int) = i
+  let of_int (i : int) =
+    check_bounds i;
+    i
 
   let to_int (v : v) = v
+
+  let to_string (v : v) = string_of_int v
 end
 
 module FP_int32 : (FP_elem with type v = Int32.t) = struct
@@ -635,6 +662,8 @@ module FP_int32 : (FP_elem with type v = Int32.t) = struct
   let of_int (i : int) = Int32.of_int i
 
   let to_int (v : v) = Int32.to_int v
+
+  let to_string (v : v) = Int32.to_string v
 end
 
 module FP_uint32 : (FP_elem with type v = Int32.t) = struct
@@ -704,6 +733,8 @@ module FP_uint32 : (FP_elem with type v = Int32.t) = struct
       Int64.add (Int64.of_int32 (Int32.logand v 0x7fffffffl)) 0x80000000L
     else
       Int64.of_int32 v
+
+  let to_string (v : v) = Int64.to_string (to_int64 v)
 end
 
 module FP_int64 : (FP_elem with type v = Int64.t) = struct
@@ -757,6 +788,8 @@ module FP_int64 : (FP_elem with type v = Int64.t) = struct
   let of_int (i : int) = Int64.of_int i
 
   let to_int (v : v) = Int64.to_int v
+
+  let to_string (v : v) = Int64.to_string v
 end
 
 module type FP_array_sig = sig
@@ -829,5 +862,7 @@ end
 
 module FP_byte_vector  = FP_array (FP_byte)
 module FP_int16_vector = FP_array (FP_int16)
+module FP_uint16_vector = FP_array (FP_uint16)
 module FP_int32_vector = FP_array (FP_int32)
+module FP_uint32_vector = FP_array (FP_uint32)
 module FP_int64_vector = FP_array (FP_int64)
