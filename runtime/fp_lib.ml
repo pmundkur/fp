@@ -666,9 +666,9 @@ module FP_int32 : (FP_elem with type v = Int32.t) = struct
   let to_string (v : v) = Int32.to_string v
 end
 
-module FP_uint32 : (FP_elem with type v = Int32.t) = struct
+module FP_uint32 : (FP_elem with type v = Int64.t) = struct
   type t = Env.t
-  type v = Int32.t
+  type v = Int64.t
 
   let size = 2 * FP_int16.size
 
@@ -680,7 +680,7 @@ module FP_uint32 : (FP_elem with type v = Int32.t) = struct
     (t : t)
 
   let read (t : t) =
-    let module I = Int32 in
+    let module I = Int64 in
     let t0, e0 = FP_int16.unmarshal t in
     let t1, _ = FP_int16.unmarshal e0 in
     let i0 = I.of_int (FP_int16.read t0) in
@@ -695,8 +695,8 @@ module FP_uint32 : (FP_elem with type v = Int32.t) = struct
     (Env.sub env 0 size : t), (Env.skip_bytes env size)
 
   let marshal env (v : v) =
-    let module I = Int32 in
-    let i0 = I.to_int (I.logand v 65535l) in
+    let module I = Int64 in
+    let i0 = I.to_int (I.logand v 65535L) in
     let i1 = I.to_int (I.shift_right v 16) in
     let next =
       match Env.endian env with
@@ -716,25 +716,20 @@ module FP_uint32 : (FP_elem with type v = Int32.t) = struct
   let of_int (i : int) =
     if i < 0 then  (* TODO: check max limit in case where nativeint = int64 *)
       raise Arg_out_of_bounds;
-    Int32.of_int i
+    Int64.of_int i
 
   let to_int (v : v) =
-    if v < 0l then
+    if v < 0L then
       raise Arg_out_of_bounds;
-    Int32.to_int v
+    Int64.to_int v
 
   let of_int64 (i : Int64.t) : v =
-    if i < 0L || i > 0xffffffffL then
-      raise Arg_out_of_bounds;
-    Int64.to_int32 i
+    i
 
   let to_int64 (v : v) =
-    if v < 0l then
-      Int64.add (Int64.of_int32 (Int32.logand v 0x7fffffffl)) 0x80000000L
-    else
-      Int64.of_int32 v
+    v
 
-  let to_string (v : v) = Int64.to_string (to_int64 v)
+  let to_string (v : v) = Int64.to_string v
 end
 
 module FP_int64 : (FP_elem with type v = Int64.t) = struct
