@@ -120,7 +120,7 @@ module Variant = struct
       (Typeinfo.lib_module_name (base_type_of ft));
     fprintf ff "@]@]@,"
 
-  let generate ff id ft v =
+  let generate_defs ff id ft v =
     gen_type ff id ft v; fprintf ff "@,";
     gen_of ff id ft v;   fprintf ff "@,";
     gen_to ff id ft v;   fprintf ff "@,";
@@ -129,19 +129,40 @@ module Variant = struct
 end
 
 module Struct = struct
-  let start_module ff st_id =
-    fprintf ff "@[<v 2>module %s = struct@," (String.capitalize (Ident.name_of st_id))
+  let start_module ff ?(suffix="") st_id =
+    let suffix = if suffix = "" then "" else "_" ^ (String.lowercase suffix) in
+      fprintf ff "@[<v 2>module %s = struct@,"
+        (String.capitalize ((Ident.name_of st_id) ^ suffix))
 
   let end_module ff =
     fprintf ff "@]@,end@,"
 
-  let generate ff typed_env st_id (st, deps) =
-    start_module ff st_id;
+  let rec generate ff typed_env st_id ?(suffix="") (st, deps) =
+    start_module ff ~suffix st_id;
+    (* variants *)
     Ident.iter (fun id (ft, fattribs) ->
                   match fattribs.field_attrib_variant with
                     | None -> ()
-                    | Some (v, _) -> Variant.generate ff id ft v
+                    | Some (v, _) -> Variant.generate_defs ff id ft v
                ) st.fields;
+    (* nested structs *)
+    Ident.iter (fun id (ft, fattribs) ->
+                  match ft with
+                    | Ttype_struct st
+                    | Ttype_array (_, st) ->
+                        generate ff typed_env id (st, deps)
+                    | Ttype_map (_, mt) ->
+                        StringMap.iter
+                          (fun cnm (_, _, st) ->
+                             generate ff typed_env id ~suffix:cnm (st, deps)
+                          ) mt.map_type_desc
+                    | _ ->
+                        ()
+               ) st.fields;
+    (* TODO: struct rep. This requires computing the free variables of
+       the struct, which need to be passed in as arguments.  Also,
+       some free variables are special: e.g. remaining(),
+       offset(field), etc. in array/vector lengths. *)
     end_module ff
 end
 
