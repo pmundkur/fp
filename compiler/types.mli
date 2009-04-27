@@ -177,9 +177,6 @@ type type_info = primitive * int
 (* generate a field identifier map for a struct *)
 val ident_map: struct_type -> field_info Ident.env
 
-(* compute free variables in a struct *)
-val free_variables: struct_type -> Ident.t list
-
 (* recursive iteration over structs *)
 val struct_iter: (struct_type -> unit) -> struct_type -> unit
 

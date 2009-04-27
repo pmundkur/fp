@@ -1,5 +1,19 @@
 TODO:
 
+- To simplify codegen, disallow for now the use of offset() in
+  vector/array length expressions.  This should be a typing-phase
+  check.
+
+- Properly handle remainder() as a free-variable.
+
+- Test Types.ident_map.
+
+- Add a check to ensure that array structs don't have free variables,
+  to avoid having to deal with value extraction from within arrays.
+  This is a generation-only check.
+
+
+
 - A nice thing to provide good support for is optional fields.  Though
   they can be manually translated as follows:
 
@@ -19,12 +33,6 @@ TODO:
   default at the time of the use of the variant definition.
   Currently, the default is only specified at the time of the
   declaration, which is restrictive.
-
-- Test Types.{ident_map, free_variables}.
-
-- Add a check to ensure that array structs don't have free variables,
-  to avoid having to deal with value extraction from within arrays.
-  This is a generation-only check.
 
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 

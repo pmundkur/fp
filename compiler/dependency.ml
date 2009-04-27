@@ -118,6 +118,8 @@ type dependency =
       length_of: dpath list;
       branch_of: dpath list;
       in_length_of: dpath list;
+      (* free variables; only for struct-like fields *)
+      free_vars: Ident.t list;
       (* analysis result for various phases *)
       mutable autocompute: bool
     }
@@ -131,6 +133,7 @@ let make_dep id ft fas ctxt =
     length_of     = [];
     branch_of     = [];
     in_length_of  = [];
+    free_vars     = [];
     autocompute   = false
  }
 
@@ -168,27 +171,42 @@ let generate_depinfo fmt =
                                 ^ (Ident.name_of id))) in
   let store_dep tid dep deps =
     Ident.put tid dep deps in
-  let rec process_length_expr deps ctxt lid e =
-    let dpath = make_dpath lid ctxt
+  let process_length_expr deps ctxt lid e (cfields, opt_st_id) =
+    let dpath = make_dpath lid ctxt in
+    let update_length_of tid deps =
+      let dep = lookup_dep deps tid in
+      let dep = { dep with length_of = dpath :: dep.length_of } in
+        store_dep tid dep deps in
+    let update_in_length_of tid deps =
+      let dep = lookup_dep deps tid in
+      let dep = { dep with in_length_of = dpath :: dep.in_length_of } in
+        store_dep tid dep deps in
+    let update_dep_free_vars tid st_id deps =
+      let dep = lookup_dep deps st_id in
+      let dep = { dep with free_vars = tid :: dep.free_vars } in
+        store_dep st_id dep deps in
+    let update_st_free_vars tid deps =
+      match opt_st_id with
+        | None -> deps
+        | Some st_id ->
+            if List.mem tid cfields
+            then deps
+            else update_dep_free_vars tid st_id deps
     in
       match e.exp_desc with
         | Texp_var p ->
             let tid = path_tail_ident p in
-            let dep = lookup_dep deps tid in
-            let dep = { dep with length_of = dpath :: dep.length_of }
-            in
-              store_dep tid dep deps
+            let deps = update_length_of tid deps in
+              update_st_free_vars tid deps
         | _ ->
             let tidl = List.map path_tail_ident (vars_of_exp ~traverse_offset_call:false e)
             in
               List.fold_left
                 (fun deps tid ->
-                   let dep = lookup_dep deps tid in
-                   let dep = { dep with in_length_of = dpath :: dep.in_length_of }
-                   in
-                     store_dep tid dep deps)
-                deps tidl in
-  let rec process_field deps (ctxt, cst) id (ft, fas) =
+                   let deps = update_in_length_of tid deps in
+                     update_st_free_vars tid deps
+                ) deps tidl in
+  let rec process_field deps (ctxt, cst, cfields, opt_cst_id) id (ft, fas) =
     (* Initialize dep for field based on the field attributes *)
     let dep = init_dep deps id ctxt in
     let deps = store_dep id dep deps
@@ -198,39 +216,73 @@ let generate_depinfo fmt =
         | Ttype_base (Tbase_primitive _) ->
             deps
         | Ttype_base (Tbase_vector (_, e)) ->
-            process_length_expr deps ctxt id e
+            process_length_expr deps ctxt id e (cfields, opt_cst_id)
         | Ttype_struct st ->
-            process_struct deps (Struct_block id :: ctxt) st
+            process_struct deps (Struct_block id :: ctxt) st (Some id)
         | Ttype_map (bid, mt) ->
-            let dep = lookup_dep deps bid in
-            let dep = { dep with
+            let bdep = lookup_dep deps bid in
+            let bdep = { bdep with
                           branch_of = (make_dpath id ctxt) :: dep.branch_of } in
-            let deps = store_dep bid dep deps
-            in
+            let deps = store_dep bid bdep deps in
               StringMap.fold
                 (fun _ (cn, _, st) deps ->
-                   process_struct deps (Classify_block (cst, id, cn) :: ctxt) st)
-                mt.map_type_desc deps
+                   let ctxt = Classify_block (cst, id, cn) :: ctxt in
+                     process_struct deps ctxt st (Some id)
+                ) mt.map_type_desc deps
         | Ttype_array (e, st) ->
-            let deps = process_length_expr deps ctxt id e
-            in
-              process_struct deps (Array_block id :: ctxt) st
+            let deps = process_length_expr deps ctxt id e (cfields, opt_cst_id) in
+              process_struct deps (Array_block id :: ctxt) st (Some id)
         | Ttype_label | Ttype_format _ ->
             deps
-  and process_struct deps ctxt st =
-    (* Since we're initializing our dep env as we go, process the
-       fields in textual order, instead of iterating over Ident.env in
-       st.fields, where the fields are in unspecified order. *)
-    List.fold_left
-      (fun deps fe ->
-         match fe.field_entry_desc with
-           | Tfield_name (f, fi) ->
-               process_field deps (ctxt, st) f fi
-           | Tfield_align _ ->
-               deps)
-      deps st.entries
+  and process_struct deps ctxt st opt_st_id =
+    (* Since we're initializing our dep env as we go, we process the
+       fields in textual order using st.entries, instead of iterating
+       over Ident.env in st.fields, where the fields are in
+       unspecified order.
+
+       Free variable computation: we do this in two passes.  First,
+       for each vector or array field, any idents in its length
+       expression that do not belong to the fields processed so far,
+       are free in this struct.  This is done in process_length_expr.
+       Second, once we are done processing all this struct's fields,
+       we promote any free-variables of any nested struct-like field to
+       free-variables of this struct if they do not belong to this
+       struct's fields.
+    *)
+    let add_free_vars (all_fields, cdep) ndep =
+      List.fold_left
+        (fun cdep v ->
+           if List.mem v cdep.free_vars or List.mem v all_fields
+           then cdep
+           else { cdep with
+                    free_vars = v :: cdep.free_vars }
+        ) cdep ndep.free_vars in
+    let all_fields, deps =
+      List.fold_left
+        (fun (cfields, deps) fe ->
+           match fe.field_entry_desc with
+             | Tfield_name (f, fi) ->
+                 let cfields = f :: cfields in
+                   cfields, process_field deps (ctxt, st, cfields, opt_st_id) f fi
+             | Tfield_align _ ->
+                 cfields, deps
+        ) ([], deps) st.entries
+    in
+      match opt_st_id with
+        | None ->
+            deps
+        | Some st_id ->
+            (* 2nd pass of free-var computation *)
+            let st_dep =
+              List.fold_left
+                (fun cdep fid ->
+                   let ndep = lookup_dep deps fid in
+                     add_free_vars (all_fields, cdep) ndep
+                ) (lookup_dep deps st_id) all_fields
+            in
+              store_dep st_id st_dep deps
   in
-    process_struct Ident.empty_env [] fmt
+    process_struct Ident.empty_env [] fmt None
 
 type dep_warning =
   | Multiple_length_use of (* field *) Ident.t * (* lengths *) Ident.t * Ident.t
