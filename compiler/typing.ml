@@ -174,15 +174,15 @@ let populate_functions env =
   List.fold_left
     (fun e (fn, finfo) ->
        let fid = Ident.from_string fn Location.dummy_loc in
-         Env.add_function fid finfo e)
-    env functions
+         Env.add_function fid finfo e
+    ) env functions
 
 let populate_base_types env =
   List.fold_left
     (fun e (tn, tinfo) ->
        let tid = Ident.from_string tn Location.dummy_loc in
-         Env.add_type tid tinfo e)
-    env base_types
+         Env.add_type tid tinfo e
+    ) env base_types
 
 let init_typing_env () =
   populate_functions (populate_base_types (Env.new_env ()))
@@ -810,8 +810,8 @@ let type_attribs env f ft fal classify_fields branch_fields =
                    { tas with
                        field_attrib_variant = Some (tv, fa.pfield_attrib_loc) }
              | _ ->
-                 raise_invalid_attribute f fa.pfield_attrib_loc)
-      null_field_attribs fal
+                 raise_invalid_attribute f fa.pfield_attrib_loc
+      ) null_field_attribs fal
   in
     check_flags ();
     tas
@@ -894,8 +894,8 @@ let rec type_field (env, cur_align, fl) f =
                                  exp_within_range ~start ~finish cc
                          in
                            if overlapping then
-                             raise_overlapping_classify_value cc loc pc.case_exp_loc)
-                      typed_case_list in
+                             raise_overlapping_classify_value cc loc pc.case_exp_loc
+                      ) typed_case_list in
                   match tce with
                     | Tcase_const c ->  check_ce c
                     | Tcase_range (l, r) ->  check_ce l; check_ce r in
@@ -917,8 +917,8 @@ let rec type_field (env, cur_align, fl) f =
                            { case_exp_desc = tce;
                              case_exp_loc = ce.pcase_exp_loc } in
                          let tfmt = type_format env fmt in
-                           (cnm, (cn, tce, tfmt)) :: a)
-                    [] cl in
+                           (cnm, (cn, tce, tfmt)) :: a
+                    ) [] cl in
                 let m =
                   List.fold_left
                     (fun m (nm, (cn, te, tfmt)) -> StringMap.add nm (cn, te, tfmt) m)
@@ -953,9 +953,8 @@ and type_format env fmt =
            | Align _ ->
                e
            | Field (_, id, _) ->
-               Env.add_field id (lookup_type id ext_env) e)
-      (Env.clone ext_env)
-      (List.rev fl) in
+               Env.add_field id (lookup_type id ext_env) e
+      ) (Env.clone ext_env) (List.rev fl) in
   let get_classify_fields venv fl =
     List.fold_left
       (fun ((cfields, bfields) as fields) f ->
@@ -969,8 +968,8 @@ and type_format env fmt =
                        branch_field = bid;
                        branch_map = mt } :: cfields,
                      bid :: bfields
-                 | _ -> fields)
-      ([], []) fl in
+                 | _ -> fields
+      ) ([], []) fl in
   let get_field_entries venv fl classify_fields branch_fields =
     List.fold_left
       (fun (entries, fields) f ->
@@ -984,8 +983,8 @@ and type_format env fmt =
                  in
                    loc, Tfield_name (id, (ft, tal)), (Ident.add id (ft, tal) fields)
          in
-           { field_entry_desc = ent; field_entry_loc = loc } :: entries, fields')
-      ([], Ident.empty_env) fl in
+           { field_entry_desc = ent; field_entry_loc = loc } :: entries, fields'
+      ) ([], Ident.empty_env) fl in
   let ext_env, align, fl = type_fields () in
   let _ = check_align align in
   let venv = get_value_env ext_env fl in

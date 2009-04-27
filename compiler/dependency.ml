@@ -412,8 +412,8 @@ let dep_idents_of_value v =
     List.fold_left
       (fun acc b ->
          let cid = b.branch_info.classify_field in
-           cid :: acc)
-      [] bl in
+           cid :: acc
+      ) [] bl in
   let fv_idents fv =
     match fv.field_value_desc with
       | Tvalue_auto ->
@@ -467,8 +467,8 @@ let make_dep_graph st dep_env =
       (fun id _ acc ->
          let d = lookup_dep id in
            if d.autocompute then (id, d) :: acc
-           else acc)
-      st.fields [] in
+           else acc
+      ) st.fields [] in
   let add_id_deps g id d =
     List.iter (DepGraph.add_link g id) (get_dep_idents d) in
   let g = DepGraph.init ()
