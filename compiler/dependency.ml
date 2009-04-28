@@ -175,15 +175,21 @@ let generate_depinfo fmt =
     let dpath = make_dpath lid ctxt in
     let update_length_of tid deps =
       let dep = lookup_dep deps tid in
-      let dep = { dep with length_of = dpath :: dep.length_of } in
+      let dep = (if List.mem dpath dep.length_of
+                 then dep
+                 else { dep with length_of = dpath :: dep.length_of }) in
         store_dep tid dep deps in
     let update_in_length_of tid deps =
       let dep = lookup_dep deps tid in
-      let dep = { dep with in_length_of = dpath :: dep.in_length_of } in
+      let dep = (if List.mem dpath dep.in_length_of
+                 then dep
+                 else { dep with in_length_of = dpath :: dep.in_length_of }) in
         store_dep tid dep deps in
     let update_dep_free_vars tid st_id deps =
       let dep = lookup_dep deps st_id in
-      let dep = { dep with free_vars = tid :: dep.free_vars } in
+      let dep = (if List.mem tid dep.free_vars
+                 then dep
+                 else { dep with free_vars = tid :: dep.free_vars }) in
         store_dep st_id dep deps in
     let update_st_free_vars tid deps =
       match opt_st_id with
