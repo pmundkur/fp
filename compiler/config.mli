@@ -23,3 +23,4 @@ val test_mode: bool ref
 val pprint_ast: bool ref
 val show_dependency_warnings: bool ref
 val show_dependencies: bool ref
+val show_free_variables: bool ref

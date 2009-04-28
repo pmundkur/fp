@@ -500,6 +500,8 @@ let handle_dep_exception e =
   Printf.fprintf stderr "%s\n" (errmsg e);
   Util.exit_with_code 1
 
+exception Have_free_vars
+
 let analyze_formats fmts =
   let cycle_checker st deps loc =
     let g = make_dep_graph st deps in
@@ -507,9 +509,23 @@ let analyze_formats fmts =
         Printf.printf "Dependencies:\n";
         print_dep_graph g;
       end;
-      DepGraph.check_cycles g loc
+      DepGraph.check_cycles g loc in
+  let print_free_variables st_id deps =
+    try
+      Ident.iter (fun id dep ->
+                    if List.length dep.free_vars > 0 then
+                      raise Have_free_vars
+                 ) deps
+    with
+      | Have_free_vars ->
+          Printf.printf "Free variables for %s:\n" (Ident.name_of st_id);
+          Ident.iter (fun id dep ->
+                        if List.length dep.free_vars > 0 then
+                          Printf.printf "%s: %s\n" (Ident.name_of id)
+                            (String.concat " " (List.map Ident.name_of dep.free_vars))
+                     ) deps
   in
-  let analyze_fmt st =
+  let analyze_fmt st_id st =
     let deps = generate_depinfo st in
       Ident.iter (fun fid dep ->
                     let warnings = analyze_depinfo fid dep in
@@ -522,9 +538,11 @@ let analyze_formats fmts =
                         dep.autocompute <- can_autocompute dep
                  ) deps;
       struct_iter (fun st -> cycle_checker st deps st.struct_type_loc) st;
+      if !Config.show_free_variables then
+        print_free_variables st_id deps;
       (st, deps)
   in
     try
-      Ident.map (fun _ st -> analyze_fmt st) fmts
+      Ident.map (fun st_id st -> analyze_fmt st_id st) fmts
     with
       | e -> handle_dep_exception e

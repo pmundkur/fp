@@ -21,4 +21,4 @@
 
 type dep_info
 
-val analyze_formats : Types.struct_type Ident.env -> (Types.struct_type * dep_info) Ident.env
+val analyze_formats: Types.struct_type Ident.env -> (Types.struct_type * dep_info) Ident.env
