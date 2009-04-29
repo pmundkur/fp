@@ -1,0 +1,41 @@
+format map {
+    var : byte;
+    payload : classify (var) {
+              | 0:First ->  { vec: byte[3] }
+              | 1:Second -> { len: byte    }
+              }
+}
+format arr {
+    var : byte;
+    payload : array (var) {
+                 vec: byte[3];
+              }
+}
+
+variant phone_type { | 0 -> Mobile | 1 => Home | 2 -> Work }
+
+format byte {
+    type : byte variant phone_type;
+    content : byte[10];
+}
+
+format int16 {
+    type : int16 variant phone_type;
+    content : byte[10];
+}
+
+format int32 {
+    type : int32 variant phone_type;
+    content : byte[10];
+}
+
+format uint32 {
+    type : uint32 variant phone_type;
+    content : byte[10];
+}
+
+format int64 {
+    type : int64 variant phone_type;
+    content : byte[10];
+}
+
