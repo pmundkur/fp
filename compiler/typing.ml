@@ -150,8 +150,8 @@ let functions = [
   ("/", (([Texp_type_int; Texp_type_int], Texp_type_int),
          Some (binary (Int64.div))));
 
-  ("byte_sizeof", (([Texp_type_base], Texp_type_int), None));
-  ("bit_sizeof", (([Texp_type_base], Texp_type_int), None));
+  ("byte_sizeof", (([Texp_type_field], Texp_type_int), None));
+  ("bit_sizeof", (([Texp_type_field], Texp_type_int), None));
   ("length", (([Texp_type_vector], Texp_type_int), None));
   ("array_length", (([Texp_type_array], Texp_type_int), None));
 
