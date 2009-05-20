@@ -819,6 +819,9 @@ struct
     then raise (Env.Invalid_op "FP_array.env_to_rep");
     (t : t)
 
+  let length (t : t) =
+    (Env.byte_length t) / (E.size)
+
   let size (t : t) =
     Env.byte_length t
 
