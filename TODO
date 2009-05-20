@@ -1,6 +1,76 @@
 TODO:
 
-- Properly handle remainder() as a free-variable.
+- Notes on free-variables for parsing codegen:
+
+  It's not enough to know what the free variables are, but we need to
+  know how they occur in the expression(s).
+
+  Free-variables needed for the parse phase appear in:
+  . vector and array length expressions
+  . classification expressions
+
+  remaining() is a special free-variable, whose name remains the same
+  but whose value changes for each struct.  Its value is not derived
+  from any field, but from the env/buffer passed in to the generated
+  parsing function.
+
+  Within these expressions, a free variable can appear in one or more
+  of the following contexts:
+
+  1. as a direct argument to one of the arithmetic functions.
+
+    Currently all these functions take integer arguments.  In this
+    case, the generated parsing function takes an extra argument of
+    integer type.
+
+    The value used for the call to this generated parsing function
+    will be computed from the corresponding field's representation.
+
+    A special case of this is when a variable directly appears as the
+    length expression of a  vector or array, e.g. the free-variable
+    "len" in
+         vec: byte[len]
+         arr: array(len) {...}
+
+  2. as a direct argument to the "length" or "array_length" function.
+
+    The generated parsing function takes an extra argument of integer
+    type.
+
+    The variable used for the call to this parsing function from
+    within a struct will simply reuse the temporary (but unique)
+    variable name used to store the length of the corresponding vector
+    or array field when parsing that field.  This implies that these
+    variable names must be recorded in the codegenerator state.
+
+  3. as a direct argument to the "offset" function.
+
+    The generated parsing function takes an extra argument of integer
+    type.
+
+    The variable used for the call to this parsing function will have
+    to be generated and its name recorded in the codegen state.  (We
+    could always generate and record this for each field, irrespective
+    of whether it was used as an offset, but this would not be very
+    polite.)
+
+    To compute the offset, we would need to record the variable
+    holding the env of nearest enclosing struct in the codegen
+    environment.  It is simpler to do this irrespective of whether or
+    not the variable is needed later for offset computation.
+
+  Note that variables falling under categories 1) and 2) are mutually
+  exclusive, whereas variables falling under 3) could also fall under
+  1) or 2).  Hence, the generated parsing functions for a struct could
+  take multiple arguments derived from the same free field, and
+  generated calls to these functions could need multiple variables to
+  hold the arguments for these functions.
+
+  remaining(): The use of this "free-variable" does not need a
+  corresponding variable to be recorded in the codegen environment.
+  The codegen merely generates a call to Env.remaining with the
+  current env as argument.
+
 
 - Test Types.ident_map.
 
