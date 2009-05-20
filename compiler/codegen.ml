@@ -230,6 +230,11 @@ module Struct = struct
 
     Object.generate ff st;
 
+    (* Opaque formats will be referred to by their repn type t, so we
+       need this type defined for all structs, not just for maps.
+    *)
+    fprintf ff "type t = Env.t@,";
+
     (* TODO: struct unmarshalling/marshalling. This requires computing
        the free variables of the struct, which need to be passed in as
        arguments.  Also, some free variables are special:
