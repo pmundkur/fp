@@ -1,9 +1,5 @@
 TODO:
 
-- To simplify codegen, disallow for now the use of offset() in
-  vector/array length expressions.  This should be a typing-phase
-  check.
-
 - Properly handle remainder() as a free-variable.
 
 - Test Types.ident_map.
