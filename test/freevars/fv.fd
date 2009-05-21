@@ -1,0 +1,22 @@
+format cl {
+  len : byte value (| g = Zero -> byte_sizeof(g.h)
+                    | g = One  -> byte_sizeof(g.i) - 2);
+  len2 : byte value (4);
+  f : byte;
+  g : classify (f) {
+        | 0:Zero -> {
+            h : byte[len];
+        }
+        | 1:One  -> {
+            i : byte[len + 2];
+            j : classify (len2) {
+                |0:Zero -> {
+                  m: byte[3];
+                }
+            }
+        }
+      };
+  h : array (len) {
+          k : byte[len2]
+      }
+}
