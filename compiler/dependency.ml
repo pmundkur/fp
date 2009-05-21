@@ -135,7 +135,7 @@ let make_dep id ft fas ctxt =
     in_length_of  = [];
     free_vars     = [];
     autocompute   = false
- }
+  }
 
 let can_autocompute = function
   | { field_type = ft }
@@ -171,6 +171,19 @@ let generate_depinfo fmt =
                                 ^ (Ident.name_of id))) in
   let store_dep tid dep deps =
     Ident.put tid dep deps in
+  let update_dep_free_vars tid st_id deps =
+    let dep = lookup_dep deps st_id in
+    let dep = (if List.mem tid dep.free_vars
+               then dep
+               else { dep with free_vars = tid :: dep.free_vars }) in
+      store_dep st_id dep deps in
+  let update_st_free_vars opt_st_id cfields tid deps =
+    match opt_st_id with
+      | None -> deps
+      | Some st_id ->
+          if List.mem tid cfields
+          then deps
+          else update_dep_free_vars tid st_id deps in
   let process_length_expr deps ctxt lid e (cfields, opt_st_id) =
     let dpath = make_dpath lid ctxt in
     let update_length_of tid deps =
@@ -184,33 +197,20 @@ let generate_depinfo fmt =
       let dep = (if List.mem dpath dep.in_length_of
                  then dep
                  else { dep with in_length_of = dpath :: dep.in_length_of }) in
-        store_dep tid dep deps in
-    let update_dep_free_vars tid st_id deps =
-      let dep = lookup_dep deps st_id in
-      let dep = (if List.mem tid dep.free_vars
-                 then dep
-                 else { dep with free_vars = tid :: dep.free_vars }) in
-        store_dep st_id dep deps in
-    let update_st_free_vars tid deps =
-      match opt_st_id with
-        | None -> deps
-        | Some st_id ->
-            if List.mem tid cfields
-            then deps
-            else update_dep_free_vars tid st_id deps
+        store_dep tid dep deps
     in
       match e.exp_desc with
         | Texp_var p ->
             let tid = path_tail_ident p in
             let deps = update_length_of tid deps in
-              update_st_free_vars tid deps
+              update_st_free_vars opt_st_id cfields tid deps
         | _ ->
             let tidl = List.map path_tail_ident (vars_of_exp ~traverse_offset_call:false e)
             in
               List.fold_left
                 (fun deps tid ->
                    let deps = update_in_length_of tid deps in
-                     update_st_free_vars tid deps
+                     update_st_free_vars opt_st_id cfields tid deps
                 ) deps tidl in
   let rec process_field deps (ctxt, cst, cfields, opt_cst_id) id (ft, fas) =
     (* Initialize dep for field based on the field attributes *)
@@ -230,6 +230,7 @@ let generate_depinfo fmt =
             let bdep = { bdep with
                           branch_of = (make_dpath id ctxt) :: dep.branch_of } in
             let deps = store_dep bid bdep deps in
+            let deps = update_st_free_vars opt_cst_id cfields bid deps in
               StringMap.fold
                 (fun _ (cn, _, st) deps ->
                    let ctxt = Classify_block (cst, id, cn) :: ctxt in
