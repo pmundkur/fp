@@ -1,13 +1,43 @@
 TODO:
 
+- Add offset() and remaining() apis to the Env module in the runtime.
+
 - Notes on free-variables for parsing codegen:
 
   It's not enough to know what the free variables are, but we need to
-  know how they occur in the expression(s).
+  know how they occur in the expression(s), and how they are related
+  to the field associated with that expression.
 
-  Free-variables needed for the parse phase appear in:
+  Free-variables of a struct that are needed for the parse phase
+  appear in:
   . vector and array length expressions
   . classification expressions
+
+  Additional free-variables for a {array,map}-valued field occur in
+  the field's array length or classify expression.  These
+  free-variables are not needed as arguments to the generated struct
+  parsing functions, but are needed to compute the length or branch of
+  the field itself.
+
+    For example, in
+
+      format f {
+        br  : byte;
+        len : byte;
+        s : ...  {
+           g : array (br) {
+                k : byte[len];
+               }
+        }
+      }
+
+    len is free in the struct G, and hence is an argument to its
+    generated parsing function.  br is needed in the generated code
+    that sets up field g itself.  These two groups of free-variables
+    need to be stored seperately for field g.
+
+    Both br and len are free in the struct S of field s, and hence
+    belong to the same group in this case.
 
   remaining() is a special free-variable, whose name remains the same
   but whose value changes for each struct.  Its value is not derived
@@ -20,8 +50,8 @@ TODO:
   1. as a direct argument to one of the arithmetic functions.
 
     Currently all these functions take integer arguments.  In this
-    case, the generated parsing function takes an extra argument of
-    integer type.
+    case, the generated struct parsing function takes an extra
+    argument of integer type.
 
     The value used for the call to this generated parsing function
     will be computed from the corresponding field's representation.
@@ -34,8 +64,8 @@ TODO:
 
   2. as a direct argument to the "length" or "array_length" function.
 
-    The generated parsing function takes an extra argument of integer
-    type.
+    The generated struct parsing function takes an extra argument of
+    integer type.
 
     The variable used for the call to this parsing function from
     within a struct will simply reuse the temporary (but unique)
@@ -45,8 +75,8 @@ TODO:
 
   3. as a direct argument to the "offset" function.
 
-    The generated parsing function takes an extra argument of integer
-    type.
+    The generated struct parsing function takes an extra argument of
+    integer type.
 
     The variable used for the call to this parsing function will have
     to be generated and its name recorded in the codegen state.  (We
