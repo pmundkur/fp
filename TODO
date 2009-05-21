@@ -1,7 +1,5 @@
 TODO:
 
-- Add offset() and remaining() apis to the Env module in the runtime.
-
 - Notes on free-variables for parsing codegen:
 
   It's not enough to know what the free variables are, but we need to

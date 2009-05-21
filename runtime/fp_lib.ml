@@ -26,6 +26,7 @@ module Env = struct
   exception Invalid_access of string
   exception Invalid_op of string
   exception Insufficient_data of string
+  exception Invalid_offset_context
 
   type endian =
     | Big_endian
@@ -82,6 +83,8 @@ module Env = struct
 
   let byte_length env =
     env.vlen
+
+  let remaining = byte_length
 
   let is_valid env =
     (env.blen <= String.length env.buf)
@@ -369,6 +372,12 @@ module Env = struct
             (sub env 0 tlen), (skip_bytes env tlen)
       | `Fill fn ->
           fn env
+
+  let offset from_env to_env =
+    if not ((from_env.buf == to_env.buf) && (to_env.vstart >= from_env.vstart)) then
+      raise Invalid_offset_context;
+    (to_env.vstart - from_env.vstart)
+
 end
 
 module type FP_bit_elem = sig
