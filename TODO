@@ -1,5 +1,17 @@
 TODO:
 
+- Add type checking for num_bit_sets, to ensure it only works on a
+  scalar.  This will be a special-case, like the one for bits.
+
+- Add a check to ensure that array structs don't have free variables,
+  to avoid having to deal with value extraction from within arrays.
+  This is a generation-only check.
+
+- With variant definitions, it should be possible to specify the
+  default at the time of the use of the variant definition.
+  Currently, the default is only specified at the time of the
+  declaration, which is restrictive.
+
 - Notes on free-variables for parsing codegen:
 
   It's not enough to know what the free variables are, but we need to
@@ -48,39 +60,43 @@ TODO:
   1. as a direct argument to one of the arithmetic functions.
 
     Currently all these functions take integer arguments.  In this
-    case, the generated struct parsing function takes an extra
-    argument of integer type.
+    case, the generated struct parsing function needs only the type of
+    the free variable.  The integer argument for the arithmetic
+    function can be computed by using the _to_int API of the module
+    corresponding to the field type from the runtime library.
 
     The value used for the call to this generated parsing function
-    will be computed from the corresponding field's representation.
+    will be the name of the representation of the corresponding field.
 
     A special case of this is when a variable directly appears as the
-    length expression of a  vector or array, e.g. the free-variable
+    length expression of a vector or array, e.g. the free-variable
     "len" in
          vec: byte[len]
          arr: array(len) {...}
 
   2. as a direct argument to the "length" or "array_length" function.
 
-    The generated struct parsing function takes an extra argument of
-    integer type.
+    The generated struct parsing function only needs the type of the
+    free variable.  The length value can then be computed by a call to
+    the appropriate vector/array length function from the runtime
+    library.
 
-    The variable used for the call to this parsing function from
-    within a struct will simply reuse the temporary (but unique)
-    variable name used to store the length of the corresponding vector
-    or array field when parsing that field.  This implies that these
-    variable names must be recorded in the codegenerator state.
+    The value used for the call to this generated parsing function
+    will be the name of the representation of the corresponding field.
 
   3. as a direct argument to the "offset" function.
 
-    The generated struct parsing function takes an extra argument of
-    integer type.
+    This case differs from the above two, since the generated struct
+    parsing function will need the value of the offset, since it
+    cannot determine the offset value from either or both of the
+    variable name/type using (current incarnation of) the runtime
+    library.
 
     The variable used for the call to this parsing function will have
     to be generated and its name recorded in the codegen state.  (We
     could always generate and record this for each field, irrespective
     of whether it was used as an offset, but this would not be very
-    polite.)
+    elegant.)
 
     To compute the offset, we would need to record the variable
     holding the env of nearest enclosing struct in the codegen
@@ -99,14 +115,7 @@ TODO:
   The codegen merely generates a call to Env.remaining with the
   current env as argument.
 
-
 - Test Types.ident_map.
-
-- Add a check to ensure that array structs don't have free variables,
-  to avoid having to deal with value extraction from within arrays.
-  This is a generation-only check.
-
-
 
 - A nice thing to provide good support for is optional fields.  Though
   they can be manually translated as follows:
@@ -121,12 +130,6 @@ TODO:
 
   it would be nice to abbreviate this at the spec level and at the
   code generation level.
-
-
-- With variant definitions, it should be possible to specify the
-  default at the time of the use of the variant definition.
-  Currently, the default is only specified at the time of the
-  declaration, which is restrictive.
 
 - Lib: Handcode pcap -> ethernet -> ipv4 -> tcp using fp_lib.
 
