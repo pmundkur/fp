@@ -63,10 +63,6 @@ and exp_desc =
   | Texp_const_int64 of Int64.t
   | Texp_apply of Ident.t * exp list
 
-(* exp utilities *)
-val is_const_exp: exp -> bool
-val vars_of_exp: ?traverse_offset_call:bool -> exp -> path list
-
 type base_type =
   | Tbase_primitive of primitive
   | Tbase_vector of primitive * exp
@@ -188,7 +184,26 @@ val path_decompose: path -> string list
 val path_compose: path -> path -> path
 val path_location_of: path -> Location.t
 
+(* exp utilities *)
+
+val is_const_exp: exp -> bool
+
+type exp_paths =
+    { offset_paths: path list;
+      normal_paths: path list }
+val exp_paths_empty: exp_paths
+val exp_paths_of_exp: exp -> exp_paths
+
+type exp_vars =
+    { offset_vars: Ident.t list;
+      normal_vars: Ident.t list }
+val exp_vars_empty: exp_vars
+val exp_vars_of_exp: exp -> exp_vars
+val exp_vars_join: exp_vars -> exp_vars -> exp_vars
+val exp_vars_filter: exp_vars -> Ident.t list -> exp_vars
+
 (* type utilities *)
+
 val is_scalar: field_type -> bool
 val is_field_name_in_struct: string -> struct_type -> bool
 val lookup_field_in_struct_env: string -> struct_type -> (Ident.t * field_info) option

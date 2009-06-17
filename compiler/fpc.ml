@@ -25,7 +25,7 @@ open Asttypes
 let options = [ ("-test", Arg.Set Config.test_mode, " unit-test mode");
                 ("-pprint-ast", Arg.Set Config.pprint_ast, " pretty-print parsed ast");
                 ("-show-dependencies", Arg.Set Config.show_dependencies, " show dependency equations");
-                ("-show-free-variables", Arg.Set Config.show_free_variables, " show free variables")
+                ("-show-gen-variables", Arg.Set Config.show_gen_variables, " show generation variables")
               ]
 
 let parse_args () =

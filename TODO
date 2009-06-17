@@ -12,20 +12,72 @@ TODO:
   Currently, the default is only specified at the time of the
   declaration, which is restrictive.
 
-- Notes on free-variables for parsing codegen:
+- A note on arguments to offset().
 
-  It's not enough to know what the free variables are, but we need to
-  know how they occur in the expression(s), and how they are related
-  to the field associated with that expression.
+   . for dependency analysis/generation facet:
 
-  Free-variables of a struct that are needed for the parse phase
+     Struct construction always requires that all vector/array fields
+     be specified, since they cannot be given value attributes.  This
+     means that all fields of variable length will have their lengths
+     known at construction time.  This allows offsets of all fields in
+     the struct to be known at construction time.  Hence, the use of a
+     field as an offset argument cannot create a dependency for it.
+     This is why when we create dependencies from a length expression
+     below, we omit offset arguments.
+
+   . for the parser generation/parsing facet:
+
+     Since the offset of a field in a struct being parsed cannot be
+     computed knowing only its name (and any API in the runtime
+     library), we need to generate a variable to record the offset of
+     any field used as an offset() argument at the time it is parsed.
+
+     This variable will be used to pass the offset value to any users
+     of the offset, both by sibling fields, as well as generated
+     parser functions for embedded structs which use this offset.
+
+     This means we need to record the following:
+
+     . for each struct which of its fields occur as an argument to
+       offset() (including occurences in embedded structs).
+
+     . for each struct, which of its dependency variables occur in the
+       context of an argument to offset().  This is so that the
+       generated parser function can receive a corresponding variable
+       containing the offset-value.
+
+- Notes on dependency-variables for parsing codegen:
+
+  Essentially, information of field identifier occurences is needed
+  along two axes:
+
+  . what context they appear in: either a context in which their type
+    is all that matters (normal contexts), or as in argument to
+    offset(), where their type does not matter, and hence they need to
+    be handled specially during parsing.  Note that identifiers could
+    appear in both contexts.
+
+  . whether they appear in a generator expression for a field (e.g. a
+    vector or array length, or the branch field of a classify map), or
+    whether they are free variables of an embedded struct.  Note that
+    a field could have both generator fields as well as fields free in
+    its associated struct.
+
+  Older notes:
+
+  It's not enough to know what the dependency variables are, but we
+  need to know how they occur in the expression(s), and how they are
+  related to the field associated with that expression.
+
+  Dependency variables of a struct that are needed for the parse phase
   appear in:
+
   . vector and array length expressions
   . classification expressions
 
-  Additional free-variables for a {array,map}-valued field occur in
+  Additional variables for a {array,map}-valued field occur in
   the field's array length or classify expression.  These
-  free-variables are not needed as arguments to the generated struct
+  variables are not needed as arguments to the generated struct
   parsing functions, but are needed to compute the length or branch of
   the field itself.
 
@@ -43,7 +95,7 @@ TODO:
 
     len is free in the struct G, and hence is an argument to its
     generated parsing function.  br is needed in the generated code
-    that sets up field g itself.  These two groups of free-variables
+    that sets up field g itself.  These two groups of variables
     need to be stored seperately for field g.
 
     Both br and len are free in the struct S of field s, and hence
@@ -54,14 +106,14 @@ TODO:
   from any field, but from the env/buffer passed in to the generated
   parsing function.
 
-  Within these expressions, a free variable can appear in one or more
+  Within these expressions, a variable can appear in one or more
   of the following contexts:
 
   1. as a direct argument to one of the arithmetic functions.
 
     Currently all these functions take integer arguments.  In this
     case, the generated struct parsing function needs only the type of
-    the free variable.  The integer argument for the arithmetic
+    the variable.  The integer argument for the arithmetic
     function can be computed by using the _to_int API of the module
     corresponding to the field type from the runtime library.
 
@@ -69,7 +121,7 @@ TODO:
     will be the name of the representation of the corresponding field.
 
     A special case of this is when a variable directly appears as the
-    length expression of a vector or array, e.g. the free-variable
+    length expression of a vector or array, e.g. the variable
     "len" in
          vec: byte[len]
          arr: array(len) {...}
@@ -77,7 +129,7 @@ TODO:
   2. as a direct argument to the "length" or "array_length" function.
 
     The generated struct parsing function only needs the type of the
-    free variable.  The length value can then be computed by a call to
+    variable.  The length value can then be computed by a call to
     the appropriate vector/array length function from the runtime
     library.
 

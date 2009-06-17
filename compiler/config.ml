@@ -23,4 +23,4 @@ let test_mode = ref false
 let pprint_ast = ref false
 let show_dependency_warnings = ref true
 let show_dependencies = ref false
-let show_free_variables = ref false
+let show_gen_variables = ref false

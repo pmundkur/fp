@@ -63,39 +63,6 @@ and exp_desc =
   | Texp_const_int64 of Int64.t
   | Texp_apply of Ident.t * exp list
 
-let is_const_exp e =
-  match e.exp_desc with
-    | Texp_unit
-    | Texp_const_bit _
-    | Texp_const_byte _
-    | Texp_const_int16 _
-    | Texp_const_uint16 _
-    | Texp_const_int _
-    | Texp_const_int32 _
-    | Texp_const_uint32 _
-    | Texp_const_int64 _
-        -> true
-    | Texp_var _
-    | Texp_apply _
-        -> false
-
-(* exp utilities *)
-
-let vars_of_exp ?(traverse_offset_call=true) e =
-  let rec vars acc e =
-    match e.exp_desc with
-      | Texp_unit | Texp_const_bit _ | Texp_const_byte _
-      | Texp_const_int16 _ | Texp_const_uint16 _ | Texp_const_int _
-      | Texp_const_int32 _ | Texp_const_uint32 _ | Texp_const_int64 _ -> acc
-      | Texp_var p -> p :: acc
-      | Texp_apply (fn, el)
-          when not traverse_offset_call && (Ident.name_of fn) = "offset" ->
-            acc
-      | Texp_apply (fn, el) ->
-          List.fold_left vars acc el
-  in
-    vars [] e
-
 type base_type =
   | Tbase_primitive of primitive
   | Tbase_vector of primitive * exp
@@ -275,12 +242,110 @@ let rec path_location_of = function
   | Tvar_ident id -> Ident.location_of id
   | Tvar_path (id, p) -> Location.span (Ident.location_of id) (path_location_of p)
 
+(* exp utilities *)
+
+let is_const_exp e =
+  match e.exp_desc with
+    | Texp_unit
+    | Texp_const_bit _
+    | Texp_const_byte _
+    | Texp_const_int16 _
+    | Texp_const_uint16 _
+    | Texp_const_int _
+    | Texp_const_int32 _
+    | Texp_const_uint32 _
+    | Texp_const_int64 _ ->
+        true
+    | Texp_var _
+    | Texp_apply _ ->
+        false
+
+type exp_paths =
+    { offset_paths: path list;
+      normal_paths: path list }
+
+let exp_paths_empty =
+  { offset_paths = [];
+    normal_paths = [] }
+
+let exp_paths_of_exp e =
+  let rec paths in_offset acc e =
+    match e.exp_desc with
+      | Texp_unit
+      | Texp_const_bit _
+      | Texp_const_byte _
+      | Texp_const_int16 _
+      | Texp_const_uint16 _
+      | Texp_const_int _
+      | Texp_const_int32 _
+      | Texp_const_uint32 _
+      | Texp_const_int64 _ ->
+          acc
+      | Texp_var p ->
+          if in_offset
+          then { acc with offset_paths = p :: acc.offset_paths }
+          else { acc with normal_paths = p :: acc.normal_paths }
+      | Texp_apply (fn, el) ->
+          let in_offset = in_offset || (Ident.name_of fn = "offset") in
+            List.fold_left (fun acc e ->
+                              paths in_offset acc e
+                           ) acc el
+  in
+    paths false exp_paths_empty e
+
+type exp_vars =
+    { offset_vars: Ident.t list;
+      normal_vars: Ident.t list }
+
+let exp_vars_empty =
+  { offset_vars = [];
+    normal_vars = [] }
+
+let exp_vars_of_exp e =
+  let rec vars in_offset acc e =
+    match e.exp_desc with
+      | Texp_unit
+      | Texp_const_bit _
+      | Texp_const_byte _
+      | Texp_const_int16 _
+      | Texp_const_uint16 _
+      | Texp_const_int _
+      | Texp_const_int32 _
+      | Texp_const_uint32 _
+      | Texp_const_int64 _ ->
+          acc
+      | Texp_var p ->
+	  let p = path_tail_ident p in
+            if in_offset
+            then { acc with offset_vars = p :: acc.offset_vars }
+            else { acc with normal_vars = p :: acc.normal_vars }
+      | Texp_apply (fn, el) ->
+          let in_offset = in_offset || (Ident.name_of fn = "offset") in
+            List.fold_left (fun acc e ->
+                              vars in_offset acc e
+                           ) acc el
+  in
+    vars false exp_vars_empty e
+
+let exp_vars_join v1 v2 =
+  let filter vl omit_filter = List.filter (fun v -> not (List.mem v omit_filter)) vl in
+    { offset_vars = (filter v1.offset_vars v2.offset_vars) @ v2.offset_vars;
+      normal_vars = (filter v1.normal_vars v2.normal_vars) @ v2.normal_vars }
+
+let exp_vars_filter vars omit_filter =
+  let filter vl = List.filter (fun v -> not (List.mem v omit_filter)) vl in
+    { offset_vars = filter vars.offset_vars;
+      normal_vars = filter vars.normal_vars }
+
 (* type utilities *)
 
 let is_scalar = function
   | Ttype_base (Tbase_vector _) -> false
   | Ttype_base (Tbase_primitive _) -> true
-  | Ttype_struct _ | Ttype_map _ | Ttype_array _ | Ttype_format _ -> false
+  | Ttype_struct _
+  | Ttype_map _
+  | Ttype_array _
+  | Ttype_format _ -> false
   | Ttype_label -> true (* special case *)
 
 let is_field_name_in_struct fn st =
@@ -291,10 +356,8 @@ let lookup_field_in_struct_env fn st =
 
 let get_field_type fn st =
   match lookup_field_in_struct_env fn st with
-    | None ->
-        raise Not_found
-    | Some (fid, (ft, _)) ->
-        fid, ft
+    | None -> raise Not_found
+    | Some (fid, (ft, _)) -> fid, ft
 
 (* range and equality checks *)
 

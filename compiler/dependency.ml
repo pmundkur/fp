@@ -44,6 +44,21 @@
 
 open Types
 
+(* Struct-valued fields are associated with two kinds of
+   variables:
+
+   . free-variables embedded in the struct itself; these are variables
+     embedded in expressions used inside the struct, and are hence
+     'internal'.
+
+   . variables used in an expression outside the struct, but needed to
+     'generate' or parse the field.  For e.g., variables used in the
+     length expression for an array-valued field.
+*)
+type dep_var_info =
+    { internal: exp_vars;
+      generators: exp_vars }
+
 (* Paths are from one field to another, possibly nested, field within
    the same struct.  The nesting may be within in an array or a
    classify block; in this case, the paths are relative to the outer
@@ -110,6 +125,16 @@ let make_dpath id ctxt_stack =
        first; however, the path is specified from outside-in.  *)
     maker (List.rev ctxt_stack)
 
+(* During format construction, the values of some fields in a struct
+   can be automatically computed from the values of sibling fields in
+   the struct, and so do not need to appear in the generated
+   construction function for a struct. The latter fields are
+   dependencies of the former, and this type collects the dependencies
+   for a field.
+
+   As an optimization, since we are doing a deep traversal anyway, we
+   also collect dependency variable information in the same pass.
+*)
 type dependency =
     { field_path: dpath;
       field_type: field_type;
@@ -118,8 +143,8 @@ type dependency =
       length_of: dpath list;
       branch_of: dpath list;
       in_length_of: dpath list;
-      (* free variables; only for struct-like fields *)
-      free_vars: Ident.t list;
+      (* generator and internal fields *)
+      dep_vars: dep_var_info;
       (* analysis result for various phases *)
       mutable autocompute: bool
     }
@@ -133,7 +158,8 @@ let make_dep id ft fas ctxt =
     length_of     = [];
     branch_of     = [];
     in_length_of  = [];
-    free_vars     = [];
+    dep_vars      = { internal   = exp_vars_empty;
+                      generators = exp_vars_empty };
     autocompute   = false
   }
 
@@ -149,6 +175,10 @@ let can_autocompute = function
       true
   | _ ->
       false
+
+type var_context =
+  | VC_internal
+  | VC_generator
 
 let generate_depinfo fmt =
   let fenv = ident_map fmt in
@@ -171,20 +201,19 @@ let generate_depinfo fmt =
                                 ^ (Ident.name_of id))) in
   let store_dep tid dep deps =
     Ident.put tid dep deps in
-  let update_dep_free_vars tid st_id deps =
-    let dep = lookup_dep deps st_id in
-    let dep = (if List.mem tid dep.free_vars
-               then dep
-               else { dep with free_vars = tid :: dep.free_vars }) in
-      store_dep st_id dep deps in
-  let update_st_free_vars opt_st_id cfields tid deps =
-    match opt_st_id with
-      | None -> deps
-      | Some st_id ->
-          if List.mem tid cfields
-          then deps
-          else update_dep_free_vars tid st_id deps in
-  let process_length_expr deps ctxt lid e (cfields, opt_st_id) =
+  let add_vars_to_dep vars in_context dep =
+    { dep with
+        dep_vars = (match in_context with
+                      | VC_internal  -> { dep.dep_vars with
+                                            internal = exp_vars_join vars dep.dep_vars.internal }
+                      | VC_generator -> { dep.dep_vars with
+                                            generators = exp_vars_join vars dep.dep_vars.generators })
+    } in
+  let add_dep_vars vars in_context of_id deps =
+    let dep = lookup_dep deps of_id in
+    let dep = add_vars_to_dep vars in_context dep in
+      store_dep of_id dep deps in
+  let process_length_expr deps ctxt lid e =
     let dpath = make_dpath lid ctxt in
     let update_length_of tid deps =
       let dep = lookup_dep deps tid in
@@ -197,47 +226,53 @@ let generate_depinfo fmt =
       let dep = (if List.mem dpath dep.in_length_of
                  then dep
                  else { dep with in_length_of = dpath :: dep.in_length_of }) in
-        store_dep tid dep deps
-    in
+        store_dep tid dep deps in
+    let evars, deps =
       match e.exp_desc with
         | Texp_var p ->
-            let tid = path_tail_ident p in
-            let deps = update_length_of tid deps in
-              update_st_free_vars opt_st_id cfields tid deps
+            let evars = exp_vars_of_exp e in
+            let deps = update_length_of (path_tail_ident p) deps in
+	      evars, deps
         | _ ->
-            let tidl = List.map path_tail_ident (vars_of_exp ~traverse_offset_call:false e)
-            in
-              List.fold_left
-                (fun deps tid ->
-                   let deps = update_in_length_of tid deps in
-                     update_st_free_vars opt_st_id cfields tid deps
-                ) deps tidl in
-  let rec process_field deps (ctxt, cst, cfields, opt_cst_id) id (ft, fas) =
+            let evars = exp_vars_of_exp e in
+            let deps = List.fold_left (fun deps tid ->
+                                         update_in_length_of tid deps
+                                      ) deps evars.normal_vars in
+              evars, deps in
+      add_dep_vars evars VC_generator lid deps in
+  let process_branch_expr deps ctxt fid bid =
+    let update_branch_of bid deps =
+      let branch_of = make_dpath fid ctxt in
+      let dep = lookup_dep deps bid in
+      let dep = (if List.mem branch_of dep.branch_of
+                 then dep
+                 else { dep with
+                          branch_of = branch_of :: dep.branch_of }) in
+        store_dep bid dep deps in
+    let deps = update_branch_of bid deps in
+    let evars = { exp_vars_empty with normal_vars = [ bid ] } in
+      add_dep_vars evars VC_generator fid deps in
+  let rec process_field deps (ctxt, cst) id (ft, fas) =
     (* Initialize dep for field based on the field attributes *)
     let dep = init_dep deps id ctxt in
-    let deps = store_dep id dep deps
-    in
+    let deps = store_dep id dep deps in
       (* Update deps based on the field type *)
       match ft with
         | Ttype_base (Tbase_primitive _) ->
             deps
         | Ttype_base (Tbase_vector (_, e)) ->
-            process_length_expr deps ctxt id e (cfields, opt_cst_id)
+            process_length_expr deps ctxt id e
         | Ttype_struct st ->
             process_struct deps (Struct_block id :: ctxt) st (Some id)
         | Ttype_map (bid, mt) ->
-            let bdep = lookup_dep deps bid in
-            let bdep = { bdep with
-                          branch_of = (make_dpath id ctxt) :: dep.branch_of } in
-            let deps = store_dep bid bdep deps in
-            let deps = update_st_free_vars opt_cst_id cfields bid deps in
+            let deps = process_branch_expr deps ctxt id bid in
               StringMap.fold
                 (fun _ (cn, _, st) deps ->
                    let ctxt = Classify_block (cst, id, cn) :: ctxt in
                      process_struct deps ctxt st (Some id)
                 ) mt.map_type_desc deps
         | Ttype_array (e, st) ->
-            let deps = process_length_expr deps ctxt id e (cfields, opt_cst_id) in
+            let deps = process_length_expr deps ctxt id e in
               process_struct deps (Array_block id :: ctxt) st (Some id)
         | Ttype_label | Ttype_format _ ->
             deps
@@ -256,21 +291,18 @@ let generate_depinfo fmt =
        free-variables of this struct if they do not belong to this
        struct's fields.
     *)
-    let add_free_vars (all_fields, cdep) ndep =
-      List.fold_left
-        (fun cdep v ->
-           if List.mem v cdep.free_vars or List.mem v all_fields
-           then cdep
-           else { cdep with
-                    free_vars = v :: cdep.free_vars }
-        ) cdep ndep.free_vars in
+    let promote_free_vars (filter_fields, to_dep) from_dep =
+      let free_ints = exp_vars_filter from_dep.dep_vars.internal filter_fields in
+      let free_gens = exp_vars_filter from_dep.dep_vars.generators filter_fields in
+      let to_dep = add_vars_to_dep free_ints VC_internal to_dep in
+        add_vars_to_dep free_gens VC_internal to_dep in
     let all_fields, deps =
       List.fold_left
         (fun (cfields, deps) fe ->
            match fe.field_entry_desc with
              | Tfield_name (f, fi) ->
                  let cfields = f :: cfields in
-                   cfields, process_field deps (ctxt, st, cfields, opt_st_id) f fi
+                   cfields, process_field deps (ctxt, st) f fi
              | Tfield_align _ ->
                  cfields, deps
         ) ([], deps) st.entries
@@ -283,8 +315,8 @@ let generate_depinfo fmt =
             let st_dep =
               List.fold_left
                 (fun cdep fid ->
-                   let ndep = lookup_dep deps fid in
-                     add_free_vars (all_fields, cdep) ndep
+                   let fdep = lookup_dep deps fid in
+                     promote_free_vars (all_fields, cdep) fdep
                 ) (lookup_dep deps st_id) all_fields
             in
               store_dep st_id st_dep deps
@@ -426,10 +458,10 @@ let dep_idents_of_value v =
       | Tvalue_auto ->
           []
       | Tvalue_default e ->
-          List.map path_head_ident (vars_of_exp ~traverse_offset_call:false e)
+          List.map path_head_ident (exp_paths_of_exp e).normal_paths
       | Tvalue_branch bv ->
           (fv_pattern bv.struct_pattern)
-          @ (List.map path_head_ident (vars_of_exp ~traverse_offset_call:false bv.value))
+          @ (List.map path_head_ident (exp_paths_of_exp bv.value).normal_paths)
   in
     match v with
       | None -> []
@@ -517,20 +549,29 @@ let analyze_formats fmts =
         print_dep_graph g;
       end;
       DepGraph.check_cycles g loc in
-  let print_free_variables st_id deps =
-    try
-      Ident.iter (fun id dep ->
-                    if List.length dep.free_vars > 0 then
-                      raise Have_free_vars
-                 ) deps
-    with
-      | Have_free_vars ->
-          Printf.printf "Free variables for %s:\n" (Ident.name_of st_id);
-          Ident.iter (fun id dep ->
-                        if List.length dep.free_vars > 0 then
-                          Printf.printf "%s: %s\n" (Ident.name_of id)
-                            (String.concat " " (List.map Ident.name_of dep.free_vars))
-                     ) deps
+  let print_free_variables deps st_id =
+    let make_var_strings fvl =
+      (List.map Ident.name_of fvl.normal_vars)
+      @ (List.map (fun id -> "ofs:" ^ (Ident.name_of id))
+           fvl.offset_vars)
+    in
+      try
+        Ident.iter (fun id dep ->
+                      if (dep.dep_vars.internal <> exp_vars_empty
+                          || dep.dep_vars.generators <> exp_vars_empty)
+                      then raise Have_free_vars
+                   ) deps
+      with
+        | Have_free_vars ->
+            Printf.printf "Generation variables for %s:\n" (Ident.name_of st_id);
+            Ident.iter (fun id dep ->
+                          if dep.dep_vars.generators <> exp_vars_empty then
+                            Printf.printf "  generators for %s: %s\n" (Ident.name_of id)
+                              (String.concat " " (make_var_strings dep.dep_vars.generators));
+                          if dep.dep_vars.internal <> exp_vars_empty then
+                            Printf.printf "  free vars for %s: %s\n" (Ident.name_of id)
+                              (String.concat " " (make_var_strings dep.dep_vars.internal))
+                       ) deps
   in
   let analyze_fmt st_id st =
     let deps = generate_depinfo st in
@@ -545,8 +586,8 @@ let analyze_formats fmts =
                         dep.autocompute <- can_autocompute dep
                  ) deps;
       struct_iter (fun st -> cycle_checker st deps st.struct_type_loc) st;
-      if !Config.show_free_variables then
-        print_free_variables st_id deps;
+      if !Config.show_gen_variables then
+        print_free_variables deps st_id;
       (st, deps)
   in
     try
