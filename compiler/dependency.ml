@@ -515,6 +515,17 @@ let make_dep_graph st dep_env =
     List.iter (fun (id, d) -> add_id_deps g id d) (get_auto_computes st);
     g
 
+exception Have_dep_graph
+let have_dep_graph g =
+  try
+    DepGraph.iter
+      (fun id n ->
+         if DepGraph.get_children g id <> [] then
+           raise Have_dep_graph
+      ) g;
+    false
+  with Have_dep_graph -> true
+
 let print_dep_graph g =
   DepGraph.iter
     (fun id n ->
@@ -539,14 +550,23 @@ let handle_dep_exception e =
   Printf.fprintf stderr "%s\n" (errmsg e);
   Util.exit_with_code 1
 
-exception Have_free_vars
+exception Have_dep_vars
+let have_dep_vars deps =
+  try
+    Ident.iter (fun id dep ->
+                  if (dep.dep_vars.internal <> exp_vars_empty
+                      || dep.dep_vars.generators <> exp_vars_empty)
+                  then raise Have_dep_vars
+               ) deps;
+    false
+  with Have_dep_vars -> true
 
 let analyze_formats fmts =
   let cycle_checker st deps loc =
     let g = make_dep_graph st deps in
-      if !Config.show_dependencies then begin
+      if !Config.show_dependencies && have_dep_graph g then begin
         Printf.printf "Dependencies:\n";
-        print_dep_graph g;
+        print_dep_graph g
       end;
       DepGraph.check_cycles g loc in
   let print_free_variables deps st_id =
@@ -555,23 +575,17 @@ let analyze_formats fmts =
       @ (List.map (fun id -> "ofs:" ^ (Ident.name_of id))
            fvl.offset_vars)
     in
-      try
+      if have_dep_vars deps then begin
+        Printf.printf "Generation variables for %s:\n" (Ident.name_of st_id);
         Ident.iter (fun id dep ->
-                      if (dep.dep_vars.internal <> exp_vars_empty
-                          || dep.dep_vars.generators <> exp_vars_empty)
-                      then raise Have_free_vars
+                      if dep.dep_vars.generators <> exp_vars_empty then
+                        Printf.printf "  generators for %s: %s\n" (Ident.name_of id)
+                          (String.concat " " (make_var_strings dep.dep_vars.generators));
+                      if dep.dep_vars.internal <> exp_vars_empty then
+                        Printf.printf "  free vars for %s: %s\n" (Ident.name_of id)
+                          (String.concat " " (make_var_strings dep.dep_vars.internal))
                    ) deps
-      with
-        | Have_free_vars ->
-            Printf.printf "Generation variables for %s:\n" (Ident.name_of st_id);
-            Ident.iter (fun id dep ->
-                          if dep.dep_vars.generators <> exp_vars_empty then
-                            Printf.printf "  generators for %s: %s\n" (Ident.name_of id)
-                              (String.concat " " (make_var_strings dep.dep_vars.generators));
-                          if dep.dep_vars.internal <> exp_vars_empty then
-                            Printf.printf "  free vars for %s: %s\n" (Ident.name_of id)
-                              (String.concat " " (make_var_strings dep.dep_vars.internal))
-                       ) deps
+      end
   in
   let analyze_fmt st_id st =
     let deps = generate_depinfo st in
