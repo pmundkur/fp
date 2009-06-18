@@ -5,7 +5,7 @@ format cl {
   f : byte;
   g : classify (f) {
         | 0:Zero -> {
-            h : byte[len];
+            h : byte[len + offset(len2)];
         }
         | 1:One  -> {
             i : byte[len + 2];
@@ -16,7 +16,7 @@ format cl {
             }
         }
       };
-  h : array (len) {
+  h2 : array (len) {
           k : byte[len2]
       }
 }
