@@ -46,9 +46,10 @@ type path =
   | Tvar_ident of Ident.t
   | Tvar_path of Ident.t * path
 
-type exp =
-    { exp_desc: exp_desc;
-      exp_loc: Location.t }
+type exp = {
+  exp_desc: exp_desc;
+  exp_loc: Location.t;
+}
 
 and exp_desc =
   | Texp_unit
@@ -69,15 +70,17 @@ type base_type =
 
 val max_bit_vector_length: int
 
-type variant =
-    { variant_desc: variant_desc;
-      variant_loc: Location.t }
+type variant = {
+  variant_desc: variant_desc;
+  variant_loc: Location.t;
+}
 
 and variant_desc = (exp * Asttypes.case_name * Asttypes.default) list
 
-type case_exp =
-    { case_exp_desc: case_exp_desc;
-      case_exp_loc: Location.t }
+type case_exp = {
+  case_exp_desc: case_exp_desc;
+  case_exp_loc: Location.t;
+}
 
 and case_exp_desc =
   | Tcase_const of exp
@@ -87,42 +90,47 @@ and case_exp_desc =
 
 module StringMap: Map.S with type key = string
 
-type branch =
-    { pattern: pattern;
-      branch_info: branch_info }
+type branch = {
+  pattern: pattern;
+  branch_info: branch_info;
+}
 
 and pattern =
   | Pt_constructor of Asttypes.case_name * struct_pattern
   | Pt_any
 
-and branch_info =
-    { classify_field: Ident.t;
-      branch_field: Ident.t;
-      branch_map: map_type }
+and branch_info = {
+  classify_field: Ident.t;
+  branch_field: Ident.t;
+  branch_map: map_type;
+}
 
 and struct_pattern =
   | Pt_struct of branch list
 
-and branch_value =
-    { struct_pattern: struct_pattern;
-      value: exp }
+and branch_value = {
+  struct_pattern: struct_pattern;
+  value: exp;
+}
 
-and field_value =
-    { field_value_desc: field_value_desc;
-      field_value_loc: Location.t }
+and field_value = {
+  field_value_desc: field_value_desc;
+  field_value_loc: Location.t;
+}
 
 and field_value_desc =
   | Tvalue_auto
   | Tvalue_default of exp
   | Tvalue_branch of branch_value
 
-and field_attribs =
-    { field_attrib_max: (exp * Location.t) option;
-      field_attrib_min: (exp * Location.t) option;
-      field_attrib_const: (exp * Location.t) option;
-      field_attrib_default: (exp * Location.t) option;
-      field_attrib_value: ((field_value list) * Location.t) option;
-      field_attrib_variant: (variant * Location.t) option }
+and field_attribs = {
+  field_attrib_max: (exp * Location.t) option;
+  field_attrib_min: (exp * Location.t) option;
+  field_attrib_const: (exp * Location.t) option;
+  field_attrib_default: (exp * Location.t) option;
+  field_attrib_value: ((field_value list) * Location.t) option;
+  field_attrib_variant: (variant * Location.t) option;
+}
 
 and field_type =
   | Ttype_base of base_type
@@ -132,9 +140,10 @@ and field_type =
   | Ttype_label
   | Ttype_format of Asttypes.format_name
 
-and field_entry =
-    { field_entry_desc: field_entry_desc;
-      field_entry_loc: Location.t }
+and field_entry = {
+  field_entry_desc: field_entry_desc;
+  field_entry_loc: Location.t;
+}
 
 and field_info = field_type * field_attribs
 
@@ -146,17 +155,19 @@ and field_entry_desc =
 (* the struct type embeds the environment in which the field
    identifiers are defined.
 *)
-and struct_type =
-    { entries: field_entry list;
-      fields: field_info Ident.env;
-      classify_fields: branch_info list;
-      struct_type_loc: Location.t }
+and struct_type = {
+  entries: field_entry list;
+  fields: field_info Ident.env;
+  classify_fields: branch_info list;
+  struct_type_loc: Location.t;
+}
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 
-and map_type =
-    { map_type_desc: map_type_desc;
-      map_type_loc: Location.t }
+and map_type = {
+  map_type_desc: map_type_desc;
+  map_type_loc: Location.t;
+}
 
 and map_type_desc = map_entry StringMap.t
 
@@ -188,15 +199,17 @@ val path_location_of: path -> Location.t
 
 val is_const_exp: exp -> bool
 
-type exp_paths =
-    { offset_paths: path list;
-      normal_paths: path list }
+type exp_paths = {
+  offset_paths: path list;
+  normal_paths: path list;
+}
 val exp_paths_empty: exp_paths
 val exp_paths_of_exp: exp -> exp_paths
 
-type exp_vars =
-    { offset_vars: Ident.t list;
-      normal_vars: Ident.t list }
+type exp_vars = {
+  offset_vars: Ident.t list;
+  normal_vars: Ident.t list;
+}
 val exp_vars_empty: exp_vars
 val exp_vars_of_exp: exp -> exp_vars
 val exp_vars_join: exp_vars -> exp_vars -> exp_vars

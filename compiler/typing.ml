@@ -386,7 +386,7 @@ let const_fold_as_base_type env exp bt id loc =
           Texp_const_int64 (const_fold_as_int64 env exp)
   in
     { exp_desc = e;
-      exp_loc = exp.pexp_loc }
+      exp_loc  = exp.pexp_loc }
 
 
 (* This is used to typecheck expressions in two contexts:
@@ -439,8 +439,10 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
                 check_exp_type_equal frt as_exp_type exp.pexp_loc;
                 Texp_apply (fid, targlist)
   in
-    { exp_desc = exp_typer exp;
-      exp_loc = exp.pexp_loc }
+    {
+      exp_desc = exp_typer exp;
+      exp_loc  = exp.pexp_loc;
+    }
 
 (* This is used to typecheck expressions in the following contexts:
    . value expressions,
@@ -488,8 +490,10 @@ let type_check_exp_as_base_type env exp as_base_type =
                   (Ttype_base as_base_type) frt exp.pexp_loc;
                 Texp_apply (fid, targlist)
   in
-    { exp_desc = exp_typer exp;
-      exp_loc = exp.pexp_loc }
+    {
+      exp_desc = exp_typer exp;
+      exp_loc  = exp.pexp_loc;
+    }
 
 
 (* This implements a variant checker that is used for both top-level
@@ -562,8 +566,10 @@ let kinding env cur_align te =
                 else if is_bit_type && len > Types.max_bit_vector_length then
                   raise_bit_vector_length_limit len Types.max_bit_vector_length e.pexp_loc
                 else
-                  { exp_desc = Texp_const_int len;
-                    exp_loc = e'.exp_loc } in
+                  {
+                    exp_desc = Texp_const_int len;
+                    exp_loc  = e'.exp_loc
+                  } in
         let _, (pt, _) = lookup_typename env tn in
         let next_align =
           if is_bit_type
@@ -604,13 +610,17 @@ let type_check_variant_attrib env f bt v =
         | Tprim_int32 -> Texp_const_int32 (const_fold_as_int32 env vc)
         | Tprim_uint32 -> Texp_const_uint32 (const_fold_as_uint32 env vc)
         | Tprim_int64 -> Texp_const_int64 (const_fold_as_int64 env vc) in
-      { exp_desc = ced;
-        exp_loc = vc.pexp_loc } in
+      {
+        exp_desc = ced;
+        exp_loc  = vc.pexp_loc;
+      } in
   let vd =
     List.map (fun (e, cn, d) -> (cfold e), cn, d) v.pvariant_desc
   in
-    { variant_desc = vd;
-      variant_loc = v.pvariant_loc }
+    {
+      variant_desc = vd;
+      variant_loc  = v.pvariant_loc;
+    }
 
 let extend_env_with_branch_paths env bgl =
   let extend_with_branch e bg =
@@ -665,13 +675,17 @@ and br_pattern bi cases =
   in
     match cases with
       | [] ->
-          { pattern = Pt_any;
-            branch_info = bi }
+          {
+            pattern = Pt_any;
+            branch_info = bi;
+          }
       | (Tvar_ident fid, cn, st) :: tl ->
           (* The filter in the st_pattern caller should ensure this. *)
           assert (bi.classify_field = fid);
-          { pattern = Pt_constructor (cn, st_pattern (strip_path tl) st.classify_fields);
-            branch_info = bi }
+          {
+            pattern = Pt_constructor (cn, st_pattern (strip_path tl) st.classify_fields);
+            branch_info = bi;
+          }
       | (Tvar_path _, _, _) :: _ ->
           (* The leading case should refer to a local field ident, not
              a nested one.  Otherwise, typechecking should have
@@ -703,11 +717,15 @@ let type_check_value_attrib env f bt vcl classify_fields branch_fields =
             let ext_env = extend_env_with_branch_paths env bgl in
             let te = type_check_exp_as_base_type ext_env e bt in
             let cases_info = Env.get_paths ext_env in
-            let b = { struct_pattern = st_pattern cases_info classify_fields;
-                      value = te } in
+            let b = {
+              struct_pattern = st_pattern cases_info classify_fields;
+              value = te;
+            } in
               Tvalue_branch b in
-      { field_value_desc = fvd;
-        field_value_loc = vc.pvalue_case_loc } in
+      {
+        field_value_desc = fvd;
+        field_value_loc  = vc.pvalue_case_loc;
+      } in
   let fvl = List.map typer vcl in
   let last_vc = List.hd (List.rev vcl) in
     (* Check that if a default was present, it was the last case
@@ -774,41 +792,48 @@ let type_attribs env f ft fal classify_fields branch_fields =
                  ignore (type_check_exp_as_base_type env e bt);
                  let te = const_fold_as_base_type env e bt f fa.pfield_attrib_loc in
                    { tas with
-                       field_attrib_max = Some (te, fa.pfield_attrib_loc) }
+                       field_attrib_max = Some (te, fa.pfield_attrib_loc);
+                   }
              | Pattrib_min e, Ttype_base bt ->
                  check_and_mark_present "min" min_present fa.pfield_attrib_loc;
                  ignore (type_check_exp_as_base_type env e bt);
                  let te = const_fold_as_base_type env e bt f fa.pfield_attrib_loc in
                    { tas with
-                       field_attrib_min = Some (te, fa.pfield_attrib_loc) }
+                       field_attrib_min = Some (te, fa.pfield_attrib_loc);
+                   }
              | Pattrib_const e, Ttype_base bt ->
                  check_and_mark_present "const" const_present fa.pfield_attrib_loc;
                  ignore (type_check_exp_as_base_type env e bt);
                  let te = const_fold_as_base_type env e bt f fa.pfield_attrib_loc in
                    { tas with
-                       field_attrib_const = Some (te, fa.pfield_attrib_loc) }
+                       field_attrib_const = Some (te, fa.pfield_attrib_loc);
+                   }
              | Pattrib_default e, Ttype_base bt ->
                  check_and_mark_present "default" default_present fa.pfield_attrib_loc;
                  let te = type_check_exp_as_base_type env e bt in
                    { tas with
-                       field_attrib_default = Some (te, fa.pfield_attrib_loc) }
+                       field_attrib_default = Some (te, fa.pfield_attrib_loc);
+                   }
              | Pattrib_value vcl, Ttype_base bt ->
                  check_and_mark_present "value" value_present fa.pfield_attrib_loc;
                  let te = type_check_value_attrib env f bt vcl classify_fields branch_fields in
                    { tas with
-                       field_attrib_value = Some (te,  fa.pfield_attrib_loc) }
+                       field_attrib_value = Some (te,  fa.pfield_attrib_loc);
+                   }
              | Pattrib_variant_ref vn, Ttype_base bt ->
                  check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                  let _, vdef = get_variant_def env vn in
                  let tv = type_check_variant_attrib env f bt vdef in
                    { tas with
-                       field_attrib_variant = Some (tv, fa.pfield_attrib_loc) }
+                       field_attrib_variant = Some (tv, fa.pfield_attrib_loc);
+                   }
              | Pattrib_variant_inline vdef, Ttype_base bt ->
                  check_and_mark_present "variant" variant_present fa.pfield_attrib_loc;
                  check_variant_def vdef.pvariant_desc;
                  let tv = type_check_variant_attrib env f bt vdef in
                    { tas with
-                       field_attrib_variant = Some (tv, fa.pfield_attrib_loc) }
+                       field_attrib_variant = Some (tv, fa.pfield_attrib_loc);
+                   }
              | _ ->
                  raise_invalid_attribute f fa.pfield_attrib_loc
       ) null_field_attribs fal
@@ -914,8 +939,10 @@ let rec type_field (env, cur_align, fl) f =
                                  Tcase_range (tl, tr) in
                          let tce =
                            check_case_is_non_overlapping (tce, ce.pcase_exp_loc) a;
-                           { case_exp_desc = tce;
-                             case_exp_loc = ce.pcase_exp_loc } in
+                           {
+                             case_exp_desc = tce;
+                             case_exp_loc = ce.pcase_exp_loc;
+                           } in
                          let tfmt = type_format env fmt in
                            (cnm, (cn, tce, tfmt)) :: a
                     ) [] cl in
@@ -923,8 +950,10 @@ let rec type_field (env, cur_align, fl) f =
                   List.fold_left
                     (fun m (nm, (cn, te, tfmt)) -> StringMap.add nm (cn, te, tfmt) m)
                     StringMap.empty tcl in
-                let m = { map_type_desc = m;
-                          map_type_loc = ft.pfield_type_loc } in
+                let m = {
+                  map_type_desc = m;
+                  map_type_loc = ft.pfield_type_loc;
+                } in
                 let e = Env.add_field fi (Ttype_map (eid, m)) env in
                   e, 0, (Field (f.pfield_loc, fi, [])) :: fl
 
@@ -964,9 +993,11 @@ and type_format env fmt =
            | Field (_, id, _) ->
                match lookup_type id venv with
                  | Ttype_map (bid, mt) ->
-                     { classify_field = id;
+                     {
+                       classify_field = id;
                        branch_field = bid;
-                       branch_map = mt } :: cfields,
+                       branch_map = mt;
+                     } :: cfields,
                      bid :: bfields
                  | _ -> fields
       ) ([], []) fl in
@@ -983,17 +1014,22 @@ and type_format env fmt =
                  in
                    loc, Tfield_name (id, (ft, tal)), (Ident.add id (ft, tal) fields)
          in
-           { field_entry_desc = ent; field_entry_loc = loc } :: entries, fields'
+           {
+             field_entry_desc = ent;
+             field_entry_loc = loc;
+           } :: entries, fields'
       ) ([], Ident.empty_env) fl in
   let ext_env, align, fl = type_fields () in
   let _ = check_align align in
   let venv = get_value_env ext_env fl in
   let cfields, bfields = get_classify_fields venv fl in
   let entries, fields = get_field_entries venv fl cfields bfields in
-    { entries = entries;
+    {
+      entries = entries;
       fields = fields;
       classify_fields = cfields;
-      struct_type_loc = fmt.pformat_loc }
+      struct_type_loc = fmt.pformat_loc;
+    }
 
 (* Type-checker top-level *)
 

@@ -55,9 +55,10 @@ open Types
      'generate' or parse the field.  For e.g., variables used in the
      length expression for an array-valued field.
 *)
-type dep_var_info =
-    { internal: exp_vars;
-      generators: exp_vars }
+type dep_var_info = {
+  internal: exp_vars;
+  generators: exp_vars;
+}
 
 (* Paths are from one field to another, possibly nested, field within
    the same struct.  The nesting may be within in an array or a
@@ -135,33 +136,35 @@ let make_dpath id ctxt_stack =
    As an optimization, since we are doing a deep traversal anyway, we
    also collect dependency variable information in the same pass.
 *)
-type dependency =
-    { field_path: dpath;
-      field_type: field_type;
-      field_attribs: field_attribs;
-      (* controlled by usage in remote fields *)
-      length_of: dpath list;
-      branch_of: dpath list;
-      in_length_of: dpath list;
-      (* generator and internal fields *)
-      dep_vars: dep_var_info;
-      (* analysis result for various phases *)
-      mutable autocompute: bool
-    }
+type dependency = {
+  field_path: dpath;
+  field_type: field_type;
+  field_attribs: field_attribs;
+  (* controlled by usage in remote fields *)
+  length_of: dpath list;
+  branch_of: dpath list;
+  in_length_of: dpath list;
+  (* generator and internal fields *)
+  dep_vars: dep_var_info;
+  (* analysis result for various phases *)
+  mutable autocompute: bool;
+}
 
 type dep_info = dependency Ident.env
 
-let make_dep id ft fas ctxt =
-  { field_path    = make_dpath id ctxt;
-    field_type    = ft;
-    field_attribs = fas;
-    length_of     = [];
-    branch_of     = [];
-    in_length_of  = [];
-    dep_vars      = { internal   = exp_vars_empty;
-                      generators = exp_vars_empty };
-    autocompute   = false
-  }
+let make_dep id ft fas ctxt = {
+  field_path    = make_dpath id ctxt;
+  field_type    = ft;
+  field_attribs = fas;
+  length_of     = [];
+  branch_of     = [];
+  in_length_of  = [];
+  dep_vars      = {
+    internal    = exp_vars_empty;
+    generators  = exp_vars_empty;
+  };
+  autocompute   = false
+}
 
 let can_autocompute = function
   | { field_type = ft }
@@ -207,7 +210,7 @@ let generate_depinfo fmt =
                       | VC_internal  -> { dep.dep_vars with
                                             internal = exp_vars_join vars dep.dep_vars.internal }
                       | VC_generator -> { dep.dep_vars with
-                                            generators = exp_vars_join vars dep.dep_vars.generators })
+                                            generators = exp_vars_join vars dep.dep_vars.generators });
     } in
   let add_dep_vars vars in_context of_id deps =
     let dep = lookup_dep deps of_id in
@@ -247,7 +250,8 @@ let generate_depinfo fmt =
       let dep = (if List.mem branch_of dep.branch_of
                  then dep
                  else { dep with
-                          branch_of = branch_of :: dep.branch_of }) in
+                          branch_of = branch_of :: dep.branch_of;
+                      }) in
         store_dep bid dep deps in
     let deps = update_branch_of bid deps in
     let evars = { exp_vars_empty with normal_vars = [ bid ] } in

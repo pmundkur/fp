@@ -20,18 +20,19 @@
 (**************************************************************************)
 
 module Node = struct
-  type 'a t =
-      { elem: 'a;
-        mark: bool;
-        children: 'a list;
-        parents: 'a list
-      }
+  type 'a t = {
+    elem: 'a;
+    mark: bool;
+    children: 'a list;
+    parents: 'a list
+  }
 
-  let make_node elem mark =
-    { elem     = elem;
-      mark     = mark;
-      children = [];
-      parents  = [] }
+  let make_node elem mark = {
+    elem     = elem;
+    mark     = mark;
+    children = [];
+    parents  = [];
+  }
 
   let get_elem v = v.elem
   let get_children v = v.children
@@ -40,12 +41,10 @@ module Node = struct
 
   let add_child v c =
     if List.mem c v.children then v
-    else { v with
-             children = c :: v.children }
+    else { v with children = c :: v.children }
   let add_parent v p =
     if List.mem p v.parents then v
-    else { v with
-             parents = p :: v.parents }
+    else { v with parents = p :: v.parents }
 
   let is_root v = v.parents = []
   let is_leaf v = v.children = []

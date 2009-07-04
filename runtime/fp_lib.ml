@@ -124,7 +124,8 @@ module Env = struct
       raise (Insufficient_data "Env.vector_at");
     { env with
         vstart = env.vstart + offset;
-        vlen = len }
+        vlen = len;
+    }
 
   let set_vector_at env offset src =
     let src_len = String.length src in
@@ -152,7 +153,8 @@ module Env = struct
     end;
     { env with
         vstart = env.vstart + len;
-        vlen = env.vlen - len }
+        vlen = env.vlen - len;
+    }
 
   let bit_at env bit_offset =
     if bit_offset < 0 then
@@ -196,7 +198,8 @@ module Env = struct
           vstart = env.vstart + offs_bytes;
           start_bit = offs_bits;
           vlen = len_bytes + 1;
-          end_bit = len_bits }
+          end_bit = len_bits;
+      }
 
   (* Byte-wise bitblit.  A good candidate for rewrite in C, and for
      unrolling word-blits.  The source and dest buffers could be
@@ -257,7 +260,8 @@ module Env = struct
       { env with
           vstart = env.vstart + skipped_bytes;
           vlen = env.vlen - skipped_bytes;
-          start_bit = skipped_bits }
+          start_bit = skipped_bits;
+      }
 
   let num_set_bits env =
     if not (is_valid env) then
@@ -286,7 +290,8 @@ module Env = struct
         { env with
             start_bit = 0;
             vstart = env.vstart + 1;
-            vlen = env.vlen - 1 }
+            vlen = env.vlen - 1;
+        }
       else
         env
     in
@@ -295,7 +300,8 @@ module Env = struct
     let aligned_env =
       { byte_aligned_env with
           vstart = byte_aligned_env.vstart + shift;
-          vlen = byte_aligned_env.vlen - shift }
+          vlen = byte_aligned_env.vlen - shift;
+      }
     in
       if not (is_valid aligned_env) then
         raise (Invalid_op "Env.align_start");
@@ -310,7 +316,8 @@ module Env = struct
     let aligned_env =
       { env with
           vlen = env.vlen + shift;
-          end_bit = 7 }
+          end_bit = 7;
+      }
     in
       if not (is_valid aligned_env) then
         raise (Invalid_op "Env.align_start");
@@ -323,7 +330,8 @@ module Env = struct
       raise (Insufficient_data "Env.sub");
     { env with
         vstart = env.vstart + offset;
-        vlen = len }
+        vlen = len;
+    }
 
   let bit_sub env offset len =
     if offset < 0 || len < 0 then
@@ -340,7 +348,8 @@ module Env = struct
           vstart = env.vstart + start_skipped_bytes;
           start_bit = new_start_bit;
           vlen = len_skipped_bytes + 1;
-          end_bit = new_end_bit }
+          end_bit = new_end_bit;
+      }
 
   let read_raw env offset len =
     if offset < 0 || len < 0 then

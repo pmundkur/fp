@@ -19,18 +19,21 @@
 (*  <http://www.gnu.org/licenses/>.                                       *)
 (**************************************************************************)
 
-type t =
-    { name: string;
-      stamp: int;
-      loc: Location.t }
+type t = {
+  name: string;
+  stamp: int;
+  loc: Location.t;
+}
 
 let cur_stamp = ref 0
 
 let from_string name loc =
   incr cur_stamp;
-  { name  = name;
+  {
+    name  = name;
     stamp = !cur_stamp;
-    loc   = loc }
+    loc   = loc;
+  }
 
 let from_node n =
   from_string (Location.node_of n) (Location.location_of n)
