@@ -257,7 +257,9 @@ let close_output (oc, ff) =
   close_out oc
 
 let generate_header ff =
-  let invok = String.concat " " (Array.to_list Sys.argv) in
+  let argv = Array.to_list Sys.argv in
+  let argv = (Filename.basename (List.hd argv)) :: (List.tl argv) in
+  let invok = String.concat " " argv in
     fprintf ff "(* This file has been auto-generated using \"%s\". *)@\n@\n" invok
 
 let generate_opens ff =
