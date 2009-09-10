@@ -27,6 +27,8 @@ metavar alignment, current_alignment    ::= {{ lex alphanum }} {{ com Alignment 
 
 metavar value, v                        ::= {{ lex numeral }}  {{ com Constant values }}
 
+metavar target_variable, tv             ::= {{ lex alphanum }} {{ com Target variable }}
+
 indexvar index, j, k                    ::= {{ lex numeral }}  {{ com Indices }}
 
 grammar
@@ -38,8 +40,8 @@ kind, K :: '' ::=                               {{ com Kinds }}
 
  % Sigma below refers to expression values, so that vectors and arrays
  % are dependent types.
- | Sigma -> T                       ::  :: vectors      {{ com Vector types }}  {{ tex \sigma\rightarrow [[T]] }}
- | Sigma -> Struct                  ::  :: array        {{ com Array types }}   {{ tex \sigma\rightarrow [[Struct]] }}
+ | Sigma -> T               ::  :: vectors      {{ com Vector types }}  {{ tex \sigma\rightarrow [[T]] }}
+ | Sigma -> Struct          ::  :: array        {{ com Array types }}   {{ tex \sigma\rightarrow [[Struct]] }}
 
  % A map arises from the classify construct, and actually should be
  % dependently-typed like vectors and arrays, but we simplify it by
@@ -65,17 +67,17 @@ base, b :: '' ::=                               {{ com Base types }}
 % slight extension of these expressions will be used to specify value
 % specifications.
 exp, e :: '' ::=                                {{ com Expressions }}
- | integer_literal          ::  :: integer
- | x                        ::  :: field_ref
- | e1 + e2                  ::  :: addition
- | e1 - e2                  ::  :: subtraction
- | e1 * e2                  ::  :: multiplication
- | e1 / e2                  ::  :: division
- | ( e )                    ::  :: grouping
- | sizeof x                 ::  :: sizeof
- | offset x                 ::  :: offset
- | num_set_bits x           ::  :: num_set_bits
- | remaining ()             ::  :: remaining
+ | integer_literal          ::   :: integer
+ | x                        ::   :: field_ref
+ | e1 + e2                  ::   :: addition
+ | e1 - e2                  ::   :: subtraction
+ | e1 * e2                  ::   :: multiplication
+ | e1 / e2                  ::   :: division
+ | ( e )                    :: S :: grouping
+ | sizeof x                 ::   :: sizeof
+ | offset x                 ::   :: offset
+ | num_set_bits x           ::   :: num_set_bits
+ | remaining ()             ::   :: remaining
 
 % Path expressions.
 %
@@ -138,11 +140,9 @@ cases :: '' ::=                                 {{ com Classification trees }}
 % Value declarations.
 %
 % The value declarations are unordered, so we use a list form.  This
-% ensures that we use the same environment for each decl.  I think Ott
-% had issues with the way I attempted it using the dot form, so we
-% just resort to the comprehension form instead.
+% ensures that we use the same environment for each decl.
 VD :: '' ::=                                    {{ com Value declarations }}
- | </ Vj // j />            ::  :: value_decls
+ | V1 .. Vj                 ::  :: value_decls
 
 % A field value declaration.
 V :: '' ::=                                     {{ com Field value specification }}
@@ -153,7 +153,7 @@ V :: '' ::=                                     {{ com Field value specification
 % A value can be specified for each branch of a classification tree,
 % using a case per branch.
 value_cases, vcs :: '' ::=                      {{ com Value cases }}
- | </ value_casej // j />   ::  :: value_cases
+ | vc1 .. vcj               ::  :: value_cases
 
 % A field value case.
 %
@@ -206,7 +206,7 @@ E :: '' ::=                                     {{ com Typing environments }}
 % a Map.
 C :: '' ::=
  |                          ::  :: class_env_nil
- | path : tau            ::  :: class_env_cons
+ | path : tau               ::  :: class_env_cons
  | C1 ; C2                  ::  :: class_env_append
 
 % Sets containing field and label names.
@@ -214,8 +214,8 @@ C :: '' ::=
 % These sets are usually used to ensure uniqueness of names, or to
 % ensure the use of known names.
 S, L :: '' ::=                                  {{ com Label and name sets }}
- | Empty                     ::  :: nil         {{ com Empty set }}             {{ tex \empty }}
- | S + x                     ::  :: set_union   {{ com Set union }}             {{ tex [[S]] \cup {[[x]]} }}
+ | Empty                    ::  :: nil          {{ com Empty set }} {{ tex \empty }}
+ | S + x                    ::  :: set_union    {{ com Set union }} {{ tex [[S]] \cup {[[x]]} }}
 
 % Alignment expressions.
 align_expr, a :: '' ::=                         {{ com Alignment expressions }}
@@ -228,11 +228,11 @@ align_expr, a :: '' ::=                         {{ com Alignment expressions }}
  % The ( exp ) production is purely a mechanism for the benefit of
  % Ott, to inject expressions as alignments without causing Ott any
  % heartburn.
- | ( exp )                  ::  :: align_exp
+ | ( exp )                  :: S :: align_exp
 
  % const_fold is a function that is defined when exp can be
  % constant-folded into a constant, and is not defined otherwise.
- | const_fold ( exp )       ::  :: align_const_fold
+ | const_fold ( exp )       ::   :: align_const_fold
 
 
 % Additional syntax for premises in inference rules.  See the Ott
@@ -241,6 +241,7 @@ formula :: formula_ ::=
  | judgement                    ::  :: judgement
  | </ formulaj // j />          ::  :: formula_list
  | E ; x : tau ; E'             ::  :: env
+ | TE ; tv : tt ; TE'           ::  :: target_env
  | x in S                       ::  :: in_S             {{ tex [[x]]\not\in [[S]] }}
  | x not in S                   ::  :: not_in_S         {{ tex [[x]]\not\in [[S]] }}
  | E ( x ) = label              ::  :: label_in_E
@@ -695,3 +696,142 @@ E , C |- num_set_bits path : int
 % For other forms of value expressions, we merely repeat the
 % expression typing rules, with the addition of C as a component of
 % the environment.  We avoid repeating these rules here.
+
+
+
+% The following rules are an attempt to formalize the code-generation
+% algorithm for the parsing facet.  The outline for this is as follows:
+%
+% . The grammar for the source-terms is restricted to structs, since
+%   they form the top-level definitions in the input specification,
+%   and the base and vectors types (i.e. b and b[e] above) are
+%   largely handled by the runtime library.
+%
+% . A grammar for the target language is defined.  For simplicity:
+%     . the types in this target language will include as primitives
+%       the encodings used by the runtime library to represent the
+%       base and vector types.
+%     . the target language will include calls to the runtime
+%       library as primitive expressions
+%
+% . The code-generation will be inductively specified as translation
+%   relations between the source and target expressions and types.
+%
+% Thus, the target language will actually be a form of intermediate
+% representation (IR) for the source specification.  The intention is
+% that this IR be low-level enough to make code-generation into the
+% final host language relatively simple, as well as high-level enough
+% to abstract multiple possible host languages.
+%
+% The use of an IR also should help the development of an interpreter
+% mode for the compiler, where the IR is interpreted directly instead
+% of being used as an input for the code-generator.
+
+grammar
+
+% As mentioned, the source language only contains struct terms.
+
+source_term, stm :: 'source_' ::=               {{ com Source terms }}
+ | struct { D }             ::  :: struct
+
+% The monomorphic type system of the target language.  The
+% representation types are distinguished, to ease typing; they are the
+% ones implemented in the runtime library of the host language.
+
+target_type, tt :: 'target_' ::=                {{ com Target types }}
+ | byte                     ::  :: byte
+ | int                      ::  :: int
+ | context                  ::  :: context
+ | field                    ::  :: field_name
+ | target_rep               ::  :: rep_type
+
+target_rep, tt_rep :: 'target_rep_' ::=         {{ com Target representations of source types }}
+ | tt_base                  ::  :: base_type
+ | tt_struct                ::  :: struct
+ | tt_map                   ::  :: map
+
+tt_base, tb :: 'target_base_rep_' ::=          {{ com Base representation types }}
+ | tt_primitive             ::  :: primitive
+ | T_vector tt_primitive    ::  :: vector
+
+tt_primitive, tp :: 'target_primitive_rep_' ::= {{ com Primitive representation types }}
+ | T_bit
+ | T_byte                   ::  :: byte
+ | T_int16                  ::  :: int16
+ | T_int32                  ::  :: int32
+ | T_int64                  ::  :: int64
+
+tt_struct, ts :: 'target_struct_' ::=           {{ com Target struct types }}
+ | { x1 : tt_rep1 .. xj : tt_repj }     :: :: struct
+
+tt_map, tm :: 'target_map_' ::=
+ | { n1 ts1 .. nj tsj }     ::  :: constructor
+
+% The expressions of the target language.  As mentioned, it is at a
+% level where calls to the runtime library and struct constructors are
+% made explicit.
+
+target_expr, te :: 'target_expr_' ::= {{ com Target expressions }}
+ | integer_literal          ::  :: integer
+ | tv                       ::  :: variable
+ | te1 + te2                ::  :: addition
+ | te1 - te2                ::  :: subtraction
+ | te1 * te2                ::  :: multiplication
+ | te1 / te2                ::  :: division
+ | te1 , te2                ::  :: tuples
+
+% language constructs
+ | let pat = te1 in te2     ::  :: let_binding
+ | lambda ( tv : tt ) te    ::  :: lambda
+ | te1 te2                  ::  :: application
+
+% high-level / runtime library operations
+ | bit_sizeof tb                  ::  :: bit_sizeof
+ | byte_sizeof tt_rep             ::  :: byte_sizeof
+ | offset te1 te2                 ::  :: offset
+ | remaining tv                   ::  :: remaining
+ | to_native te tb                ::  :: type_convert
+ | base_parse tb tv               ::  :: base_parser
+ | base_vector_parse tb tv1 tv2   ::  :: vector_parser
+ | make_struct x field_bindings   ::  :: struct_constructor
+ | array_parse tt_rep tv1 tv2     ::  :: array_parser
+
+t_pat, pat :: 't_pattern_' ::= {{ com Target pattern expressions }}
+ | tv                       ::  :: variable
+ | tv , pat                 ::  :: tuple
+
+field_binding, fb :: 't_binding_' ::=           {{ com Field binding }}
+ | x : tt_rep               ::  :: binding
+
+field_bindings, fbs :: 't_bindings_' ::=        {{ com Field bindings }}
+ | ( fb1 .. fbk )           ::  :: bindings
+
+
+% The typing environment.
+TE :: 'target_' ::=                             {{ com Target typing environment }}
+ |                          ::  :: env_nil
+ | tv : tt                  ::  :: env_cons
+ | TE1 ; TE2                ::  :: env_append
+ | TE1 \ TE2                ::  :: env_subtract
+
+
+defns
+Target_type_checking :: '' ::=
+
+% Type environment lookup for target variables.
+defn
+TE ( tv ) = tt    ::  :: target_type_context :: 'target_type_context_' by
+
+TE1 ; tv : tt ; TE2
+--------------------------  :: var
+TE (tv ) = tt
+
+% Type environment lookup for source fields.
+defn
+E ( x ) = tau    ::  :: source_type_context :: 'source_type_context_' by
+
+E1 ; x : tau ; E2
+--------------------------  :: var
+E ( x ) = tau
+
+% Translation of source types to target types
