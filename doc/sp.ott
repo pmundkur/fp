@@ -75,6 +75,7 @@ exp, e :: '' ::=                                {{ com Expressions }}
  | e1 / e2                  ::   :: division
  | ( e )                    :: S :: grouping
  | sizeof x                 ::   :: sizeof
+ | length x                 ::   :: length
  | offset x                 ::   :: offset
  | num_set_bits x           ::   :: num_set_bits
  | remaining ()             ::   :: remaining
@@ -185,6 +186,7 @@ value_exp, ve :: '' ::=                         {{ com Value expressions }}
  | e                        ::  :: expr
  | path                     ::  :: qualified_field
  | sizeof path              ::  :: path_sizeof
+ | length path              ::  :: path_length
  | offset path              ::  :: path_offset
  | num_set_bits path        ::  :: path_num_set_bits
 
@@ -242,6 +244,7 @@ formula :: formula_ ::=
  | </ formulaj // j />          ::  :: formula_list
  | E ; x : tau ; E'             ::  :: env
  | TE ; tv : tt ; TE'           ::  :: target_env
+ | FM ; x : tv ; FM'            ::  :: field_env
  | x in S                       ::  :: in_S             {{ tex [[x]]\not\in [[S]] }}
  | x not in S                   ::  :: not_in_S         {{ tex [[x]]\not\in [[S]] }}
  | E ( x ) = label              ::  :: label_in_E
@@ -359,9 +362,13 @@ E |- e : int
 --------------------------  :: grouping
 E |- (e) : int
 
-E ( x ) = tau
+E ( x ) = base
 --------------------------  :: sizeof
 E |- sizeof x  : int
+
+E ( x ) = base [ e ]
+--------------------------  :: length
+E |- length x  : int
 
 E ( x ) = tau
 --------------------------  :: offset
@@ -685,6 +692,10 @@ E , C |- path : tau
 --------------------------  :: sizeof
 E , C |- sizeof path : int
 
+E , C |- path : b [ e ]
+--------------------------  :: length
+E , C |- length path : int
+
 E , C |- path : tau
 --------------------------  :: offset
 E , C |- offset path : int
@@ -745,7 +756,7 @@ target_type, tt :: 'target_' ::=                {{ com Target types }}
  | field                    ::  :: field_name
  | target_rep               ::  :: rep_type
 
-target_rep, tr, tr' :: 'target_rep_' ::=         {{ com Target representations of source types }}
+target_rep, tr, tr' :: 'target_rep_' ::=        {{ com Target representations of source types }}
  | tt_base                  ::  :: base_type
  | tt_struct                ::  :: struct
  | tt_array tt_struct       ::  :: array
@@ -773,48 +784,66 @@ tt_map, tm :: 'target_map_' ::=
 % made explicit.
 
 target_expr, te :: 'target_expr_' ::= {{ com Target expressions }}
- | integer_literal          ::  :: integer
- | tv                       ::  :: variable
- | te1 + te2                ::  :: addition
- | te1 - te2                ::  :: subtraction
- | te1 * te2                ::  :: multiplication
- | te1 / te2                ::  :: division
- | te1 , te2                ::  :: tuples
+ | integer_literal          ::   :: integer
+ | tv                       ::   :: variable
+
+ % These are special variables that contain the current parsing
+ % context, and the context at the start of parsing the current
+ % struct.  The current_context variable is a temporary hack to
+ % support the IntCompile relation
+ | current_context          ::   :: current_context
+ | start_context            ::   :: context_at_struct_start
+
+ | te1 + te2                ::   :: addition
+ | te1 - te2                ::   :: subtraction
+ | te1 * te2                ::   :: multiplication
+ | te1 / te2                ::   :: division
+ | te1 , te2                ::   :: tuples
+ | ( te )                   :: S :: grouping
 
  % language constructs
- | let pat = te1 in te2     ::  :: let_binding
- | lambda ( tv : tt ) te    ::  :: lambda
- | te1 te2                  ::  :: application
+ | let pat = te1 in te2     ::   :: let_binding
+ | lambda ( tv : tt ) te    ::   :: lambda
+ | te1 te2                  ::   :: application
 
  % high-level / runtime library operations
- | bit_sizeof tb                  ::  :: bit_sizeof
- | byte_sizeof tr                 ::  :: byte_sizeof
- | offset te1 te2                 ::  :: offset
- | remaining tv                   ::  :: remaining
- | to_native te tb                ::  :: type_convert
- | base_parse tb tv               ::  :: base_parser
- | base_vector_parse tb tv1 tv2   ::  :: vector_parser
- | make_struct x field_bindings   ::  :: struct_constructor
- | array_parse tr tv1 tv2         ::  :: array_parser
+ | align tv i                     ::   :: alignment
+ | sizeof tb                      ::   :: sizeof
+ | length tv                      ::   :: length
+ | offset te1 te2                 ::   :: offset
+ | remaining tv                   ::   :: remaining
+ | to_int tp te                   ::   :: int_convert
+ | base_parse tb tv               ::   :: base_parser
+ | base_vector_parse tb tv1 tv2   ::   :: vector_parser
+ | make_struct x field_bindings   ::   :: struct_constructor
+ | array_parse tr tv1 tv2         ::   :: array_parser
 
 t_pat, pat :: 't_pattern_' ::= {{ com Target pattern expressions }}
- | tv                       ::  :: variable
- | tv , pat                 ::  :: tuple
+ | tv                       ::   :: variable
+ | tv , pat                 ::   :: tuple
 
 field_binding, fb :: 't_binding_' ::=           {{ com Field binding }}
- | x : tr : te              ::  :: binding
+ | x : tr : te              ::   :: binding
 
 field_bindings, fbs :: 't_bindings_' ::=        {{ com Field bindings }}
- | ( fb1 .. fbk )           ::  :: bindings
+ | ( fb1 .. fbk )           ::   :: bindings
 
 
-% The typing environment.
+% The typing environment, which maps target variables to target types.
 TE :: 'target_' ::=                             {{ com Target typing environment }}
  |                          ::  :: env_nil
  | tv : tt                  ::  :: env_cons
  | TE1 ; TE2                ::  :: env_append
- | TE1 \ TE2                ::  :: env_subtract
 
+% The field mapping environment, which maps source fields to target
+% variables.  The target variables could contain values in the target
+% representation types (in FE), or contexts at which those values were
+% parsed (in OE).
+
+FM, OE :: 'field_map_' ::=                          {{ com Field mapping environment }}
+ |                          ::  :: env_null
+ | x : tv                   ::  :: env_cons
+ | FM1 ; FM2                ::  :: env_append
 
 defns
 Target_type_checking :: '' ::=
@@ -825,7 +854,7 @@ TE ( tv ) = tt      ::  :: target_type_context :: 'target_type_context_' by
 
 TE1 ; tv : tt ; TE2
 --------------------------  :: var
-TE (tv ) = tt
+TE ( tv ) = tt
 
 
 % Type environment lookup for source fields.
@@ -836,34 +865,46 @@ E1 ; x : tau ; E2
 --------------------------  :: var
 E ( x ) = tau
 
+% Field map environment lookup for source fields.
+defn
+FM ( x ) = tv       ::  :: field_map_context :: 'field_map_context_' by
+
+FM1 ; x : tv ; FM2
+--------------------------  :: field
+FM ( x ) = tv
 
 % Translation of source types to target representation types.  This is
 % the top-level algorithm, but it uses a couple of helpers for
 % handling the ordering of the fields within a struct.
 
 defn
-TTrans [ tau ] = target_rep ::  :: type_trans :: 'type_trans_' by
+BTrans [ b ] = tt_primitive ::  :: base_trans :: 'base_trans_' by
 
 --------------------------  :: bit
-TTrans [ bit ] = T_bit
+BTrans [ bit ] = T_bit
 
 --------------------------  :: byte
-TTrans [ byte ] = T_byte
+BTrans [ byte ] = T_byte
 
 --------------------------  :: int16
-TTrans [ int16 ] = T_int16
+BTrans [ int16 ] = T_int16
 
 --------------------------  :: int32
-TTrans [ int32 ] = T_int32
+BTrans [ int32 ] = T_int32
 
 --------------------------  :: int64
-TTrans [ int64 ] = T_int64
+BTrans [ int64 ] = T_int64
 
-% int is not a specification type, so we skip its translation.
+defn
+TTrans [ tau ] = target_rep ::  :: type_trans :: 'type_trans_' by
+
+BTrans [ b ] = tp
+--------------------------  :: base
+TTrans [ b ] = tp
 
 TTrans [ b ] = tp
 --------------------------  :: vector
-TTrans [ b ] = T_vector tp
+TTrans [ b [ e ] ] = T_vector tp
 
 TTrans [ tau ] = ts
 --------------------------  :: array
@@ -881,7 +922,7 @@ TTrans [ D ] , ts1 = ts2    ::  :: struct_trans :: 'struct_trans_' by
 --------------------------  :: nil_decl
 TTrans [   ] , ts = ts
 
-%TTrans [ F ] = { x : tr }
+TTrans [ F ] = x : tr
 TTrans [ D ] , { x1 : tr1 .. xj : trj } = { y1 : tr'1 .. yk : tr'k }
 --------------------------  :: cons_decl
 TTrans [ F ; D ] , { x1 : tr1 .. xj : trj } = { x1 : tr1 .. xj : trj x : tr y1 : tr'1 .. yk : tr'k }
@@ -908,6 +949,65 @@ TTrans [ x : array ( e ) { D ;; VD } ] = x : tt_array ts
 TTrans [ x : classify ( y ) { </ ej : nj -> { Dj ;; VDj } // j /> } ] = x : { </ nj tsj // j /> }
 
 
+% The algorithms below use and sometimes update the following state:
+%
+% . the source typing environment E generated by the type-checking the
+%   source term, as specified in the previous family of relations.  E
+%   maps fields x to their source types tau: E(x) = tau.
+%
+% . the target typing environment TE tracks the target types tr of
+%   target variables tv:  TE(tv) = tt.
+%
+% . the field map environment FM keeps track of which target variable tv
+%   contains the value representing a field x:  FM(x) = tv.
+
+
+% Integer expression compilation algorithm.  This compiles a source
+% expression and its expected source base type, into a target
+% expression that evaluates to an integer.  This algorithm is used for
+% evaluating array/vector length expressions arising in the parsing
+% context.
+
+defn
+IntCompile E , TE , FM , OE [ e ] = te     ::  :: int_compile :: 'int_compile_' by
+
+--------------------------  :: int
+IntCompile E , TE , FM , OE [ i ] = i
+
+E ( x ) = base
+BTrans [ base ] = tp
+FM ( x ) = tv
+--------------------------  :: field_ref
+IntCompile E , TE , FM , OE [ x ] = to_int tp tv
+
+IntCompile E , TE , FM , OE [ e1 ] = te1
+IntCompile E , TE , FM , OE [ e2 ] = te2
+--------------------------  :: addition
+IntCompile E , TE , FM , OE [ e1 + e2 ] = te1 + te2
+
+% and so on for the other operators '+', '-', '*', '/'.
+
+E ( x ) = base
+BTrans [ base ] = tp
+--------------------------  :: sizeof
+IntCompile E , TE , FM , OE [ sizeof x ] = sizeof tp
+
+E ( x ) = tau
+TTrans [ tau ] = T_vector tp
+FM ( x ) = tv
+--------------------------  :: sizeof
+IntCompile E , TE , FM , OE [ length x ] = length tv
+
+OE ( x ) = tv
+--------------------------  :: offset
+IntCompile E , TE , FM , OE [ offset x ] = offset tv start_context
+
+--------------------------  :: offset
+IntCompile E , TE , FM , OE [ remaining () ] = offset current_context start_context
+
 % TODO:
+
+% . Typing and compiling classify expressions, especially handling
+%   constant values and variants.
 % . Parser IR generation.
 % . The typing algorithm for the target language.
