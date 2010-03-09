@@ -27,6 +27,7 @@ module Env = struct
   exception Invalid_op of string
   exception Insufficient_data of string
   exception Invalid_offset_context
+  exception Invalid_vector_access of string
 
   type endian =
     | Big_endian
@@ -805,7 +806,7 @@ module FP_int64 : (FP_elem with type v = Int64.t) = struct
   let to_string (v : v) = Int64.to_string v
 end
 
-module type FP_array_sig = sig
+module type FP_vector_sig = sig
   type t
   type v
   type elem_v
@@ -823,8 +824,8 @@ module type FP_array_sig = sig
   val copy : t -> Env.t -> t * Env.t
 end
 
-module FP_array (E : FP_elem)
-  : (FP_array_sig with type v = E.v array and type elem_v = E.v) =
+module FP_vector (E : FP_elem)
+  : (FP_vector_sig with type v = E.v array and type elem_v = E.v) =
 struct
   type t = Env.t
   type v = E.v array
@@ -834,7 +835,7 @@ struct
 
   let env_to_rep (t : Env.t) =
     if not (Env.is_byte_aligned t) || (Env.byte_length t) mod E.size <> 0
-    then raise (Env.Invalid_op "FP_array.env_to_rep");
+    then raise (Env.Invalid_op "FP_vector.env_to_rep");
     (t : t)
 
   let length (t : t) =
@@ -843,23 +844,27 @@ struct
   let size (t : t) =
     Env.byte_length t
 
+  let unmarshal len env =
+    let alen = len * E.size in
+      (Env.sub env 0 alen : t), (Env.skip_bytes env alen)
+
   let read_elem idx (t : t) =
+    if idx < 0 || idx >= length t then
+      raise (Env.Invalid_vector_access "FP_vector.read_elem");
     let elem = Env.sub t (idx * E.size) E.size in
       E.read (E.env_to_rep elem)
 
-  let write_elem idx (e : elem_v) (t : t) =
-    let elem = Env.sub t (idx * E.size) E.size in
-    E.write e (E.env_to_rep elem)
-
   let read (t : t) =
-    Array.init ((Env.byte_length t) / E.size) (fun idx -> read_elem idx t)
+    Array.init (length t) (fun idx -> read_elem idx t)
 
   let read_raw (t : t) =
     Env.read_raw t 0 (size t)
 
-  let unmarshal len env =
-    let alen = len * E.size in
-      (Env.sub env 0 alen : t), (Env.skip_bytes env alen)
+  let write_elem idx (e : elem_v) (t : t) =
+    if idx < 0 || idx >= length t then
+      raise (Env.Invalid_vector_access "FP_vector.write_elem");
+    let elem = Env.sub t (idx * E.size) E.size in
+      E.write e (E.env_to_rep elem)
 
   let marshal env (a : v) =
     let alen = (Array.length a) * E.size in
@@ -867,18 +872,43 @@ struct
       (Env.sub env 0 alen : t), next
 
   let write (a : v) (t : t) =
+    if Array.length a <> length t then
+      raise (Env.Invalid_vector_access "FP_vector.write");
     ignore (marshal t a)
 
   let write_raw src (t : t) =
-    Env.write_raw t 0 src 0 (String.length src)
+    let len = String.length src in
+      (if Env.byte_length t < len then
+	 raise (Env.Invalid_vector_access "FP_vector.write_raw");
+       Env.write_raw t 0 src 0 (String.length src))
 
   let copy (t : t) env =
     marshal env (read t)
 end
 
-module FP_byte_vector  = FP_array (FP_byte)
-module FP_int16_vector = FP_array (FP_int16)
-module FP_uint16_vector = FP_array (FP_uint16)
-module FP_int32_vector = FP_array (FP_int32)
-module FP_uint32_vector = FP_array (FP_uint32)
-module FP_int64_vector = FP_array (FP_int64)
+module FP_byte_vector  = FP_vector (FP_byte)
+module FP_int16_vector = FP_vector (FP_int16)
+module FP_uint16_vector = FP_vector (FP_uint16)
+module FP_int32_vector = FP_vector (FP_int32)
+module FP_uint32_vector = FP_vector (FP_uint32)
+module FP_int64_vector = FP_vector (FP_int64)
+
+module type FP_array_elem = sig
+  type v
+  val unmarshal: Env.t -> v * Env.t
+end
+
+module FP_array (E : FP_array_elem) = struct
+  type v = E.v array
+  let elem indx v =
+    v.[indx]
+  let unmarshal len env =
+    let rec helper len env acc =
+      match len with
+	| 0 -> Array.of_list (List.rev acc), env
+	| n ->
+	    let v, env = E.unmarshal env in
+	      helper (n - 1) env (v :: acc)
+    in
+      helper len env []
+end
