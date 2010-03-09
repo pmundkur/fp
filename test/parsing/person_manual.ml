@@ -57,7 +57,7 @@ module Phone_number = struct
 
     let unmarshal env =
       let typ, env = FP_byte.unmarshal env in
-	new o typ, env
+        new o typ, env
   end
 
   type typ =
@@ -80,13 +80,13 @@ module Phone_number = struct
     let typ_option, env = FP_byte.unmarshal env in
     let typ , env = match FP_byte.to_int (FP_byte.read typ_option) with
       | 0 ->
-	  let typ, env = No_type.unmarshal env in
-	    No_type typ, env
+          let typ, env = No_type.unmarshal env in
+            No_type typ, env
       | 1 ->
-	  let typ, env = Type.unmarshal env  in
-	    Type typ, env
+          let typ, env = Type.unmarshal env  in
+            Type typ, env
       | _ ->
-	  failwith "unknown type_option"
+          failwith "unknown type_option"
     in
       new o number typ_option typ, env
 end
@@ -108,7 +108,7 @@ module Person = struct
 
     let unmarshal env =
       let email, env = String.unmarshal env in
-	new o email, env
+        new o email, env
 
     type v = <email: String.v>
   end
@@ -124,7 +124,7 @@ module Person = struct
 
     let unmarshal env =
       let phone, env = Phone_number.unmarshal env in
-	new o phone, env
+        new o phone, env
 
     type v = <phone: Phone_number.v>
   end
@@ -143,23 +143,23 @@ module Person = struct
 
   type v = <name: String.v;
             email_option: char; email_option_set: char -> unit;
-	    email_address: email_address;
-	    num_phones: int; num_phones_set: int -> unit;
-	    phones: Phones.v>
+            email_address: email_address;
+            num_phones: int; num_phones_set: int -> unit;
+            phones: Phones.v>
 
   let unmarshal env =
     let name, env = String.unmarshal env in
     let email_option, env = FP_byte.unmarshal env in
     let email_address, env =
       match FP_byte.to_int (FP_byte.read email_option) with
-	| 0 ->
-	    let email_address, env = No_email.unmarshal env in
-	      No_email email_address, env
-	| 1 | 2 ->
-	    let email_address, env = Email.unmarshal env in
-	      Email email_address, env
-	| _ ->
-	    failwith "Unknown email_option" in
+        | 0 ->
+            let email_address, env = No_email.unmarshal env in
+              No_email email_address, env
+        | 1 | 2 ->
+            let email_address, env = Email.unmarshal env in
+              Email email_address, env
+        | _ ->
+            failwith "Unknown email_option" in
     let num_phones, env = FP_int16.unmarshal env in
     let phones, env =
       Phones.unmarshal (FP_int16.to_int (FP_int16.read num_phones)) env
