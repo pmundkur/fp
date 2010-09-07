@@ -6,7 +6,6 @@ SOURCES=util.mli location.mli config.mli config.ml ident.mli graph.mli \
 	types.ml lexer.mll codegen.ml typing.mli patternmatch.ml \
 	env.ml dependency.ml typing.ml fpc.ml
 
-LIBS=unix
 RESULT=fp
 
 .PHONY: all
