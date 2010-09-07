@@ -7,6 +7,7 @@ SOURCES=util.mli location.mli config.mli config.ml ident.mli graph.mli \
 	env.ml dependency.ml typing.ml fpc.ml
 
 RESULT=fp
+ANNOTATE=yes
 
 .PHONY: all
 all: nc
