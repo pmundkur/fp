@@ -245,8 +245,7 @@ end
 
 let open_output fn =
   (* Need to remove read-only files since Open_trunc needs write-permission. *)
-  (try Unix.unlink fn
-   with Unix.Unix_error (Unix.ENOENT, _, _) -> ());
+  (try Sys.remove fn with _ -> ());
   let op_flags = [ Open_wronly ; Open_creat; Open_trunc; Open_text ] in
   let oc = open_out_gen op_flags 0o444 fn in
   let ff = formatter_of_out_channel oc in
