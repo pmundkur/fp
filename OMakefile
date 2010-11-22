@@ -6,7 +6,7 @@ BASE = $(dir .)
 COMPILER = $(nth 0, $(FP_COMPILER))
 
 .SUBDIRS: runtime examples
-if $(OTT)
+if $(and $(OTT), $(mem doc, $(TARGETS)))
     .SUBDIRS: doc
 
 .PHONY: copyright
