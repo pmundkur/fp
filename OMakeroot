@@ -1,13 +1,22 @@
+open configure/Configure
 open build/OCaml
 open build/LaTeX
 
-#
 # The command-line variables are defined *after* the
 # standard configuration has been loaded.
-#
 DefineCommandVars()
 
-#
+# Configuration check for ott
+.STATIC:
+   OTT = false
+   ConfMsgChecking(for Ott)
+   WHERE = $(where ott)
+   if $(WHERE)
+      OTT = $(nth 0, $(WHERE))
+      ConfMsgResult(found $(OTT))
+      export
+   else
+      ConfMsgResult(not found -- docs will not be built)
+
 # Include the OMakefile in this directory.
-#
 .SUBDIRS: .

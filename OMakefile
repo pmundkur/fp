@@ -5,9 +5,11 @@ BASE = $(dir .)
 
 COMPILER = $(nth 0, $(FP_COMPILER))
 
-.SUBDIRS: runtime doc examples test
+.SUBDIRS: runtime examples
+if $(OTT)
+    .SUBDIRS: doc
 
 .PHONY: copyright
 
 copyright:
-	headache -c mk/headache.conf -h mk/copyright.headache runtime/*.ml compiler/*.ml{,l,y,i} doc/*.{tex,ott}
+    headache -c mk/headache.conf -h mk/copyright.headache runtime/*.ml compiler/*.ml{,l,y,i} doc/*.{tex,ott}
