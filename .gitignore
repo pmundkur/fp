@@ -3,12 +3,11 @@ compiler/lexer.ml
 compiler/parser.mli
 compiler/parser.ml
 compiler/fp
-._d/
-._ncdi/
-._bcdi/
 doc/ott.tex
 
 # other generated files
+all.otarget
+_build/
 .omakedb
 .omakedb.lock
 *.omc
