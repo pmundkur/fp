@@ -1,5 +1,23 @@
 TODO:
 
+- Redesign/simplification:
+
+  - remove inlined hierarchical structs - instead use names to
+    indirect inlining which should simplify (but also make less
+    expressive) referencing from value statements.  this would
+    especially help with switch statements and arrays
+
+  - formal handling:
+
+    - at parse time, each struct field should have a length
+      determinable from its type and the lengths of the previous
+      fields
+      => struct is parseable
+
+    - at gen time, each struct field that has a value field can have
+      its value (content) computed from the values of the fields that
+      don't have a value component.
+
 - Runtime:
   - 'marshal' is a catamorphism, and so should not output a
     tuple.
