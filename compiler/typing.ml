@@ -270,7 +270,6 @@ let check_field_type_compatible_with_base_type field_type base_type loc =
     | Ttype_struct _, _
     | Ttype_map _, _
     | Ttype_array _, _
-    | Ttype_label, _
     | Ttype_format _, _ ->
         raise_field_base_type_mismatch field_type base_type loc
 
@@ -861,11 +860,6 @@ let rec type_field (env, cur_align, fl) f =
                 let bt, next_align = kinding env cur_align te in
                 let e = Env.add_field fi (Ttype_base bt) env in
                   e, next_align, (Field (f.pfield_loc, fi, fal)) :: fl
-            | Ptype_label ->
-                if not (is_byte_aligned cur_align)
-                then raise_bad_alignment cur_align 8 ft.pfield_type_loc;
-                let e = Env.add_field fi Ttype_label env in
-                  e, cur_align, (Field (f.pfield_loc, fi, [])) :: fl
             | Ptype_format fn ->
                 if not (is_byte_aligned cur_align)
                 then raise_bad_alignment cur_align 8 ft.pfield_type_loc;

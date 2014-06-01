@@ -31,7 +31,6 @@
   let keyword_list = [
     ("array", fun l -> ARRAY l);
     ("align", fun l -> ALIGN l);
-    ("label", fun l -> LABEL l);
     ("value", fun l -> VALUE l);
     ("format", fun l -> FORMAT l);
     ("variant", fun l -> VARIANT l);

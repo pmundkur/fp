@@ -66,8 +66,6 @@ module Typeinfo = struct
           String.capitalize (Ident.name_of fid) ^ ".o array"
       | Ttype_map _ ->
           String.capitalize (Ident.name_of fid) ^ ".t"
-      | Ttype_label ->
-          ""
       | Ttype_format fname ->
           String.capitalize (Location.node_of fname) ^ ".o"
 end
@@ -166,8 +164,6 @@ module Object = struct
             fprintf ff "@,method %s = %s" getter c_arg
         | Ttype_array _, _ ->
             fprintf ff "@,method %s_at indx = %s.(indx)" getter c_arg
-        | Ttype_label, _ ->
-            ()
 
   let generate ff st =
     let args = List.map (fun (id, at) ->

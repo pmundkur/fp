@@ -60,7 +60,6 @@ and field_type_desc =
   | Ptype_simple of type_exp * field_attrib list
   | Ptype_array of exp * format
   | Ptype_classify of exp * classify_case list
-  | Ptype_label
   | Ptype_format of format_name
 
 and field_attrib = {

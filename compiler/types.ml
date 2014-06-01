@@ -135,7 +135,6 @@ and field_type =
   | Ttype_struct of struct_type
   | Ttype_map of Ident.t * map_type
   | Ttype_array of exp * struct_type
-  | Ttype_label
   | Ttype_format of Asttypes.format_name
 
 and field_entry = {
@@ -196,7 +195,6 @@ let rec ident_map st =
           mt.map_type_desc env
     | Ttype_array (_, st) ->
         Ident.extend env (ident_map st)
-    | Ttype_label
     | Ttype_format _ ->
         env in
   let env = st.fields
@@ -210,7 +208,6 @@ let struct_iter f st =
   let field_iter _ (ft, _) =
     match ft with
       | Ttype_base _
-      | Ttype_label
       | Ttype_format _ ->
           ()
       | Ttype_struct st
@@ -364,7 +361,6 @@ let is_scalar = function
   | Ttype_map _
   | Ttype_array _
   | Ttype_format _ -> false
-  | Ttype_label -> true (* special case *)
 
 let is_field_name_in_struct fn st =
   Ident.exists (fun id _ -> Ident.name_of id = fn) st.fields
@@ -547,7 +543,6 @@ let pr_field_type = function
   | Ttype_struct _ -> "format"
   | Ttype_map _ -> "map"
   | Ttype_array _ -> "array"
-  | Ttype_label -> "label"
   | Ttype_format f -> Printf.sprintf "format %s" (Location.node_of f)
 
 let pr_struct_pattern sp =

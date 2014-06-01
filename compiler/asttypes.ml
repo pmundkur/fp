@@ -42,6 +42,4 @@ type fun_name = string Location.located_node
 
 type type_name = string Location.located_node
 
-type label_name = string Location.located_node
-
 type format_name = string Location.located_node

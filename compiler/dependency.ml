@@ -276,7 +276,7 @@ let generate_depinfo fmt =
         | Ttype_array (e, st) ->
             let deps = process_length_expr deps ctxt id e in
               process_struct deps (Array_block id :: ctxt) st (Some id)
-        | Ttype_label | Ttype_format _ ->
+        | Ttype_format _ ->
             deps
   and process_struct deps ctxt st opt_st_id =
     (* Since we're initializing our dep env as we go, we process the

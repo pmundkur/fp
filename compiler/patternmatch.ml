@@ -276,7 +276,6 @@ let rec check_struct_patterns st =
             mt.map_type_desc
       | Ttype_array (_, st) ->
           check_struct_patterns st
-      | Ttype_label
       | Ttype_format _ ->
           ()
   and do_attribs fid fas st =
@@ -523,7 +522,7 @@ let check_struct_branch_field_values st =
     Ident.iter
       (fun fid (ft, _) ->
          match ft with
-           | Ttype_base _ | Ttype_label | Ttype_format _ ->
+           | Ttype_base _ | Ttype_format _ ->
                ()
            | Ttype_map _ ->
                (* This is done via st.classify_fields above, so we
