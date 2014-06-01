@@ -19,7 +19,7 @@
 
 metavar form_defn, f                    ::= {{ lex alphanum }} {{ com Struct name }}
 
-metavar field, x, y, name, n            ::= {{ lex alphanum }} {{ com Field or label }}
+metavar field, x, y, name, n            ::= {{ lex alphanum }} {{ com Field }}
 
 metavar integer_literal, i              ::= {{ lex numeral }}  {{ com Literal integers }}
 
@@ -154,9 +154,8 @@ D :: 'decl_' ::=                                {{ com Declarations }}
  | F ; D                        ::  :: cons
 
 % A field or alignment declaration.
-F :: '' ::=                                     {{ com Labeled Fields }}
+F :: '' ::=                                     {{ com Aligns and Fields }}
  | align e                      ::  :: alignment
- | x : label                    ::  :: label
  | x : ty                       ::  :: field
 
 % Value declarations.
@@ -225,7 +224,6 @@ Prelude, P :: 'lib_' ::=
 E :: 'env_' ::=                                 {{ com Typing environments }}
  |                          ::  :: nil
  | x : tau                  ::  :: cons
- | x : label                ::  :: label
  | E1 ; E2                  ::  :: append
  | E1 \ E2                  ::  :: minus
 
@@ -238,11 +236,11 @@ C :: 'class_env_' ::=
  |                          ::  :: nil
  | C ; path : tau           ::  :: cons
 
-% Sets containing field and label names.
+% Sets containing field names.
 %
 % These sets are usually used to ensure uniqueness of names, or to
 % ensure the use of known names.
-S, L :: 'set_' ::=                              {{ com Label and name sets }}
+S, L :: 'set_' ::=                                 {{ com Name sets }}
  | Empty                    ::  :: nil          {{ com Empty set }} {{ tex \empty }}
  | S + x                    ::  :: union        {{ com Set union }} {{ tex [[S]] \cup {[[x]]} }}
 
@@ -275,7 +273,6 @@ formula :: formula_ ::=
  | x in S                       ::  :: in_S             {{ tex [[x]]\not\in [[S]] }}
  | x not in S                   ::  :: not_in_S         {{ tex [[x]]\not\in [[S]] }}
  | f in P                       ::  :: f_in_P           {{ tex [[f]]    \in [[P]] }}
- | E ( x ) = label              ::  :: label_in_E
  | a                            ::  :: current_alignment
  | a '%' i1 = i2                ::  :: alignment_boundary
  | a < a'                       ::  :: alignment_compare
@@ -396,10 +393,6 @@ E |- length x  : int
 
 E ( x ) = tau
 --------------------------  :: offset
-E |- offset x  : int
-
-E ( x ) = label
---------------------------  :: offset_label
 E |- offset x  : int
 
 E |- e : int
@@ -530,22 +523,22 @@ P, E, a |- </ vj , nj , sj // j /> : Map, 0
 
 
 % Rules to process a sequence of field and alignment declarations.
-% Since field and label names cannot conflict, and since there cannot
-% be duplicate field or label names, we thread a set of current names
-% through the rules.  To ensure linearity of classification use, we
-% also thread a set of fields used for classification.  See the
-% field_typing rule below for more explanation.
+% Since field names cannot conflict, i.e. there cannot be duplicate
+% field names, we thread a set S of current names through the rules.
+% To ensure linearity of classification use, we also thread a set L of
+% fields used for classification.  See the field_typing rule below for
+% more explanation.
 defn
-P , E , a , S , L |- D , E' , a' , S' , L'  ::  :: decls_typing :: 'decls_typing_' by
+P , E , a , S , L |- D , E' , a' , S' , L' ::  :: decls_typing :: 'decls_typing_' by
 
 % That's not a typo below: it's the null decl!
 --------------------------  :: nil
 P , E , a , S , L |- , E , a , S , L
 
-P , E  , a  , S  , L   |- F , E'  , a'  , S'  , L'
-P , E' , a' , S' , L'  |- D , E'' , a'' , S'' , L''
+P , E  , a  , S  , L  |- F , E'  , a'  , S' , L'
+P , E' , a' , S' , L' |- D , E'' , a'' , S'' , L''
 --------------------------  :: decl_cons
-P , E  , a  , S  , L'' |- F ; D , E'' , a'' , S'' , L''
+P , E  , a  , S  , L  |- F ; D , E'' , a'' , S'' , L''
 
 
 % Rules to process a single field or alignment declaration.
@@ -556,8 +549,8 @@ P , E  , a  , S  , L'' |- F ; D , E'' , a'' , S'' , L''
 % environment and an updated bit alignment.
 %
 %
-% We thread a set S of field and label names to check for uniqueness.
-% This set is checked and updated by each non-alignment field.
+% We thread a set S of field names to check for uniqueness.  This set
+% is checked and updated by each non-alignment field.
 %
 % We also thread a set L of fields used for classification, to ensure
 % that fields are not used for branching multiple times.  This is
@@ -572,15 +565,6 @@ P , E , a , S , L |- F , E' , a' , S' , L'  ::  :: field_typing :: 'field_typing
 const_fold ( e ) % 8 = 0
 --------------------------  :: alignment
 P , E , a , S , L |- align e , E , 0 , S , L
-
-% A label is simply added to the environment as a label; in
-% particular, the current alignment is unchanged.  We support labels
-% only at byte boundaries.
-
-a % 8 = 0
-x not in S
---------------------------  :: label
-P , E , a , S , L |- x : label , E ; x : label , 0 , S + x , L
 
 % We don't have a single rule for x : tau, but instead separate out
 % the rules for the top level cases of tau.  This is to specially
@@ -606,11 +590,6 @@ P , E , a , S , L |- x : b [ e ] , E ; x : b [ e ] , a' , S + x , L
 %
 % - the pre- and post- adjustment (reset) of the S set, which ensures
 %   that field name uniqueness is only scoped within a struct.
-%
-% - TODO: do we really need labels?  The only label that seems useful
-%   is an end-of-format label.  Otherwise, fields can be used as
-%   labels if they are byte-aligned.  Otherwise the threading of the
-%   label state is more overhead in the semantics.
 
 x not in S
 P , E , 0 , Empty , L |- D , E' , 0 , S' , L'
@@ -648,11 +627,11 @@ P , E , 0 |- s : Struct , 0
 --------------------------  :: sized_struct
 P , E , a , S , L |- x : s within e , E ; x : s , 0, S + x , L
 
-% The field y should not be a label.  The root of the classification
-% tree should be byte-aligned, and each path in the classification
-% tree should end on a byte-aligned boundary.  Layering is again
-% enforced by adjusting the environment for the typing of the value
-% expressions of each classified struct.
+% The field y should not be re-used for classification.  The root of
+% the classification tree should be byte-aligned, and each path in the
+% classification tree should end on a byte-aligned boundary.  Layering
+% is again enforced by adjusting the environment for the typing of the
+% value expressions of each classified struct.
 %
 % As before, the set S is adjusted again for the nested structs.
 %
@@ -1049,9 +1028,8 @@ TTrans [ F ; D ] , { x1 : tr1 .. xj : trj } = { x1 : tr1 .. xj : trj x : tr y1 :
 defn
 TTrans [ F ] = x : tr       ::  :: field_trans :: 'field_trans_' by
 
-% We omit alignments and labels to simplify the algorithm
-% specification; the actual implementation will need to skip them
-% appropriately.
+% We omit alignments to simplify the algorithm specification; the
+% actual implementation will need to skip them appropriately.
 
 TTrans [ tau ] = ts
 --------------------------  :: alignment
