@@ -6,10 +6,11 @@ BASE = $(dir .)
 COMPILER = $(nth 0, $(FP_COMPILER))
 
 .SUBDIRS: runtime examples
-if $(and $(OTT), $(mem doc, $(TARGETS)))
-    .SUBDIRS: doc
 
-.PHONY: copyright
+.PHONY: copyright docs
+
+if $(and $(OTT), $(or $(mem docs, $(TARGETS)), $(mem clean, $(TARGETS))))
+    .SUBDIRS: doc
 
 copyright:
     headache -c mk/headache.conf -h mk/copyright.headache runtime/*.ml compiler/*.ml{,l,y,i} doc/*.{tex,ott}
