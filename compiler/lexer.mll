@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -43,14 +43,15 @@
     ("[", fun l -> LSQUARE l);
     ("]", fun l -> RSQUARE l);
     (".", fun l -> DOT l);
-    ("..", fun l -> DOTDOT l);
     (",", fun l -> COMMA l);
     (";", fun l -> SEMI l);
     (":", fun l -> COLON l);
     ("|", fun l -> BAR l);
+    ("=", fun l -> EQUAL l);
+
+    ("..", fun l -> DOTDOT l);
     ("->", fun l -> ARROW l);
     ("=>", fun l -> DEFARROW l);
-    ("=", fun l -> EQUAL l);
 
     ("+", fun l -> PLUS l);
     ("-", fun l -> MINUS l);
