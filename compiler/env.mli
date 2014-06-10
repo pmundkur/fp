@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -41,9 +41,8 @@ val add_type: Ident.t -> Types.type_info -> t -> t
 val add_function: Ident.t -> Types.function_info -> t -> t
 val add_variant_def: Ident.t -> Types.variant_info -> t -> t
 val add_field: Ident.t -> Types.field_type -> t -> t
-val add_format_def: Ident.t -> Types.struct_type -> t -> t
+val add_format_def: Ident.t -> Types.format_info -> t -> t
 
-(* Note that path lookup is by Ast.path, while paths are added using Types.path *)
 val lookup_path: t -> Ast.path -> (Types.path * Types.struct_type) option
 val add_path: Types.path -> Asttypes.case_name -> Types.struct_type -> t -> t
 val get_paths: t -> (Types.path * Asttypes.case_name * Types.struct_type) list
