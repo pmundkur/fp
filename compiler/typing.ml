@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -207,6 +207,11 @@ let get_field_type env fn =
     | None -> raise_unknown_ident fn
     | Some ft -> ft
 
+let lookup_formatname env fn =
+  match Env.lookup_format_by_name env (Location.node_of fn) with
+    | None -> raise_unknown_ident fn
+    | Some f -> f
+
 (* This looks up an Ast.path in an environment, and returns a tuple of
    Types.path and the found field_info.
 *)
@@ -215,12 +220,14 @@ let lookup_qualified_var env path =
     match Env.lookup_path env pre with
       | None ->
           raise_unspecified_path pre
-      | Some (p, st) ->
-          match lookup_field_in_struct_env (Location.node_of suf) st with
-            | None ->
-                raise_unknown_ident suf
-            | Some (fid, (ft, _)) ->
-                (path_compose p (Tvar_ident fid)), ft
+      | Some (p, Tstruct st) ->
+          (match lookup_field_in_struct_env (Location.node_of suf) st with
+             | None ->
+                 raise_unknown_ident suf
+             | Some (fid, (ft, _)) ->
+                 (path_compose p (Tvar_ident fid)), ft)
+      | Some (p, Tstruct_named _) ->
+            raise_unknown_ident suf
 
 (* This is called when looking up possibly Ast.path qualified fields
    in expression context.  It returns the Types.path as well as type
@@ -423,6 +430,8 @@ let rec type_check_exp_as_exp_type env exp as_exp_type =
           check_exp_type_equal Texp_type_int as_exp_type exp.pexp_loc;
           Texp_const_int64 i
       | Pexp_apply (fname, arglist) ->
+          (* TODO: Special case offset(), which needs an env extended *)
+          (* with the current field. *)
           let fid, (fat, frt) = lookup_function_info env fname in
           let rcvd, expected = List.length arglist, List.length fat in
             if rcvd <> expected then
@@ -585,8 +594,8 @@ let is_field_name_used fn fl =
   List.exists
     (function
        | Align _ -> false
-       | Field (_, id, _) -> Ident.name_of id = Location.node_of fn)
-    fl
+       | Field (_, id, _) -> Ident.name_of id = Location.node_of fn
+    ) fl
 
 let type_check_variant_attrib env f bt v =
   let pt =
@@ -648,12 +657,12 @@ let rec st_pattern cases cfields =
   in
     Pt_struct (List.map
                  (fun bi ->
-                    br_pattern bi (cases_with_path_prefix bi.classify_field))
-                 cfields)
+                    br_pattern bi (cases_with_path_prefix bi.classify_field)
+                 ) cfields)
 
 and br_pattern bi cases =
   (* The asserts here rely on typechecking to ensure well-formed case
-     paths.  The "Unspecified_path" check ensure that the leading path
+     paths.  The "Unspecified_path" check ensures that the leading path
      in the case has a single component, and the remaining paths have
      at least one component.  The "Duplicate_path" check ensures there
      are no duplicate paths.
@@ -676,13 +685,18 @@ and br_pattern bi cases =
             pattern = Pt_any;
             branch_info = bi;
           }
-      | (Tvar_ident fid, cn, st) :: tl ->
+      | (Tvar_ident fid, cn, Tstruct st) :: tl ->
           (* The filter in the st_pattern caller should ensure this. *)
           assert (bi.classify_field = fid);
           {
             pattern = Pt_constructor (cn, st_pattern (strip_path tl) st.classify_fields);
             branch_info = bi;
           }
+      | (Tvar_ident _, _, Tstruct_named _) :: _ ->
+          (* The environment construction mechanism should not have
+             allowed this! *)
+          assert false
+
       | (Tvar_path _, _, _) :: _ ->
           (* The leading case should refer to a local field ident, not
              a nested one.  Otherwise, typechecking should have
@@ -861,6 +875,7 @@ let rec type_field (env, cur_align, fl) f =
                 let e = Env.add_field fi (Ttype_base bt) env in
                   e, next_align, (Field (f.pfield_loc, fi, fal)) :: fl
             | Ptype_format fn ->
+                ignore (lookup_formatname env fn);
                 if not (is_byte_aligned cur_align)
                 then raise_bad_alignment cur_align 8 ft.pfield_type_loc;
                 let e = Env.add_field fi (Ttype_format fn) env in
@@ -965,8 +980,8 @@ and type_format env fmt =
   let check_align align =
     if not (is_byte_aligned align)
     then raise_bad_alignment align 8 fmt.pformat_loc in
-  let type_fields () =
-    List.fold_left type_field (env, 0, []) fmt.pformat_desc in
+  let type_fields fields =
+    List.fold_left type_field (env, 0, []) fields in
   let get_value_env ext_env fl =
     List.fold_left
       (fun e f ->
@@ -1011,17 +1026,28 @@ and type_format env fmt =
              field_entry_loc = loc;
            } :: entries, fields'
       ) ([], Ident.empty_env) fl in
-  let ext_env, align, fl = type_fields () in
-  let _ = check_align align in
-  let venv = get_value_env ext_env fl in
-  let cfields, bfields = get_classify_fields venv fl in
-  let entries, fields = get_field_entries venv fl cfields bfields in
-    {
-      entries = entries;
-      fields = fields;
-      classify_fields = cfields;
-      struct_type_loc = fmt.pformat_loc;
-    }
+  match fmt.pformat_desc with
+    | PFormat fields ->
+        let ext_env, align, fl = type_fields fields in
+        let _ = check_align align in
+        let venv = get_value_env ext_env fl in
+        let cfields, bfields = get_classify_fields venv fl in
+        let entries, fields = get_field_entries venv fl cfields bfields in
+          Tstruct {
+              entries = entries;
+              fields = fields;
+              classify_fields = cfields;
+              struct_type_loc = fmt.pformat_loc;
+            }
+    | PFormat_named fname ->
+        Tstruct_named (fst (lookup_formatname env fname))
+    | PFormat_empty ->
+        Tstruct {
+            entries = [];
+            fields = Ident.empty_env;
+            classify_fields = [];
+            struct_type_loc = fmt.pformat_loc;
+          }
 
 (* Type-checker top-level *)
 

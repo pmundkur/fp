@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -152,12 +152,15 @@ and field_entry_desc =
 (* the struct type embeds the environment in which the field
    identifiers are defined.
 *)
-and struct_type = {
+and struct_info = {
   entries: field_entry list;
   fields: field_info Ident.env;
   classify_fields: branch_info list;
   struct_type_loc: Location.t;
 }
+and struct_type =
+  | Tstruct of struct_info
+  | Tstruct_named of Ident.t
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 
@@ -176,13 +179,14 @@ type variant_info = Ast.variant
 
 type format_info = struct_type
 
+(* primitive types and their bit-width *)
 type type_info = primitive * int
 
 (* generate a field identifier map for a struct *)
-val ident_map: struct_type -> field_info Ident.env
+val ident_map: struct_info -> field_info Ident.env
 
 (* recursive iteration over structs *)
-val struct_iter: (struct_type -> unit) -> struct_type -> unit
+val struct_iter: (struct_info -> unit) -> struct_info -> unit
 
 (* path utilities *)
 
@@ -215,9 +219,9 @@ val exp_vars_filter: exp_vars -> Ident.t list -> exp_vars
 (* type utilities *)
 
 val is_scalar: field_type -> bool
-val is_field_name_in_struct: string -> struct_type -> bool
-val lookup_field_in_struct_env: string -> struct_type -> (Ident.t * field_info) option
-val get_field_type: string -> struct_type -> (Ident.t * field_type)
+val is_field_name_in_struct: string -> struct_info -> bool
+val lookup_field_in_struct_env: string -> struct_info -> (Ident.t * field_info) option
+val get_field_type: string -> struct_info -> (Ident.t * field_type)
 
 (* range and equality checks *)
 

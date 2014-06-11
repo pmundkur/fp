@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -40,7 +40,10 @@ and format = {
   pformat_loc: Location.t;
 }
 
-and format_desc = field list
+and format_desc =
+  | PFormat of field list
+  | PFormat_empty
+  | PFormat_named of format_name
 
 and field = {
   pfield_desc: field_desc;
@@ -71,7 +74,7 @@ and field_attrib_desc =
   | Pattrib_max of exp
   | Pattrib_min of exp
   | Pattrib_const of exp
-  | Pattrib_default  of exp
+  | Pattrib_default of exp
   | Pattrib_variant_ref of decl_name
   | Pattrib_variant_inline of variant
   | Pattrib_value of value_case list

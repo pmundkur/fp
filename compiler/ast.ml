@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -40,7 +40,10 @@ and format = {
   pformat_loc: Location.t;
 }
 
-and format_desc = field list
+and format_desc =
+  | PFormat of field list
+  | PFormat_empty
+  | PFormat_named of format_name
 
 and field = {
   pfield_desc: field_desc;
@@ -317,7 +320,15 @@ and pr_format ff fmt =
     | [ f ] -> pr_field ff f; Format.fprintf ff ";"
     | fh :: ft -> pr_field ff fh; Format.fprintf ff ";@,"; pfields ft
   in
-    pfields fmt.pformat_desc
+    match fmt.pformat_desc with
+      | PFormat fields ->
+          Format.fprintf ff "@[<v 4>{@,";
+          pfields fields;
+          Format.fprintf ff "@]@,}"
+      | PFormat_named fn ->
+          Format.fprintf ff " format %s " (Location.node_of fn)
+      | PFormat_empty ->
+          Format.fprintf ff " _ "
 
 let pr_decl ff decl =
   match decl.pdecl_desc with

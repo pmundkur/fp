@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -42,6 +42,14 @@ let list_take n list =
   in
     take [] n list
 
+let fields = function
+  | Tstruct st      -> st.fields
+  | Tstruct_named _ -> Ident.empty_env
+
+let classify_fields = function
+  | Tstruct st      -> st.classify_fields
+  | Tstruct_named _ -> []
+
 let get_case_branch_info branch_info case_name =
   let cn, _, st =
     try
@@ -50,7 +58,7 @@ let get_case_branch_info branch_info case_name =
       | Not_found ->
           raise (Failure ("get_case_branch_info: " ^ case_name))
   in
-    cn, st.classify_fields
+    cn, (classify_fields st)
 
 let make_default binfo =
   { pattern = Pt_any;
@@ -117,7 +125,7 @@ let get_a_missing_constructor signature branch_info =
       (fun s (cn, _, st) ->
          if StringSet.mem s signature
          then ()
-         else raise (Found (cn, st.classify_fields)))
+         else raise (Found (cn, classify_fields st)))
       branch_info.branch_map.map_type_desc;
     None
   with
@@ -250,7 +258,7 @@ let check_field_value_list fid fvl st =
            match fv.field_value_desc with
              | Tvalue_auto
              | Tvalue_default _ ->
-                 make_default_vector st.classify_fields
+                 make_default_vector (classify_fields st)
              | Tvalue_branch { struct_pattern = Pt_struct pattern } ->
                  pattern
          in
@@ -259,7 +267,7 @@ let check_field_value_list fid fvl st =
            else raise_redundant_branch_pattern fv.field_value_loc)
       [] fvl
   in
-    match get_unmatched_pattern final_matrix st.classify_fields with
+    match get_unmatched_pattern final_matrix (classify_fields st) with
       | None -> ()
       | Some p -> raise_unmatched_branch_pattern fid (Pt_struct p)
 
@@ -283,7 +291,7 @@ let rec check_struct_patterns st =
       | None ->  ()
       | Some (fvl, _) ->  check_field_value_list fid fvl st
   in
-    Ident.iter (do_field st) st.fields
+    Ident.iter (do_field st) (fields st)
 
 
 (* This section of the file checks if fields used for classification
@@ -517,7 +525,7 @@ let check_branch_values field_env bi =
 let check_struct_branch_field_values st =
   let rec checker field_env st =
     (* Check the top level branch fields. *)
-    List.iter (check_branch_values field_env) st.classify_fields;
+    List.iter (check_branch_values field_env) (classify_fields st);
     (* Now check nested structs. *)
     Ident.iter
       (fun fid (ft, _) ->
@@ -530,10 +538,10 @@ let check_struct_branch_field_values st =
                ()
            | Ttype_struct st
            | Ttype_array (_, st) ->
-               checker (Ident.extend field_env st.fields) st)
-      st.fields
+               checker (Ident.extend field_env (fields st)) st)
+      (fields st)
   in
-    checker st.fields st
+    checker (fields st) st
 
 
 (* This is the main external interface of the checker.  We're given a

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  Copyright 2009-2013       Prashanth Mundkur.                          */
+/*  Copyright 2009-2014       Prashanth Mundkur.                          */
 /*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          */
 /*                                                                        */
 /*  This file is part of FormatCompiler.                                  */
@@ -118,7 +118,15 @@ variant_case:
 
 format:
 | LCURLY fields RCURLY
-    { mk_with_rloc mk_format (List.rev $2) }
+    { mk_with_rloc mk_format (PFormat (List.rev $2)) }
+
+format_field:
+| format
+    { $1 }
+| UNDERSCORE
+    { mk_with_rloc mk_format PFormat_empty }
+| FORMAT LCID
+    { mk_with_rloc mk_format (PFormat_named (token_to_located_node $2)) }
 ;
 
 fields:
@@ -147,8 +155,8 @@ field_type:
       let e = mk_exp (Pexp_var (Pfield (token_to_located_node $3))) loc in
         mk_with_rloc mk_field_type (Ptype_classify (e, (List.rev $6)))
     }
-| ARRAY LPAREN exp RPAREN format
-    { mk_with_rloc mk_field_type (Ptype_array ($3, $5)) }
+| ARRAY exp format_field
+    { mk_with_rloc mk_field_type (Ptype_array ($2, $3)) }
 | type_exp field_attribs
     { mk_with_rloc mk_field_type (Ptype_simple ($1, (List.rev $2))) }
 | FORMAT LCID
@@ -169,7 +177,7 @@ case:
     }
 | case_exp ARROW field opt_semi
     { let case_name, case_exp = $1 in
-        case_name, case_exp, (mk_format [ $3 ]
+        case_name, case_exp, (mk_format (PFormat [ $3 ])
                                 (Location.rhs_loc 3))
     }
 ;

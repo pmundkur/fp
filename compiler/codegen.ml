@@ -175,6 +175,7 @@ module Object = struct
       fprintf ff "@]@,end@,"
 end
 
+(*
 module Struct = struct
   let module_name ?(suffix="") st_id =
     let suffix = if suffix = "" then "" else "_" ^ (String.lowercase suffix) in
@@ -236,6 +237,7 @@ module Struct = struct
        lengths. *)
     end_module ff
 end
+*)
 
 let open_output fn =
   (* Need to remove read-only files since Open_trunc needs write-permission. *)
@@ -263,9 +265,15 @@ let generate typed_env struct_env ofn =
     generate_header ff;
     generate_opens ff;
     fprintf ff "@[<v 0>";
+(*
     Ident.iter (fun i (fmt, deps) ->
-                  Struct.generate ff typed_env i (fmt, deps);
-                  fprintf ff "@,"
+                match fmt with
+                  | Struct s ->
+                      Struct.generate ff typed_env i (s, deps);
+                      fprintf ff "@,"
+                  | Struct_named _ ->
+                      ()
                ) struct_env;
+*)
     fprintf ff "@]";
     close_output (oc, ff)

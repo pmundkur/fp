@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -181,7 +181,7 @@ type var_context =
   | VC_internal
   | VC_generator
 
-let generate_depinfo fmt =
+let generate_depinfo (fmt : struct_info) =
   let fenv = ident_map fmt in
   let init_dep deps id ctxt =
     match Ident.assoc_by_id deps id with
@@ -278,7 +278,7 @@ let generate_depinfo fmt =
               process_struct deps (Array_block id :: ctxt) st (Some id)
         | Ttype_format _ ->
             deps
-  and process_struct deps ctxt st opt_st_id =
+  and process_struct deps ctxt s opt_st_id =
     (* Since we're initializing our dep env as we go, we process the
        fields in textual order using st.entries, instead of iterating
        over Ident.env in st.fields, where the fields are in
@@ -298,32 +298,36 @@ let generate_depinfo fmt =
       let free_gens = exp_vars_filter from_dep.dep_vars.generators filter_fields in
       let to_dep = add_vars_to_dep free_ints VC_internal to_dep in
         add_vars_to_dep free_gens VC_internal to_dep in
-    let all_fields, deps =
-      List.fold_left
-        (fun (cfields, deps) fe ->
-           match fe.field_entry_desc with
-             | Tfield_name (f, fi) ->
-                 let cfields = f :: cfields in
-                   cfields, process_field deps (ctxt, st) f fi
-             | Tfield_align _ ->
-                 cfields, deps
-        ) ([], deps) st.entries
-    in
-      match opt_st_id with
-        | None ->
-            deps
-        | Some st_id ->
-            (* 2nd pass of free-var computation *)
-            let st_dep =
-              List.fold_left
-                (fun cdep fid ->
-                   let fdep = lookup_dep deps fid in
-                     promote_free_vars (all_fields, cdep) fdep
-                ) (lookup_dep deps st_id) all_fields
-            in
-              store_dep st_id st_dep deps
+    match s with
+      | Tstruct st ->
+          let all_fields, deps =
+            List.fold_left
+              (fun (cfields, deps) fe ->
+               match fe.field_entry_desc with
+                 | Tfield_name (f, fi) ->
+                     let cfields = f :: cfields in
+                     cfields, process_field deps (ctxt, s) f fi
+                 | Tfield_align _ ->
+                     cfields, deps
+              ) ([], deps) st.entries
+          in
+          (match opt_st_id with
+             | None ->
+                 deps
+             | Some st_id ->
+                 (* 2nd pass of free-var computation *)
+                 let st_dep =
+                   List.fold_left
+                     (fun cdep fid ->
+                        let fdep = lookup_dep deps fid in
+                        promote_free_vars (all_fields, cdep) fdep
+                     ) (lookup_dep deps st_id) all_fields
+                 in
+                 store_dep st_id st_dep deps)
+      | Tstruct_named sn ->
+          deps
   in
-    process_struct Ident.empty_env [] fmt None
+    process_struct Ident.empty_env [] (Tstruct fmt) None
 
 type dep_warning =
   | Multiple_length_use of (* field *) Ident.t * (* lengths *) Ident.t * Ident.t
@@ -589,10 +593,11 @@ let analyze_formats fmts =
                    ) deps
       end
   in
-  let analyze_fmt st_id st =
-    let deps = generate_depinfo st in
-      Ident.iter (fun fid dep ->
-                    let warnings = analyze_depinfo fid dep in
+  let analyze_fmt st_id = function
+    | (Tstruct st) as s ->
+        let deps = generate_depinfo st in
+        Ident.iter (fun fid dep ->
+                      let warnings = analyze_depinfo fid dep in
                       if List.length warnings > 0 then
                         (if !Config.show_dependency_warnings then
                            List.iter (fun w ->
@@ -600,11 +605,13 @@ let analyze_formats fmts =
                                      ) warnings)
                       else
                         dep.autocompute <- can_autocompute dep
-                 ) deps;
-      struct_iter (fun st -> cycle_checker st deps st.struct_type_loc) st;
-      if !Config.show_gen_variables then
-        print_free_variables deps st_id;
-      (st, deps)
+                   ) deps;
+        struct_iter (fun st -> cycle_checker st deps st.struct_type_loc) st;
+        if !Config.show_gen_variables then
+          print_free_variables deps st_id;
+        (s, deps)
+    | (Tstruct_named _) as s ->
+        (s, Ident.empty_env)
   in
     try
       Ident.map (fun st_id st -> analyze_fmt st_id st) fmts

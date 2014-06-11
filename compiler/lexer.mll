@@ -48,6 +48,7 @@
     (":", fun l -> COLON l);
     ("|", fun l -> BAR l);
     ("=", fun l -> EQUAL l);
+    ("_", fun l -> UNDERSCORE l);
 
     ("..", fun l -> DOTDOT l);
     ("->", fun l -> ARROW l);

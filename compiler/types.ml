@@ -1,5 +1,5 @@
 (**************************************************************************)
-(*  Copyright 2009-2013       Prashanth Mundkur.                          *)
+(*  Copyright 2009-2014       Prashanth Mundkur.                          *)
 (*  Author  Prashanth Mundkur <prashanth.mundkur _at_ gmail.com>          *)
 (*                                                                        *)
 (*  This file is part of FormatCompiler.                                  *)
@@ -148,12 +148,15 @@ and field_entry_desc =
   | Tfield_name of Ident.t * field_info
   | Tfield_align of int
 
-and struct_type = {
+and struct_info = {
   entries: field_entry list;
   fields: field_info Ident.env;
   classify_fields: branch_info list;
   struct_type_loc: Location.t;
 }
+and struct_type =
+  | Tstruct of struct_info
+  | Tstruct_named of Ident.t
 
 and map_entry = Asttypes.case_name * case_exp * struct_type
 
@@ -186,15 +189,23 @@ let rec ident_map st =
   let rec do_field env = function
     | Ttype_base _ ->
         env
-    | Ttype_struct st ->
+    | Ttype_struct (Tstruct st) ->
         Ident.extend env (ident_map st)
+    | Ttype_struct (Tstruct_named _) ->
+        env
     | Ttype_map (_, mt) ->
         StringMap.fold
-          (fun bn (_, _, st) env ->
-             Ident.extend env (ident_map st))
-          mt.map_type_desc env
-    | Ttype_array (_, st) ->
+          (fun bn (_, _, s) env ->
+           match s with
+             | Tstruct st ->
+                 Ident.extend env (ident_map st)
+             | Tstruct_named _ ->
+                 env
+          ) mt.map_type_desc env
+    | Ttype_array (_, Tstruct st) ->
         Ident.extend env (ident_map st)
+    | Ttype_array (_, Tstruct_named _) ->
+        env
     | Ttype_format _ ->
         env in
   let env = st.fields
@@ -208,13 +219,19 @@ let struct_iter f st =
   let field_iter _ (ft, _) =
     match ft with
       | Ttype_base _
-      | Ttype_format _ ->
+      | Ttype_format _
+      | Ttype_struct (Tstruct_named _)
+      | Ttype_array (_, Tstruct_named _) ->
           ()
-      | Ttype_struct st
-      | Ttype_array (_, st) ->
+      | Ttype_struct (Tstruct st)
+      | Ttype_array (_, Tstruct st) ->
           f st
       | Ttype_map (_, mt) ->
-          StringMap.iter (fun _ (_, _, st) -> f st) mt.map_type_desc
+          StringMap.iter (fun _ (_, _, s) ->
+                          match s with
+                            | Tstruct st -> f st
+                            | Tstruct_named _ -> ()
+                         ) mt.map_type_desc
   in
     f st;
     Ident.iter field_iter st.fields
