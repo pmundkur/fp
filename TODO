@@ -1,5 +1,9 @@
 TODO:
 
+- Support:
+  . array bytes() ...
+  . ... within ...
+
 - Redesign/simplification:
 
   - remove inlined hierarchical structs - instead use names to

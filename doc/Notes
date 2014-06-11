@@ -343,12 +343,11 @@
 
     To implement this, the representation types for the datatype modules
     are the view, not the evaluation type.  The evaluation type needs to
-    also be exported in the module signature, to implement array
+    also be exported in the module signature, to implement vector
     functors (see below).
 
-  . The array datatype is implemented as a functor, that takes as an
-    argument the module for a primitive datatype.  Note that arrays of
-    arrays will probably not trivially work with this approach.
+  . The vector datatype is implemented as a functor, that takes as an
+    argument the module for a primitive datatype.
 
   . The representation type of a dependent sum will be an object of a
     class whose constructor will take as arguments the representation
@@ -385,7 +384,7 @@
 
 - Notes on value() attributes:
 
-  value () attributes can  handle assignments for multiple cases
+  value() attributes can handle assignments for multiple cases
   for possibly multiple branches, with support for both nested and
   serial branching.
 
@@ -396,15 +395,19 @@
                       |f=n2        -> e
                       | _          -> e')
 
-  case1 : int  value (|f=n1,f.g=m1 -> (e1)
-                      |f=n1,f.g=m2 -> (e2)
-                      |f=n2 -> (e3))
+  case1 : int  value (|f=n1,f.g=m1 -> (eo1)
+                      |f=n1,f.g=m2 -> (eo1)
+                      |f=n2        -> (eo2))
+  case2 : int  value (|f=n1,f.g=m1 -> ei1
+                      |f=n1,f.g=m2 -> ei2
+                      | _          -> e')    (* Needed for f != n1)
   f     : classify (case1) {
           |eo1:n1 -> {
                         g : classify (case2) {
                             |ei1:m1 -> fi1 : int[len]
                             |ei2:m2 -> fi2 : int[len+1]
                         }
+                     }
           |eo2:n2 -> {f2}
   }
 
@@ -434,6 +437,8 @@
   . We also check to ensure that the case specification is complete
     (i.e. all branches are covered), and do not contain unmatched
     cases.
+
+  . TODO: check for conflict: e.g. len1 when f=n1 and f=m2
 
 - Notes on overlap checking:
 
